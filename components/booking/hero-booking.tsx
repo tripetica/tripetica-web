@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { BookingPanel } from "@/components/booking/booking-panel";
 import { ServiceSelector } from "@/components/booking/service-selector";
@@ -11,9 +12,12 @@ import {
   type IstanbulClock,
 } from "@/lib/booking/istanbul-time";
 import { airportPresets, locationFromAirportPreset } from "@/lib/booking/catalog";
+import { bookingPath } from "@/lib/booking/page-config";
 import { type Locale } from "@/lib/i18n/config";
+import { localizedPath } from "@/lib/i18n/path";
 import {
   emptyLocation,
+  isLocationFilled,
   BOOKING_SERVICE_EVENT,
   prefillFromBookingHash,
   type BookingDateTime,
@@ -29,6 +33,7 @@ type HeroBookingProps = {
 };
 
 export function HeroBooking({ locale, copy }: HeroBookingProps) {
+  const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceType>("transfer");
   const [pickupLocation, setPickupLocation] = useState<LocationValue>(() =>
     emptyLocation(),
@@ -162,6 +167,16 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
       return;
     }
     setDatetimeError(null);
+
+    if (serviceType !== "transfer") {
+      return;
+    }
+
+    if (!isLocationFilled(pickupLocation) || !isLocationFilled(dropoffLocation)) {
+      return;
+    }
+
+    router.push(localizedPath(locale, bookingPath));
   }
 
   return (

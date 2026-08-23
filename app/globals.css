@@ -2613,3 +2613,71 @@ button.home-service-cta {
     line-height: 1.35;
   }
 }
+
+.booking-page {
+  position: relative;
+  min-height: 70svh;
+  background: var(--background);
+}
+
+.booking-body {
+  width: min(100%, 75rem);
+  margin-inline: auto;
+  padding: 5.5rem clamp(0.7rem, 4vw, 2.75rem) 2.5rem;
+}
+
+.booking-back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 1.15rem;
+  color: rgb(243 239 230 / 0.82);
+  font-size: 0.92rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.booking-back:hover,
+.booking-back:focus-visible {
+  color: #fff;
+}
+
+.booking-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.35);
+  border-radius: 0.4rem;
+}
+
+.booking-selection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.15rem;
+  align-items: start;
+}
+
+.booking-sidebar,
+.booking-content {
+  min-height: 16rem;
+  border-radius: 1.15rem;
+}
+
+.booking-sidebar-inner,
+.booking-content-inner {
+  min-height: 14.5rem;
+}
+
+@media (min-width: 900px) {
+  .booking-selection {
+    grid-template-columns: minmax(16.5rem, 0.86fr) minmax(0, 1.48fr);
+    gap: 1.5rem;
+  }
+
+  .booking-sidebar,
+  .booking-content {
+    min-height: 28rem;
+  }
+
+  .booking-sidebar-inner,
+  .booking-content-inner {
+    min-height: 26rem;
+  }
+}

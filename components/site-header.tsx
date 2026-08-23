@@ -10,12 +10,14 @@ type SiteHeaderProps = {
   locale: Locale;
   pathWithoutLocale?: string;
   variant?: "home" | "service";
+  showLanguageSwitcher?: boolean;
 };
 
 export function SiteHeader({
   locale,
   pathWithoutLocale = "/",
   variant = "home",
+  showLanguageSwitcher = true,
 }: SiteHeaderProps) {
   const copy = headerCopy[locale];
   const homeHref = localizedPath(locale);
@@ -68,11 +70,13 @@ export function SiteHeader({
             </a>
           </nav>
 
-          <LanguageSwitcher
-            locale={locale}
-            pathWithoutLocale={pathWithoutLocale}
-            label={copy.language}
-          />
+          {showLanguageSwitcher ? (
+            <LanguageSwitcher
+              locale={locale}
+              pathWithoutLocale={pathWithoutLocale}
+              label={copy.language}
+            />
+          ) : null}
 
           <button
             type="button"
