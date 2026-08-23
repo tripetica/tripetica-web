@@ -1,3 +1,5 @@
+import { type Locale } from "@/lib/i18n/config";
+
 export const BOOKING_TIME_ZONE = "Europe/Istanbul";
 
 export type IstanbulClock = {
@@ -58,12 +60,14 @@ export function isIstanbulLocalOnOrAfter(
   return local >= earliestLocal;
 }
 
-export function formatIstanbulLocalDisplay(local: string, locale: "ru" | "en") {
+export function formatIstanbulLocalDisplay(local: string, locale: Locale) {
   const utcMs = istanbulLocalToUtcMs(local);
   if (Number.isNaN(utcMs)) {
     return local.replace("T", " ");
   }
-  return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-GB", {
+  const intlLocale =
+    locale === "ru" ? "ru-RU" : locale === "tr" ? "tr-TR" : "en-GB";
+  return new Intl.DateTimeFormat(intlLocale, {
     timeZone: BOOKING_TIME_ZONE,
     dateStyle: "medium",
     timeStyle: "short",

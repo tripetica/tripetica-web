@@ -1,6 +1,7 @@
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { MobileNav } from "@/components/mobile-nav";
 import { type Locale } from "@/lib/i18n/config";
+import { contactSectionId } from "@/lib/contact/links";
 import { headerCopy } from "@/lib/i18n/header";
 import { localizedPath } from "@/lib/i18n/path";
 import { headerControlClassName } from "@/lib/ui/header";
@@ -8,14 +9,26 @@ import { headerControlClassName } from "@/lib/ui/header";
 type SiteHeaderProps = {
   locale: Locale;
   pathWithoutLocale?: string;
+  variant?: "home" | "service";
 };
 
 export function SiteHeader({
   locale,
   pathWithoutLocale = "/",
+  variant = "home",
 }: SiteHeaderProps) {
   const copy = headerCopy[locale];
   const homeHref = localizedPath(locale);
+  const isServicePage = variant === "service";
+  const mobileNav = (
+    <MobileNav
+      copy={copy}
+      homeHref={homeHref}
+      firstItem={
+        isServicePage ? { href: homeHref, label: copy.home } : undefined
+      }
+    />
+  );
 
   return (
     <header className="absolute inset-x-0 top-0 z-[100] bg-transparent">
@@ -30,16 +43,25 @@ export function SiteHeader({
         <div className="flex shrink-0 items-center gap-[clamp(0.15rem,1.2vw,1.75rem)]">
           <nav
             className="hidden items-center gap-1 text-[0.95rem] font-medium md:flex"
-            aria-label="Primary"
+            aria-label={copy.primaryNav}
           >
+            {isServicePage ? (
+              <a
+                href={homeHref}
+                className={`${headerControlClassName} liquid-lens px-3 py-2`}
+              >
+                {copy.home}
+              </a>
+            ) : (
+              <a
+                href="#services"
+                className={`${headerControlClassName} liquid-lens px-3 py-2`}
+              >
+                {copy.services}
+              </a>
+            )}
             <a
-              href={`${homeHref}#services`}
-              className={`${headerControlClassName} liquid-lens px-3 py-2`}
-            >
-              {copy.services}
-            </a>
-            <a
-              href={`${homeHref}#contact`}
+              href={`#${contactSectionId}`}
               className={`${headerControlClassName} liquid-lens px-3 py-2`}
             >
               {copy.contact}
@@ -72,7 +94,7 @@ export function SiteHeader({
             </svg>
           </button>
 
-          <MobileNav copy={copy} homeHref={homeHref} />
+          {isServicePage ? <div className="md:hidden">{mobileNav}</div> : mobileNav}
         </div>
       </div>
     </header>

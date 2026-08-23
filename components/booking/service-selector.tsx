@@ -17,7 +17,6 @@ export function ServiceSelector({
 }: ServiceSelectorProps) {
   return (
     <div
-      id="services"
       role="radiogroup"
       aria-label={groupLabel}
       className="service-selector"

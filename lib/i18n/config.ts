@@ -1,4 +1,4 @@
-export const locales = ["ru", "en"] as const;
+export const locales = ["ru", "en", "tr"] as const;
 
 export type Locale = (typeof locales)[number];
 
@@ -10,6 +10,7 @@ export const localeCatalog: Record<
 > = {
   ru: { code: "RU", nativeName: "Русский", flag: "🇷🇺" },
   en: { code: "EN", nativeName: "English", flag: "🇬🇧" },
+  tr: { code: "TR", nativeName: "Türkçe", flag: "🇹🇷" },
 };
 
 export function isLocale(value: string): value is Locale {

@@ -1,6 +1,7 @@
 import {
   type AirportPreset,
   type DurationOption,
+  type LocationValue,
   type TourOption,
 } from "./types";
 import { type Locale } from "@/lib/i18n/config";
@@ -30,6 +31,9 @@ export function formatDurationOption(
 ) {
   if (locale === "ru") {
     return `${option.hours} часов (${option.includedKm} км)`;
+  }
+  if (locale === "tr") {
+    return `${option.hours} saat (${option.includedKm} km)`;
   }
   return `${option.hours} Hours (${option.includedKm} km)`;
 }
@@ -97,3 +101,24 @@ export const airportPresets: AirportPreset[] = [
     country: "Turkey",
   },
 ];
+
+export function locationFromAirportPreset(
+  preset: AirportPreset,
+  label: string,
+): LocationValue {
+  return {
+    source: "preset",
+    name: label,
+    formattedAddress: preset.formattedAddress,
+    placeId: preset.placeId,
+    lat: preset.lat,
+    lng: preset.lng,
+    city: preset.city,
+    district: preset.district,
+    region: preset.region,
+    country: preset.country,
+    airportCode: preset.airportCode,
+    type: "airport",
+    placeTypes: ["airport"],
+  };
+}

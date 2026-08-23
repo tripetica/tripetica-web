@@ -10,10 +10,14 @@ import {
   isIstanbulLocalOnOrAfter,
   type IstanbulClock,
 } from "@/lib/booking/istanbul-time";
+import { airportPresets, locationFromAirportPreset } from "@/lib/booking/catalog";
 import { type Locale } from "@/lib/i18n/config";
 import {
   emptyLocation,
+  BOOKING_SERVICE_EVENT,
+  prefillFromBookingHash,
   type BookingDateTime,
+  type BookingPrefill,
   type LocationValue,
   type ServiceType,
   type TourId,
@@ -79,6 +83,59 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
     };
   }, []);
 
+  useEffect(() => {
+    function applyPrefill(prefill: BookingPrefill) {
+      setServiceType(prefill.service);
+      if (prefill.tourId) {
+        setTourId(prefill.tourId);
+      } else if (prefill.service === "tour") {
+        setTourId(null);
+      }
+      if (prefill.pickupAirport) {
+        const preset = airportPresets.find(
+          (item) => item.id === prefill.pickupAirport,
+        );
+        if (preset) {
+          setPickupLocation(
+            locationFromAirportPreset(preset, copy.airports[preset.id]),
+          );
+        }
+      } else if (prefill.service === "tour") {
+        setPickupLocation(emptyLocation());
+      }
+      if (prefill.service === "tour") {
+        setBookingDateTime({ timeZone: BOOKING_TIME_ZONE, local: "" });
+        setDatetimeError(null);
+      }
+    }
+
+    function onBookingService(event: Event) {
+      const detail = (event as CustomEvent<BookingPrefill | ServiceType>).detail;
+      if (typeof detail === "string") {
+        if (detail === "transfer" || detail === "hourly" || detail === "tour") {
+          applyPrefill({ service: detail });
+        }
+        return;
+      }
+      if (
+        detail?.service === "transfer" ||
+        detail?.service === "hourly" ||
+        detail?.service === "tour"
+      ) {
+        applyPrefill(detail);
+      }
+    }
+
+    window.addEventListener(BOOKING_SERVICE_EVENT, onBookingService);
+    const fromHash = prefillFromBookingHash(window.location.hash);
+    if (fromHash) {
+      applyPrefill(fromHash);
+    }
+    return () => {
+      window.removeEventListener(BOOKING_SERVICE_EVENT, onBookingService);
+    };
+  }, [copy.airports]);
+
   function changeService(next: ServiceType) {
     setServiceType(next);
   }
@@ -108,7 +165,7 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
   }
 
   return (
-    <div className="hero-booking">
+    <div id="booking" className="hero-booking">
       <h1 className="hero-slogan">{copy.slogan}</h1>
       <ServiceSelector
         groupLabel={copy.servicesGroupLabel}

@@ -1,5 +1,6 @@
 import { getImageProps } from "next/image";
 import { HeroBooking } from "@/components/booking/hero-booking";
+import { ReviewLabWidget } from "@/components/review-lab-widget";
 import { SiteHeader } from "@/components/site-header";
 import { type BookingCopy } from "@/lib/booking/copy";
 import { type Locale } from "@/lib/i18n/config";
@@ -32,6 +33,7 @@ export function HomeHero({ locale, imageAlt, booking }: HomeHeroProps) {
   });
 
   return (
+    <>
     <section className="relative h-[100svh] min-h-[28rem] w-full overflow-hidden">
       <picture className="pointer-events-none absolute inset-0">
         <source media={DESKTOP_BREAKPOINT} srcSet={desktopSrcSet} />
@@ -66,5 +68,7 @@ export function HomeHero({ locale, imageAlt, booking }: HomeHeroProps) {
       <SiteHeader locale={locale} pathWithoutLocale="/" />
       <HeroBooking locale={locale} copy={booking} />
     </section>
+    <ReviewLabWidget locale={locale} />
+    </>
   );
 }

@@ -10,6 +10,9 @@ export const headerCopy: Record<
     signIn: string;
     openMenu: string;
     closeMenu: string;
+    primaryNav: string;
+    mobileNav: string;
+    home: string;
   }
 > = {
   ru: {
@@ -20,6 +23,9 @@ export const headerCopy: Record<
     signIn: "Войти",
     openMenu: "Открыть меню",
     closeMenu: "Закрыть меню",
+    primaryNav: "Primary",
+    mobileNav: "Mobile",
+    home: "Главная",
   },
   en: {
     services: "Our Services",
@@ -29,5 +35,20 @@ export const headerCopy: Record<
     signIn: "Sign in",
     openMenu: "Open menu",
     closeMenu: "Close menu",
+    primaryNav: "Primary",
+    mobileNav: "Mobile",
+    home: "Home",
+  },
+  tr: {
+    services: "Hizmetlerimiz",
+    contact: "İletişim",
+    language: "Dil",
+    account: "Hesap",
+    signIn: "Giriş yap",
+    openMenu: "Menüyü aç",
+    closeMenu: "Menüyü kapat",
+    primaryNav: "Ana menü",
+    mobileNav: "Mobil",
+    home: "Ana Sayfa",
   },
 };

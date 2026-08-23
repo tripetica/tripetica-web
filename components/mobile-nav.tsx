@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { contactSectionId } from "@/lib/contact/links";
 import { headerControlClassName } from "@/lib/ui/header";
 
 type MobileNavCopy = {
@@ -10,11 +11,13 @@ type MobileNavCopy = {
   signIn: string;
   openMenu: string;
   closeMenu: string;
+  mobileNav: string;
 };
 
 type MobileNavProps = {
   copy: MobileNavCopy;
   homeHref: string;
+  firstItem?: { href: string; label: string };
 };
 
 function clearHamburgerVisualState(button: HTMLButtonElement | null) {
@@ -25,7 +28,7 @@ function clearHamburgerVisualState(button: HTMLButtonElement | null) {
   button.blur();
 }
 
-export function MobileNav({ copy, homeHref }: MobileNavProps) {
+export function MobileNav({ copy, homeHref, firstItem }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -79,8 +82,8 @@ export function MobileNav({ copy, homeHref }: MobileNavProps) {
   }
 
   const items = [
-    { href: `${homeHref}#services`, label: copy.services },
-    { href: `${homeHref}#contact`, label: copy.contact },
+    firstItem ?? { href: `${homeHref}#services`, label: copy.services },
+    { href: `#${contactSectionId}`, label: copy.contact },
     { href: `${homeHref}#signin`, label: copy.signIn },
   ];
 
@@ -123,7 +126,7 @@ export function MobileNav({ copy, homeHref }: MobileNavProps) {
                 </button>
               </div>
 
-              <nav className="flex flex-col px-4 pb-8" aria-label="Mobile">
+              <nav className="flex flex-col px-4 pb-8" aria-label={copy.mobileNav}>
                 {items.map((item) => (
                   <a
                     key={item.href}

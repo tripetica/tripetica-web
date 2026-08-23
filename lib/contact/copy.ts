@@ -26,4 +26,12 @@ export const contactLauncherCopy: Record<Locale, ContactLauncherCopy> = {
     telegram: "Telegram",
     viber: "Viber",
   },
+  tr: {
+    launcher: "Tripetica ile iletişime geçin",
+    phone: "Tripetica’yı ara",
+    phoneTooltip: "Ara",
+    whatsapp: "WhatsApp",
+    telegram: "Telegram",
+    viber: "Viber",
+  },
 };

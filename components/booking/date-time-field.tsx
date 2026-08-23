@@ -349,7 +349,8 @@ function DesktopDateTimeField({
     maxWidth: 520,
     maxHeight: 420,
   });
-  const intlLocale = locale === "ru" ? "ru-RU" : "en-GB";
+  const intlLocale =
+    locale === "ru" ? "ru-RU" : locale === "tr" ? "tr-TR" : "en-GB";
 
   return (
     <div ref={rootRef} className={`booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`}>
@@ -413,7 +414,9 @@ function DesktopDateTimeField({
                       <span className="datetime-wheels-hint" role="tooltip">
                         {locale === "ru"
                           ? "«Сначала выберите дату»"
-                          : "Select a date first"}
+                          : locale === "tr"
+                            ? "Önce tarihi seçin"
+                            : "Select a date first"}
                       </span>
                     )}
                     <div className="datetime-wheels">

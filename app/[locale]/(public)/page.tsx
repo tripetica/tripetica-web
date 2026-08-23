@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { HomeHero } from "@/components/home-hero";
+import { HomeServices } from "@/components/home-services";
 import { bookingCopy } from "@/lib/booking/copy";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localeAlternates } from "@/lib/seo/metadata";
@@ -20,6 +21,13 @@ const homeCopy: Record<
     description: "Tripetica — English version of the site.",
     heading: "Tripetica — English",
     heroAlt: "Passenger in a premium car",
+  },
+  tr: {
+    title: "Tripetica — Türkçe",
+    description:
+      "Tripetica — İstanbul ve Türkiye’de özel transfer, şoförlü araç ve kişiye özel seyahat hizmetleri.",
+    heading: "Tripetica — Türkçe",
+    heroAlt: "Premium bir otomobilde yolcu",
   },
 };
 
@@ -57,6 +65,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         imageAlt={copy.heroAlt}
         booking={bookingCopy[locale]}
       />
+      <HomeServices locale={locale} />
     </main>
   );
 }
