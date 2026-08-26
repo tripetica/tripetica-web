@@ -749,7 +749,7 @@ function Chevron() {
   return (
     <svg
       viewBox="0 0 16 16"
-      className="h-3.5 w-3.5 shrink-0 text-white/80"
+      className="h-3.5 w-3.5 shrink-0 text-stone-700/70"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"

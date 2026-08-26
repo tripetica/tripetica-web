@@ -59,12 +59,13 @@ export function HomeHero({ locale, imageAlt, booking }: HomeHeroProps) {
       </picture>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[4rem] bg-gradient-to-b from-black/20 via-black/8 to-transparent sm:h-[5rem] md:h-[6rem] md:from-black/16"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[4rem] bg-gradient-to-b from-black/14 via-black/5 to-transparent sm:h-[5rem] md:h-[6rem] md:from-black/12"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[min(52%,28rem)] bg-gradient-to-t from-black/50 via-black/18 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[min(48%,26rem)] bg-gradient-to-t from-black/18 via-black/6 to-transparent"
       />
+      <div aria-hidden="true" className="hero-exit-fade" />
       <SiteHeader locale={locale} pathWithoutLocale="/" />
       <HeroBooking locale={locale} copy={booking} />
     </section>

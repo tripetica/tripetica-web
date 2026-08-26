@@ -201,7 +201,7 @@ function LocationSwapButton({
   return (
     <button
       type="button"
-      className={`booking-swap liquid-lens glass-surface ${swapping ? "is-swapping" : ""}${hideOnMobile ? " is-mobile-hidden" : ""}`}
+      className={`booking-swap liquid-lens glass-surface-light ${swapping ? "is-swapping" : ""}${hideOnMobile ? " is-mobile-hidden" : ""}`}
       aria-label={label}
       onPointerDown={(event) => bindPress(event.currentTarget, true)}
       onPointerUp={(event) => bindPress(event.currentTarget, false)}
