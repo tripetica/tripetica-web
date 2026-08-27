@@ -31,7 +31,12 @@ export function BursaTourPage({ locale }: BursaTourPageProps) {
   );
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("bursa-tour")}
+        variant="service"
+      />
       <section className="service-hero service-hero--bursa">
         <Image
           src={HERO_IMAGE}
@@ -42,11 +47,6 @@ export function BursaTourPage({ locale }: BursaTourPageProps) {
           className="service-hero-image service-hero-image--bursa"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("bursa-tour")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

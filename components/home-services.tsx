@@ -67,7 +67,7 @@ export function HomeServices({ locale }: HomeServicesProps) {
   return (
     <section
       id="services"
-      className="home-services"
+      className="home-services light-theme"
       aria-labelledby="home-services-heading"
     >
       <div className="home-services-inner">

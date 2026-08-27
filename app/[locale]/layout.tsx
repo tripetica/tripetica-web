@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { ContactLauncher } from "@/components/contact-launcher";
 import { isLocale, locales } from "@/lib/i18n/config";
 import { getSiteUrl } from "@/lib/seo/metadata";
-import { browserThemeColor } from "@/lib/theme";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -20,12 +19,10 @@ const geistMono = Geist_Mono({
 export const dynamicParams = false;
 
 export const viewport: Viewport = {
-  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  colorScheme: "dark light",
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: browserThemeColor },
-    { media: "(prefers-color-scheme: dark)", color: browserThemeColor },
-  ],
 };
 
 export function generateStaticParams() {

@@ -9,10 +9,14 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { EditGlyph } from "@/components/booking/edit-glyph";
 import { LocationGlyph, locationIconKind } from "@/components/booking/place-icons";
-import { airportPresets } from "@/lib/booking/catalog";
+import { airportPresets, locationFromAirportPreset } from "@/lib/booking/catalog";
 import { type BookingCopy } from "@/lib/booking/copy";
-import { panelAboveField } from "@/lib/booking/panel-position";
+import {
+  panelAboveField,
+  positionAnchoredPanel,
+} from "@/lib/booking/panel-position";
 import {
   fetchPlaceDetails,
   fetchPlaceSuggestions,
@@ -52,6 +56,8 @@ type LocationFieldProps = {
   >;
   value: LocationValue;
   onChange: (value: LocationValue) => void;
+  variant?: "field" | "icon";
+  editLabel?: string;
 };
 
 export function LocationField({
@@ -64,6 +70,8 @@ export function LocationField({
   copy,
   value,
   onChange,
+  variant = "field",
+  editLabel,
 }: LocationFieldProps) {
   const desktop = useMediaQuery(BOOKING_DESKTOP_QUERY);
   const [open, setOpen] = useState(false);
@@ -74,6 +82,7 @@ export function LocationField({
   const [placesError, setPlacesError] = useState<string | null>(null);
   const skipSearchRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionRef = useRef(createSessionToken());
   const menuId = useId();
@@ -114,7 +123,7 @@ export function LocationField({
         return;
       }
       const root = rootRef.current;
-      const menu = document.getElementById(menuId);
+      const menu = menuRef.current;
       const target = event.target;
       if (!(target instanceof Node)) {
         return;
@@ -203,21 +212,7 @@ export function LocationField({
   }
 
   function selectPreset(preset: AirportPreset) {
-    onChange({
-      source: "preset",
-      name: copy.airports[preset.id],
-      formattedAddress: preset.formattedAddress,
-      placeId: preset.placeId,
-      lat: preset.lat,
-      lng: preset.lng,
-      city: preset.city,
-      district: preset.district,
-      region: preset.region,
-      country: preset.country,
-      airportCode: preset.airportCode,
-      type: "airport",
-      placeTypes: ["airport"],
-    });
+    onChange(locationFromAirportPreset(preset, copy.airports[preset.id]));
     setOpen(false);
   }
 
@@ -227,18 +222,30 @@ export function LocationField({
       locale,
       sessionToken: sessionRef.current,
     });
+    const lat = details?.lat ?? null;
+    const lng = details?.lng ?? null;
+    if (
+      typeof lat !== "number" ||
+      !Number.isFinite(lat) ||
+      typeof lng !== "number" ||
+      !Number.isFinite(lng)
+    ) {
+      setPlacesError(copy.placesError);
+      return;
+    }
     const types = details?.types ?? suggestion.types;
     onChange({
       source: "google",
       name: details?.name ?? suggestion.primaryText,
       formattedAddress: details?.formattedAddress ?? suggestion.secondaryText,
       placeId: details?.placeId ?? suggestion.placeId,
-      lat: details?.lat ?? null,
-      lng: details?.lng ?? null,
+      lat,
+      lng,
       city: details?.city ?? null,
       district: details?.district ?? null,
       region: details?.region ?? null,
       country: details?.country ?? null,
+      countryCode: details?.countryCode ?? null,
       airportCode: null,
       type: types.includes("airport") ? "airport" : "place",
       placeTypes: types,
@@ -260,7 +267,19 @@ export function LocationField({
       loading={loading}
       placesError={placesError}
       inputRef={inputRef}
-      style={desktop ? panelAboveField(menuBox) : undefined}
+      menuRef={menuRef}
+      style={
+        desktop
+          ? variant === "icon"
+            ? positionAnchoredPanel(menuBox, {
+                minWidth: 320,
+                maxWidth: 520,
+                maxHeight: 460,
+                prefer: "below",
+              })
+            : panelAboveField(menuBox)
+          : undefined
+      }
       onQueryChange={(next) => {
         skipSearchRef.current = false;
         setQuery(next);
@@ -280,6 +299,27 @@ export function LocationField({
       }}
     />
   ) : null;
+
+  if (variant === "icon") {
+    return (
+      <div ref={rootRef} className="booking-edit-anchor">
+        <button
+          type="button"
+          id={id}
+          className="booking-edit-btn"
+          aria-label={editLabel ?? title}
+          aria-expanded={open}
+          aria-controls={menuId}
+          onClick={openSelector}
+        >
+          <EditGlyph />
+        </button>
+        {open && typeof document !== "undefined"
+          ? createPortal(panel, document.body)
+          : null}
+      </div>
+    );
+  }
 
   return (
     <div ref={rootRef} className={`booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`}>
@@ -352,6 +392,7 @@ type PanelProps = {
   loading: boolean;
   placesError: string | null;
   inputRef: RefObject<HTMLInputElement | null>;
+  menuRef: RefObject<HTMLDivElement | null>;
   style?: CSSProperties;
   onQueryChange: (value: string) => void;
   onClose: () => void;
@@ -372,6 +413,7 @@ function LocationSelectorPanel({
   loading,
   placesError,
   inputRef,
+  menuRef,
   style,
   onQueryChange,
   onClose,
@@ -380,14 +422,45 @@ function LocationSelectorPanel({
 }: PanelProps) {
   const trimmed = query.trim();
 
+  useEffect(() => {
+    if (desktop) {
+      return;
+    }
+    const menu = menuRef.current;
+    if (!menu) {
+      return;
+    }
+    const sheet: HTMLDivElement = menu;
+
+    function syncViewport() {
+      const viewport = window.visualViewport;
+      const height = viewport?.height ?? window.innerHeight;
+      const offsetTop = viewport?.offsetTop ?? 0;
+      sheet.style.top = `${offsetTop}px`;
+      sheet.style.bottom = "auto";
+      sheet.style.height = `${height}px`;
+      sheet.style.maxHeight = `${height}px`;
+    }
+
+    syncViewport();
+    window.visualViewport?.addEventListener("resize", syncViewport);
+    window.visualViewport?.addEventListener("scroll", syncViewport);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", syncViewport);
+      window.visualViewport?.removeEventListener("scroll", syncViewport);
+    };
+  }, [desktop, menuRef]);
+
   return (
     <div
+      ref={menuRef}
       id={menuId}
       className={desktop ? "booking-menu location-float" : "location-sheet"}
       style={style}
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      onPointerDown={(event) => event.stopPropagation()}
     >
       {desktop ? null : (
         <div className="location-sheet-bar">
@@ -420,11 +493,15 @@ function LocationSelectorPanel({
               type="button"
               className="booking-clear"
               aria-label={copy.clearLocation}
-              onClick={(event) => {
+              onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onQueryChange("");
                 inputRef.current?.focus();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
               }}
             >
               ×

@@ -1,5 +1,8 @@
 import Image from "next/image";
-import { QuoteRequestPanel } from "@/components/quote-request-panel";
+import {
+  QuoteRequestButton,
+  QuoteRequestScope,
+} from "@/components/quote-request-panel";
 import { SiteHeader } from "@/components/site-header";
 import { type Locale } from "@/lib/i18n/config";
 import { servicePath } from "@/lib/services/catalog";
@@ -14,43 +17,29 @@ type PrivateTurkeyToursPageProps = {
 export function PrivateTurkeyToursPage({ locale }: PrivateTurkeyToursPageProps) {
   const copy = privateTurkeyToursCopy[locale];
 
-  const quoteCta = (
-    <QuoteRequestPanel
-      locale={locale}
-      label={copy.quoteCta}
-      className="service-cta"
-      placement="popover"
-    />
-  );
-
   return (
-    <main className="service-page">
+    <QuoteRequestScope locale={locale}>
+      <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("private-turkey-tours")}
+        variant="service"
+      />
       <section className="service-hero service-hero--turkey">
-        <div className="service-hero-visual">
-          <Image
-            src={HERO_IMAGE}
-            alt={copy.heroAlt}
-            width={1536}
-            height={1024}
-            priority
-            sizes="100vw"
-            className="service-hero-image service-hero-image--turkey"
-          />
-          <div className="service-hero-shade" aria-hidden="true" />
-          <SiteHeader
-            locale={locale}
-            pathWithoutLocale={servicePath("private-turkey-tours")}
-            variant="service"
-          />
-        </div>
+        <Image
+          src={HERO_IMAGE}
+          alt={copy.heroAlt}
+          fill
+          priority
+          sizes="100vw"
+          className="service-hero-image service-hero-image--turkey"
+        />
+        <div className="service-hero-shade" aria-hidden="true" />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>
-          {copy.heroLead.map((paragraph) => (
-            <p key={paragraph.slice(0, 48)} className="service-hero-lead">
-              {paragraph}
-            </p>
-          ))}
+          <p className="service-hero-lead">{copy.heroLead[0]}</p>
+          <QuoteRequestButton label={copy.quoteCta} className="service-cta" />
         </div>
       </section>
 
@@ -141,9 +130,10 @@ export function PrivateTurkeyToursPage({ locale }: PrivateTurkeyToursPageProps) 
             {copy.finalTitle}
           </h2>
           <p className="service-prose">{copy.finalLead}</p>
-          {quoteCta}
+          <QuoteRequestButton label={copy.quoteCta} className="service-cta" />
         </section>
       </div>
-    </main>
+      </main>
+    </QuoteRequestScope>
   );
 }

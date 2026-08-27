@@ -15,7 +15,12 @@ export function AirportTransferPage({ locale }: AirportTransferPageProps) {
   const copy = airportTransferCopy[locale];
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("airport-transfer")}
+        variant="service"
+      />
       <section className="service-hero">
         <Image
           src={HERO_IMAGE}
@@ -26,11 +31,6 @@ export function AirportTransferPage({ locale }: AirportTransferPageProps) {
           className="service-hero-image"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("airport-transfer")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

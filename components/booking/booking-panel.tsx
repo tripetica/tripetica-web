@@ -35,6 +35,8 @@ type BookingPanelProps = {
   onTourChange: (id: TourId) => void;
   onSwapLocations: () => void;
   onContinue: () => void;
+  persistError?: string | null;
+  submitting?: boolean;
 };
 
 export function BookingPanel({
@@ -57,6 +59,8 @@ export function BookingPanel({
   onTourChange,
   onSwapLocations,
   onContinue,
+  persistError = null,
+  submitting = false,
 }: BookingPanelProps) {
   const selectedTour = tourOptions.find((tour) => tour.id === tourId);
   const isCustomQuote =
@@ -101,6 +105,7 @@ export function BookingPanel({
       error={datetimeError}
       onChange={onDatetimeChange}
       onPickerOpen={onDatetimeOpen}
+      clearLabel={copy.clearLocation}
     />
   );
 
@@ -172,9 +177,12 @@ export function BookingPanel({
         </>
       )}
       {datetimeField}
-      <button type="submit" className="booking-cta">
+      <button type="submit" className="booking-cta" disabled={submitting}>
         {ctaLabel}
       </button>
+      {persistError ? (
+        <span className="booking-field-error">{persistError}</span>
+      ) : null}
     </form>
   );
 }

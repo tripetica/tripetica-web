@@ -15,6 +15,7 @@ export type PlaceDetailsValue = {
   district: string | null;
   region: string | null;
   country: string | null;
+  countryCode: string | null;
   types: string[];
 };
 

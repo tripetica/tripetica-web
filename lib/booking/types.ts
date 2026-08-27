@@ -95,6 +95,7 @@ export type LocationValue = {
   district: string | null;
   region: string | null;
   country: string | null;
+  countryCode: string | null;
   airportCode: string | null;
   type: LocationKind;
   placeTypes: string[] | null;
@@ -105,6 +106,12 @@ export type BookingDateTime = {
   local: string;
 };
 
+export type TransferFormHydration = {
+  pickup: LocationValue;
+  dropoff: LocationValue;
+  pickupAtLocal: string;
+};
+
 export type AirportCode = "IST" | "SAW" | "AYT";
 
 export type AirportPreset = {
@@ -112,10 +119,11 @@ export type AirportPreset = {
   airportCode: AirportCode;
   type: "airport";
   source: "preset";
-  placeId: string | null;
-  lat: number | null;
-  lng: number | null;
-  formattedAddress: string | null;
+  placeId: string;
+  lat: number;
+  lng: number;
+  formattedAddress: string;
+  googleName: string;
   city: string | null;
   district: string | null;
   region: string | null;
@@ -157,6 +165,7 @@ export function emptyLocation(): LocationValue {
     district: null,
     region: null,
     country: null,
+    countryCode: null,
     airportCode: null,
     type: null,
     placeTypes: null,

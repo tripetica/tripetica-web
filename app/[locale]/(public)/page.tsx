@@ -1,10 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { HomeHero } from "@/components/home-hero";
 import { HomeServices } from "@/components/home-services";
 import { bookingCopy } from "@/lib/booking/copy";
+import { loadHomepageTransferDraft } from "@/lib/booking/transfer-draft-hydration";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localeAlternates } from "@/lib/seo/metadata";
+import { lightBrowserThemeColor } from "@/lib/theme";
+
+export const viewport: Viewport = {
+  themeColor: lightBrowserThemeColor,
+  colorScheme: "only light",
+};
 
 const homeCopy: Record<
   Locale,
@@ -49,6 +56,8 @@ export async function generateMetadata({
   };
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const { locale } = await params;
 
@@ -57,13 +66,15 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
   }
 
   const copy = homeCopy[locale];
+  const transferDraft = await loadHomepageTransferDraft(locale);
 
   return (
-    <main>
+    <main className="home-page">
       <HomeHero
         locale={locale}
         imageAlt={copy.heroAlt}
         booking={bookingCopy[locale]}
+        transferDraft={transferDraft}
       />
       <HomeServices locale={locale} />
     </main>

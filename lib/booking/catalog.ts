@@ -1,4 +1,5 @@
 import {
+  type AirportCode,
   type AirportPreset,
   type DurationOption,
   type LocationValue,
@@ -53,9 +54,9 @@ export const tourOptions: TourOption[] = [
 ];
 
 /**
- * Airport presets for the location selector.
- * placeId / lat / lng / formattedAddress stay null until verified
- * Google Place details are supplied — do not invent coordinates or IDs.
+ * Canonical airport presets verified via Places API (New) Place Details.
+ * Technical identity (placeId / lat / lng / airport_code) is locale-independent.
+ * Localized display names stay in booking copy, not here.
  */
 export const airportPresets: AirportPreset[] = [
   {
@@ -63,44 +64,57 @@ export const airportPresets: AirportPreset[] = [
     airportCode: "IST",
     type: "airport",
     source: "preset",
-    placeId: null, // TODO: Google Place ID
-    lat: null, // TODO: verified latitude
-    lng: null, // TODO: verified longitude
-    formattedAddress: null, // TODO: official formatted address
-    city: "Istanbul",
+    placeId: "ChIJqZW8Cvb_n0ARBuUkyCzgDDg",
+    lat: 41.2761476,
+    lng: 28.7287349,
+    googleName: "Istanbul Airport",
+    formattedAddress:
+      "Tayakadın, Terminal Caddesi No:1, 34283 Arnavutköy/İstanbul, Türkiye",
+    city: "İstanbul",
     district: "Arnavutköy",
-    region: "Istanbul",
-    country: "Turkey",
+    region: "İstanbul",
+    country: "Türkiye",
   },
   {
     id: "SAW",
     airportCode: "SAW",
     type: "airport",
     source: "preset",
-    placeId: null, // TODO: Google Place ID
-    lat: null, // TODO: verified latitude
-    lng: null, // TODO: verified longitude
-    formattedAddress: null, // TODO: official formatted address
-    city: "Istanbul",
+    placeId: "ChIJU6Ek9MvbyhQRdNqYgE3K76w",
+    lat: 40.8944747,
+    lng: 29.3130928,
+    googleName: "Sabiha Gökçen International Airport",
+    formattedAddress: "Sanayi, 34906 Pendik/İstanbul, Türkiye",
+    city: "İstanbul",
     district: "Pendik",
-    region: "Istanbul",
-    country: "Turkey",
+    region: "İstanbul",
+    country: "Türkiye",
   },
   {
     id: "AYT",
     airportCode: "AYT",
     type: "airport",
     source: "preset",
-    placeId: null, // TODO: Google Place ID
-    lat: null, // TODO: verified latitude
-    lng: null, // TODO: verified longitude
-    formattedAddress: null, // TODO: official formatted address
+    placeId: "ChIJnXxhjXeEwxQR-uhI2_zcfME",
+    lat: 36.9086961,
+    lng: 30.7981855,
+    googleName: "Antalya Airport",
+    formattedAddress:
+      "Yeşilköy, Antalya Havaalanı, 07230 Muratpaşa/Antalya, Türkiye",
     city: "Antalya",
-    district: "Aksu",
+    district: "Muratpaşa",
     region: "Antalya",
-    country: "Turkey",
+    country: "Türkiye",
   },
 ];
+
+export function airportPresetByCode(code: AirportCode) {
+  const preset = airportPresets.find((item) => item.id === code);
+  if (!preset) {
+    throw new Error(`Unknown airport preset: ${code}`);
+  }
+  return preset;
+}
 
 export function locationFromAirportPreset(
   preset: AirportPreset,
@@ -117,6 +131,7 @@ export function locationFromAirportPreset(
     district: preset.district,
     region: preset.region,
     country: preset.country,
+    countryCode: "TR",
     airportCode: preset.airportCode,
     type: "airport",
     placeTypes: ["airport"],

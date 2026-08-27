@@ -61,7 +61,12 @@ export function BosphorusCruisePage({ locale }: BosphorusCruisePageProps) {
   );
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("istanbul-bosphorus-dinner-cruise")}
+        variant="service"
+      />
       <section className="service-hero service-hero--cruise">
         <Image
           src={HERO_IMAGE}
@@ -72,11 +77,6 @@ export function BosphorusCruisePage({ locale }: BosphorusCruisePageProps) {
           className="service-hero-image service-hero-image--cruise"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("istanbul-bosphorus-dinner-cruise")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

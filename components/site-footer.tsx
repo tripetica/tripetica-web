@@ -75,7 +75,7 @@ export function SiteFooter({ locale }: SiteFooterProps) {
   ];
 
   return (
-    <footer className="site-footer">
+    <footer className="site-footer light-theme">
       <div className="site-footer-inner">
         <div className="site-footer-grid">
           <div className="site-footer-brand-col">
@@ -146,6 +146,15 @@ export function SiteFooter({ locale }: SiteFooterProps) {
         </div>
 
         <p className="site-footer-copyright">{copy.copyright}</p>
+        <p className="site-footer-rates">
+          <a
+            href="https://www.exchangerate-api.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Rates by ExchangeRate-API
+          </a>
+        </p>
       </div>
     </footer>
   );

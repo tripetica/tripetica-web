@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
+import type { Viewport } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { isLocale } from "@/lib/i18n/config";
+import { lightBrowserThemeColor } from "@/lib/theme";
+
+export const viewport: Viewport = {
+  themeColor: lightBrowserThemeColor,
+  colorScheme: "only light",
+};
 
 type PublicLayoutProps = {
   children: ReactNode;

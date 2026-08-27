@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { EditGlyph } from "@/components/booking/edit-glyph";
 import { formatIstanbulLocalDisplay } from "@/lib/booking/istanbul-time";
-import { panelAboveField } from "@/lib/booking/panel-position";
+import { panelAboveField, positionAnchoredPanel } from "@/lib/booking/panel-position";
 import { type Locale } from "@/lib/i18n/config";
-import {
-  DATETIME_DESKTOP_QUERY,
-  useMediaQuery,
-} from "@/lib/ui/use-media-query";
-
-const DESKTOP_PICKER_QUERY = DATETIME_DESKTOP_QUERY;
 
 function isIosDateTimePicker() {
   if (typeof navigator === "undefined") {
@@ -36,7 +31,37 @@ type DateTimeFieldProps = {
   todayDate?: string | null;
   onChange: (value: string) => void;
   onPickerOpen: () => void;
+  variant?: "field" | "icon";
+  editLabel?: string;
+  clearLabel?: string;
 };
+
+function FieldClearButton({
+  label,
+  onClear,
+}: {
+  label: string;
+  onClear: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="booking-clear"
+      aria-label={label}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClear();
+      }}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      ×
+    </button>
+  );
+}
 
 export function DateTimeField({
   id,
@@ -52,44 +77,42 @@ export function DateTimeField({
   todayDate = null,
   onChange,
   onPickerOpen,
+  variant = "field",
+  editLabel,
+  clearLabel,
 }: DateTimeFieldProps) {
-  const desktop = useMediaQuery(DESKTOP_PICKER_QUERY);
   const filled = value.length > 0;
-
-  if (desktop) {
-    return (
-      <DesktopDateTimeField
-        id={id}
-        locale={locale}
-        label={label}
-        placeholder={placeholder}
-        applyLabel={applyLabel}
-        hourLabel={hourLabel}
-        minuteLabel={minuteLabel}
-        value={value}
-        min={min}
-        error={error}
-        todayDate={todayDate}
-        filled={filled}
-        onChange={onChange}
-        onPickerOpen={onPickerOpen}
-      />
-    );
-  }
+  const shared = {
+    locale,
+    label,
+    placeholder,
+    value,
+    min,
+    error,
+    filled,
+    variant,
+    editLabel,
+    clearLabel,
+    onChange,
+    onPickerOpen,
+  };
 
   return (
-    <MobileDateTimeField
-      id={id}
-      locale={locale}
-      label={label}
-      placeholder={placeholder}
-      value={value}
-      min={min}
-      error={error}
-      filled={filled}
-      onChange={onChange}
-      onPickerOpen={onPickerOpen}
-    />
+    <>
+      <div className="booking-pointer-fine">
+        <DesktopDateTimeField
+          {...shared}
+          id={`${id}-fine`}
+          applyLabel={applyLabel}
+          hourLabel={hourLabel}
+          minuteLabel={minuteLabel}
+          todayDate={todayDate}
+        />
+      </div>
+      <div className="booking-pointer-coarse">
+        <MobileDateTimeField {...shared} id={`${id}-coarse`} />
+      </div>
+    </>
   );
 }
 
@@ -102,6 +125,9 @@ function MobileDateTimeField({
   min,
   error,
   filled,
+  variant = "field",
+  editLabel,
+  clearLabel,
   onChange,
   onPickerOpen,
 }: Pick<
@@ -115,6 +141,9 @@ function MobileDateTimeField({
   | "error"
   | "onChange"
   | "onPickerOpen"
+  | "variant"
+  | "editLabel"
+  | "clearLabel"
 > & { filled: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value);
@@ -122,9 +151,11 @@ function MobileDateTimeField({
   const onChangeRef = useRef(onChange);
   const confirmedRef = useRef(false);
 
-  valueRef.current = value;
-  minRef.current = min;
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    valueRef.current = value;
+    minRef.current = min;
+    onChangeRef.current = onChange;
+  });
 
   useEffect(() => {
     const input = inputRef.current;
@@ -148,6 +179,9 @@ function MobileDateTimeField({
 
     function commitFromInput() {
       if (isIosDateTimePicker()) {
+        return;
+      }
+      if (!input) {
         return;
       }
       const raw = input.value;
@@ -179,20 +213,41 @@ function MobileDateTimeField({
   }
 
   return (
-    <label htmlFor={id} className={`booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`}>
-      <span className="booking-field-label booking-field-label-out">{label}</span>
-      <span className="relative block">
-        <span
-          className={`booking-field-button pointer-events-none ${filled ? "is-filled" : ""}`}
-          aria-hidden="true"
-        >
-          <span className="booking-field-label booking-field-label-in">{label}</span>
-          {filled ? <CalendarGlyph /> : null}
-          <span className="min-w-0 truncate">
-            {filled ? formatIstanbulLocalDisplay(value, locale) : placeholder}
+    <label
+      htmlFor={id}
+      className={
+        variant === "icon"
+          ? "booking-edit-anchor booking-edit-native-wrap"
+          : `booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`
+      }
+    >
+      {variant === "icon" ? null : (
+        <span className="booking-field-label booking-field-label-out">{label}</span>
+      )}
+      <span
+        className={
+          variant === "icon"
+            ? "booking-edit-native-box"
+            : `booking-input-wrap relative block${filled && clearLabel ? " is-clearable" : ""}`
+        }
+      >
+        {variant === "icon" ? (
+          <span className="booking-edit-btn pointer-events-none" aria-hidden="true">
+            <EditGlyph />
           </span>
-          <Chevron />
-        </span>
+        ) : (
+          <span
+            className={`booking-field-button pointer-events-none ${filled ? "is-filled" : ""}`}
+            aria-hidden="true"
+          >
+            <span className="booking-field-label booking-field-label-in">{label}</span>
+            {filled ? <CalendarGlyph /> : null}
+            <span className="min-w-0 truncate">
+              {filled ? formatIstanbulLocalDisplay(value, locale) : placeholder}
+            </span>
+            {filled ? null : <Chevron />}
+          </span>
+        )}
         <input
           ref={inputRef}
           id={id}
@@ -200,6 +255,7 @@ function MobileDateTimeField({
           step={60}
           min={min ?? undefined}
           defaultValue=""
+          aria-label={variant === "icon" ? editLabel ?? label : undefined}
           onPointerDown={(event) => {
             if (!isIosDateTimePicker()) {
               return;
@@ -246,8 +302,23 @@ function MobileDateTimeField({
           }}
           className="booking-datetime-native"
         />
+        {variant === "icon" || !filled || !clearLabel ? null : (
+          <FieldClearButton
+            label={clearLabel}
+            onClear={() => {
+              valueRef.current = "";
+              const input = inputRef.current;
+              if (input) {
+                input.value = "";
+              }
+              onChange("");
+            }}
+          />
+        )}
       </span>
-      {error ? <span className="booking-field-error">{error}</span> : null}
+      {variant === "icon" || !error ? null : (
+        <span className="booking-field-error">{error}</span>
+      )}
     </label>
   );
 }
@@ -267,6 +338,9 @@ function DesktopDateTimeField({
   filled,
   onChange,
   onPickerOpen,
+  variant = "field",
+  editLabel,
+  clearLabel,
 }: DateTimeFieldProps & { filled: boolean }) {
   const parts = splitLocal(value);
   const minParts = splitLocal(min ?? "");
@@ -275,9 +349,12 @@ function DesktopDateTimeField({
   const [draftHour, setDraftHour] = useState("");
   const [draftMinute, setDraftMinute] = useState("");
   const [menuBox, setMenuBox] = useState<DOMRect | null>(null);
-  const [viewMonth, setViewMonth] = useState(monthKey(minParts.date || parts.date));
+  const [viewMonth, setViewMonth] = useState(
+    monthKey(minParts.date || parts.date || todayDate || ""),
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
   useEffect(() => {
@@ -300,7 +377,7 @@ function DesktopDateTimeField({
 
     function onOutside(event: Event) {
       const root = rootRef.current;
-      const menu = document.getElementById(menuId);
+      const menu = menuRef.current;
       const target = event.target;
       if (!(target instanceof Node)) {
         return;
@@ -313,6 +390,8 @@ function DesktopDateTimeField({
 
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
     document.addEventListener("keydown", onKeyDown);
     const timer = window.setTimeout(() => {
       document.addEventListener("pointerdown", onOutside);
@@ -321,6 +400,8 @@ function DesktopDateTimeField({
     return () => {
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
       document.removeEventListener("keydown", onKeyDown);
       window.clearTimeout(timer);
       document.removeEventListener("pointerdown", onOutside);
@@ -344,56 +425,108 @@ function DesktopDateTimeField({
       ? `${draftDate}T${draftHour}:${draftMinute}`
       : "";
   const canApply = Boolean(draftLocal && (!min || draftLocal >= min));
-  const style = panelAboveField(menuBox, {
-    minWidth: 428,
-    maxWidth: 520,
-    maxHeight: 420,
-  });
+  const style =
+    variant === "icon"
+      ? positionAnchoredPanel(menuBox, {
+          minWidth: 428,
+          maxWidth: 560,
+          maxHeight: 560,
+          prefer: "below",
+        })
+      : panelAboveField(menuBox, {
+          minWidth: 428,
+          maxWidth: 520,
+          maxHeight: 420,
+        });
   const intlLocale =
     locale === "ru" ? "ru-RU" : locale === "tr" ? "tr-TR" : "en-GB";
 
+  function toggleOpen() {
+    onPickerOpen();
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuBox(rect);
+    }
+    if (parts.date && parts.time) {
+      setDraftDate(parts.date);
+      setDraftHour(parts.time.slice(0, 2));
+      setDraftMinute(parts.time.slice(3, 5));
+      setViewMonth(monthKey(parts.date || todayDate || ""));
+    } else {
+      setDraftDate("");
+      setDraftHour("");
+      setDraftMinute("");
+      setViewMonth(monthKey(minParts.date || todayDate || ""));
+    }
+    setOpen((current) => !current);
+  }
+
   return (
-    <div ref={rootRef} className={`booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`}>
-      <span className="booking-field-label" id={`${id}-label`}>
-        {label}
-      </span>
-      <button
-        ref={buttonRef}
-        type="button"
-        className={`booking-field-button ${filled ? "is-filled" : ""}`}
-        aria-labelledby={`${id}-label`}
-        aria-expanded={open}
-        aria-controls={menuId}
-        onClick={() => {
-          onPickerOpen();
-          const rect = buttonRef.current?.getBoundingClientRect();
-          if (rect) {
-            setMenuBox(rect);
-          }
-          if (parts.date && parts.time) {
-            setDraftDate(parts.date);
-            setDraftHour(parts.time.slice(0, 2));
-            setDraftMinute(parts.time.slice(3, 5));
-            setViewMonth(monthKey(parts.date));
-          } else {
-            setDraftDate("");
-            setDraftHour("");
-            setDraftMinute("");
-            setViewMonth(monthKey(minParts.date));
-          }
-          setOpen((current) => !current);
-        }}
-      >
-        {filled ? <CalendarGlyph /> : null}
-        <span className="min-w-0 truncate">
-          {filled ? formatIstanbulLocalDisplay(value, locale) : placeholder}
+    <div
+      ref={rootRef}
+      className={
+        variant === "icon"
+          ? "booking-edit-anchor"
+          : `booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`
+      }
+    >
+      {variant === "icon" ? null : (
+        <span className="booking-field-label" id={`${id}-label`}>
+          {label}
         </span>
-        <Chevron />
-      </button>
-      {error ? <span className="booking-field-error">{error}</span> : null}
+      )}
+      {variant === "icon" ? (
+        <button
+          ref={buttonRef}
+          type="button"
+          className="booking-edit-btn"
+          aria-label={editLabel ?? label}
+          aria-expanded={open}
+          aria-controls={menuId}
+          onClick={toggleOpen}
+        >
+          <EditGlyph />
+        </button>
+      ) : (
+        <div className="booking-input-wrap">
+          <button
+            ref={buttonRef}
+            type="button"
+            className={`booking-field-button ${filled ? "is-filled" : ""}`}
+            aria-labelledby={`${id}-label`}
+            aria-expanded={open}
+            aria-controls={menuId}
+            onClick={toggleOpen}
+          >
+            {filled ? <CalendarGlyph /> : null}
+            <span className="min-w-0 truncate">
+              {filled ? formatIstanbulLocalDisplay(value, locale) : placeholder}
+            </span>
+            {filled ? null : <Chevron />}
+          </button>
+          {filled && clearLabel ? (
+            <FieldClearButton
+              label={clearLabel}
+              onClear={() => {
+                setOpen(false);
+                onChange("");
+              }}
+            />
+          ) : null}
+        </div>
+      )}
+      {variant === "icon" || !error ? null : (
+        <span className="booking-field-error">{error}</span>
+      )}
       {open && style && typeof document !== "undefined"
         ? createPortal(
-            <div id={menuId} className="booking-menu location-float datetime-panel" style={style}>
+            <div
+              ref={menuRef}
+              id={menuId}
+              className="booking-menu location-float datetime-panel"
+              style={style}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
               <div className="datetime-panel-body">
                 <DesktopCalendar
                   locale={intlLocale}
@@ -467,8 +600,7 @@ function splitLocal(value: string) {
 
 function monthKey(date: string) {
   if (!date) {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return "1970-01";
   }
   return date.slice(0, 7);
 }
@@ -521,7 +653,7 @@ function TimeWheel({
   const skipScrollSync = useRef(false);
   const scrollTimerRef = useRef(0);
 
-  function alignSelectedToBand() {
+  const alignSelectedToBand = useCallback(() => {
     if (!value) {
       return;
     }
@@ -546,11 +678,11 @@ function TimeWheel({
     window.requestAnimationFrame(() => {
       skipScrollSync.current = false;
     });
-  }
+  }, [value]);
 
   useLayoutEffect(() => {
     alignSelectedToBand();
-  }, [value]);
+  }, [alignSelectedToBand]);
 
   useEffect(() => {
     return () => window.clearTimeout(scrollTimerRef.current);
@@ -737,6 +869,8 @@ function CalendarGlyph() {
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
+      width="20"
+      height="20"
       className="location-icon location-icon-field"
       fill="currentColor"
     >
@@ -749,6 +883,8 @@ function Chevron() {
   return (
     <svg
       viewBox="0 0 16 16"
+      width="14"
+      height="14"
       className="h-3.5 w-3.5 shrink-0 text-white/80"
       fill="none"
       stroke="currentColor"

@@ -48,7 +48,7 @@ export function LegalDocumentPage({ locale, slug }: LegalDocumentPageProps) {
   const title = legalNavLabels[locale][slug];
 
   return (
-    <main className="legal-page">
+    <main className="legal-page light-theme-page">
       <SiteHeader
         locale={locale}
         pathWithoutLocale={legalPath(slug)}

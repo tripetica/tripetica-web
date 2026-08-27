@@ -28,7 +28,12 @@ export function SapancaTourPage({ locale }: SapancaTourPageProps) {
   );
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("sapanca-tour")}
+        variant="service"
+      />
       <section className="service-hero service-hero--sapanca">
         <Image
           src={HERO_IMAGE}
@@ -39,11 +44,6 @@ export function SapancaTourPage({ locale }: SapancaTourPageProps) {
           className="service-hero-image service-hero-image--sapanca"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("sapanca-tour")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

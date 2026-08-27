@@ -34,6 +34,7 @@ export type BookingCopy = {
   datetimeHour: string;
   datetimeMinute: string;
   datetimeTooSoon: string;
+  persistError: string;
   swapLocations: string;
 };
 
@@ -97,6 +98,7 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     datetimeHour: "Час",
     datetimeMinute: "Минута",
     datetimeTooSoon: "Выберите время не ранее чем через 1 час по Стамбулу",
+    persistError: "Не удалось сохранить выбор. Попробуйте ещё раз.",
     swapLocations: "Поменять места подачи и назначения",
   },
   en: {
@@ -158,6 +160,7 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     datetimeHour: "Hour",
     datetimeMinute: "Minute",
     datetimeTooSoon: "Choose a time at least 1 hour from now in Istanbul",
+    persistError: "Could not save your selection. Please try again.",
     swapLocations: "Swap pickup and drop-off",
   },
   tr: {
@@ -220,6 +223,7 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     datetimeHour: "Saat",
     datetimeMinute: "Dakika",
     datetimeTooSoon: "Lütfen İstanbul saatine göre en az 1 saat sonrası için bir zaman seçin",
+    persistError: "Seçiminiz kaydedilemedi. Lütfen tekrar deneyin.",
     swapLocations: "Alış ve varış noktalarını değiştir",
   },
 };

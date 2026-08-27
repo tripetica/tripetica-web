@@ -27,7 +27,12 @@ export function IstanbulCityTourPage({ locale }: IstanbulCityTourPageProps) {
   );
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("istanbul-city-tour")}
+        variant="service"
+      />
       <section className="service-hero">
         <Image
           src={HERO_IMAGE}
@@ -38,11 +43,6 @@ export function IstanbulCityTourPage({ locale }: IstanbulCityTourPageProps) {
           className="service-hero-image service-hero-image--city-tour"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("istanbul-city-tour")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

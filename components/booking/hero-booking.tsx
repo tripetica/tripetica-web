@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BookingPanel } from "@/components/booking/booking-panel";
 import { ServiceSelector } from "@/components/booking/service-selector";
 import { TrustBar } from "@/components/booking/trust-bar";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/booking/istanbul-time";
 import { airportPresets, locationFromAirportPreset } from "@/lib/booking/catalog";
 import { bookingPath } from "@/lib/booking/page-config";
+import { persistDraftFieldClear } from "@/lib/booking/clear-draft-field";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import {
@@ -25,30 +26,39 @@ import {
   type LocationValue,
   type ServiceType,
   type TourId,
+  type TransferFormHydration,
 } from "@/lib/booking/types";
 
 type HeroBookingProps = {
   locale: Locale;
   copy: BookingCopy;
+  transferDraft?: TransferFormHydration | null;
 };
 
-export function HeroBooking({ locale, copy }: HeroBookingProps) {
+export function HeroBooking({
+  locale,
+  copy,
+  transferDraft = null,
+}: HeroBookingProps) {
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceType>("transfer");
   const [pickupLocation, setPickupLocation] = useState<LocationValue>(() =>
-    emptyLocation(),
+    transferDraft?.pickup ?? emptyLocation(),
   );
   const [dropoffLocation, setDropoffLocation] = useState<LocationValue | null>(
-    () => emptyLocation(),
+    () => transferDraft?.dropoff ?? emptyLocation(),
   );
   const [bookingDateTime, setBookingDateTime] = useState<BookingDateTime>({
     timeZone: BOOKING_TIME_ZONE,
-    local: "",
+    local: transferDraft?.pickupAtLocal ?? "",
   });
   const [durationHours, setDurationHours] = useState<number | null>(null);
   const [tourId, setTourId] = useState<TourId | null>(null);
   const [clock, setClock] = useState<IstanbulClock | null>(null);
   const [datetimeError, setDatetimeError] = useState<string | null>(null);
+  const [persistError, setPersistError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const refreshClock = useCallback(async () => {
     const response = await fetch("/api/booking/clock", { cache: "no-store" });
@@ -146,14 +156,34 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
   }
 
   async function changeDatetime(local: string) {
+    if (!local) {
+      setDatetimeError(null);
+      setBookingDateTime({ timeZone: BOOKING_TIME_ZONE, local: "" });
+      void persistDraftFieldClear(locale, "localDateTime");
+      return;
+    }
     const latest = clock ?? (await refreshClock());
-    if (latest && local && !isIstanbulLocalOnOrAfter(local, latest.earliestLocal)) {
+    if (latest && !isIstanbulLocalOnOrAfter(local, latest.earliestLocal)) {
       setDatetimeError(copy.datetimeTooSoon);
       setBookingDateTime({ timeZone: BOOKING_TIME_ZONE, local: "" });
       return;
     }
     setDatetimeError(null);
     setBookingDateTime({ timeZone: BOOKING_TIME_ZONE, local });
+  }
+
+  function changePickup(value: LocationValue) {
+    setPickupLocation(value);
+    if (!isLocationFilled(value)) {
+      void persistDraftFieldClear(locale, "pickup");
+    }
+  }
+
+  function changeDropoff(value: LocationValue) {
+    setDropoffLocation(value);
+    if (!isLocationFilled(value)) {
+      void persistDraftFieldClear(locale, "dropoff");
+    }
   }
 
   async function continueBooking() {
@@ -176,7 +206,37 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
       return;
     }
 
-    router.push(localizedPath(locale, bookingPath));
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    setPersistError(null);
+    try {
+      const response = await fetch("/api/booking/transfer-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locale,
+          pickup: pickupLocation,
+          dropoff: dropoffLocation,
+          localDateTime: bookingDateTime.local,
+        }),
+      });
+      if (!response.ok) {
+        console.error("[Tripetica transfer-search]", response.status);
+        setPersistError(copy.persistError);
+        return;
+      }
+      router.push(localizedPath(locale, bookingPath));
+    } catch (error) {
+      console.error("[Tripetica transfer-search]", error);
+      setPersistError(copy.persistError);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -200,8 +260,8 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
         datetimeError={datetimeError}
         durationHours={durationHours}
         tourId={tourId}
-        onPickupChange={setPickupLocation}
-        onDropoffChange={setDropoffLocation}
+        onPickupChange={changePickup}
+        onDropoffChange={changeDropoff}
         onDatetimeChange={(local) => {
           void changeDatetime(local);
         }}
@@ -216,6 +276,8 @@ export function HeroBooking({ locale, copy }: HeroBookingProps) {
           setPickupLocation(nextPickup);
           setDropoffLocation(nextDropoff);
         }}
+        persistError={persistError}
+        submitting={submitting}
         onContinue={() => {
           void continueBooking();
         }}

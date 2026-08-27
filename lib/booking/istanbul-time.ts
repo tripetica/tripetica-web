@@ -28,6 +28,19 @@ export function formatUtcToIstanbulLocal(utcMs: number): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
+export function timestamptzToIstanbulLocal(value: Date | string | number) {
+  const utcMs =
+    value instanceof Date
+      ? value.getTime()
+      : typeof value === "number"
+        ? value
+        : Date.parse(value);
+  if (!Number.isFinite(utcMs)) {
+    return "";
+  }
+  return formatUtcToIstanbulLocal(utcMs);
+}
+
 export function istanbulLocalToUtcMs(local: string): number {
   const match = local.match(LOCAL_PATTERN);
   if (!match) {
@@ -61,18 +74,22 @@ export function isIstanbulLocalOnOrAfter(
 }
 
 export function formatIstanbulLocalDisplay(local: string, locale: Locale) {
-  const utcMs = istanbulLocalToUtcMs(local);
-  if (Number.isNaN(utcMs)) {
+  const match = local.match(LOCAL_PATTERN);
+  if (!match) {
     return local.replace("T", " ");
   }
-  const intlLocale =
-    locale === "ru" ? "ru-RU" : locale === "tr" ? "tr-TR" : "en-GB";
-  return new Intl.DateTimeFormat(intlLocale, {
-    timeZone: BOOKING_TIME_ZONE,
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(utcMs));
+  const year = match[1];
+  const month = MONTH_LABELS[locale][Number(match[2]) - 1];
+  const day = String(Number(match[3]));
+  const time = `${match[4]}:${match[5]}`;
+  return `${day} ${month} ${year} ${time}`;
 }
+
+const MONTH_LABELS: Record<Locale, readonly string[]> = {
+  tr: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"],
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  ru: ["янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.", "нояб.", "дек."],
+};
 
 function zonedParts(utcMs: number, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {

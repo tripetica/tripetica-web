@@ -26,7 +26,12 @@ export function IstanbulLayoverPage({ locale }: IstanbulLayoverPageProps) {
   );
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("istanbul-layover-tour")}
+        variant="service"
+      />
       <section className="service-hero">
         <Image
           src={HERO_IMAGE}
@@ -37,11 +42,6 @@ export function IstanbulLayoverPage({ locale }: IstanbulLayoverPageProps) {
           className="service-hero-image service-hero-image--layover"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("istanbul-layover-tour")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

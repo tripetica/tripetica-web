@@ -15,7 +15,12 @@ export function HourlyChauffeurPage({ locale }: HourlyChauffeurPageProps) {
   const copy = hourlyChauffeurCopy[locale];
 
   return (
-    <main className="service-page">
+    <main className="service-page light-theme-page">
+      <SiteHeader
+        locale={locale}
+        pathWithoutLocale={servicePath("hourly-chauffeur")}
+        variant="service"
+      />
       <section className="service-hero">
         <Image
           src={HERO_IMAGE}
@@ -26,11 +31,6 @@ export function HourlyChauffeurPage({ locale }: HourlyChauffeurPageProps) {
           className="service-hero-image service-hero-image--hourly"
         />
         <div className="service-hero-shade" aria-hidden="true" />
-        <SiteHeader
-          locale={locale}
-          pathWithoutLocale={servicePath("hourly-chauffeur")}
-          variant="service"
-        />
         <div className="service-hero-copy">
           <p className="service-kicker">{copy.kicker}</p>
           <h1 className="service-h1">{copy.h1}</h1>

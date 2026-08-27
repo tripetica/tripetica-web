@@ -16,6 +16,8 @@ export type PlacesSearchResult = {
 type AddressComponent = {
   longText?: string;
   long_name?: string;
+  shortText?: string;
+  short_name?: string;
   types?: string[];
 };
 
@@ -187,13 +189,14 @@ async function loadPlaceDetailsNew(
     formattedAddress: place.formattedAddress ?? null,
     lat: place.location?.latitude ?? null,
     lng: place.location?.longitude ?? null,
-    city: component(place.addressComponents, "locality"),
+    city: componentLong(place.addressComponents, "locality"),
     district:
-      component(place.addressComponents, "administrative_area_level_2") ??
-      component(place.addressComponents, "sublocality") ??
-      component(place.addressComponents, "sublocality_level_1"),
-    region: component(place.addressComponents, "administrative_area_level_1"),
-    country: component(place.addressComponents, "country"),
+      componentLong(place.addressComponents, "administrative_area_level_2") ??
+      componentLong(place.addressComponents, "sublocality") ??
+      componentLong(place.addressComponents, "sublocality_level_1"),
+    region: componentLong(place.addressComponents, "administrative_area_level_1"),
+    country: componentLong(place.addressComponents, "country"),
+    countryCode: componentShort(place.addressComponents, "country"),
     types: place.types ?? [],
   };
 }
@@ -237,18 +240,71 @@ async function loadPlaceDetailsLegacy(
     formattedAddress: place.formatted_address ?? null,
     lat: place.geometry?.location?.lat ?? null,
     lng: place.geometry?.location?.lng ?? null,
-    city: component(place.address_components, "locality"),
+    city: componentLong(place.address_components, "locality"),
     district:
-      component(place.address_components, "administrative_area_level_2") ??
-      component(place.address_components, "sublocality") ??
-      component(place.address_components, "sublocality_level_1"),
-    region: component(place.address_components, "administrative_area_level_1"),
-    country: component(place.address_components, "country"),
+      componentLong(place.address_components, "administrative_area_level_2") ??
+      componentLong(place.address_components, "sublocality") ??
+      componentLong(place.address_components, "sublocality_level_1"),
+    region: componentLong(place.address_components, "administrative_area_level_1"),
+    country: componentLong(place.address_components, "country"),
+    countryCode: componentShort(place.address_components, "country"),
     types: place.types ?? [],
   };
 }
 
-function component(components: AddressComponent[] | undefined, type: string) {
-  const match = components?.find((item) => item.types?.includes(type));
+export type PlaceGeoDetails = {
+  placeId: string;
+  lat: number | null;
+  lng: number | null;
+  city: string | null;
+  district: string | null;
+  region: string | null;
+  country: string | null;
+  countryCode: string | null;
+  types: string[];
+};
+
+/**
+ * Pricing geo is resolved with a fixed Turkish Place Details language so
+ * province/district tokens stay stable across booking locales.
+ */
+export async function loadPlaceGeoDetails(
+  placeId: string,
+): Promise<PlaceGeoDetails | null> {
+  const details = await loadPlaceDetails({
+    placeId,
+    locale: "tr",
+    sessionToken: "geo-classify",
+  });
+  if (!details?.placeId) {
+    return null;
+  }
+  return {
+    placeId: details.placeId,
+    lat: details.lat,
+    lng: details.lng,
+    city: details.city,
+    district: details.district,
+    region: details.region,
+    country: details.country,
+    countryCode: details.countryCode,
+    types: details.types,
+  };
+}
+
+function componentMatch(
+  components: AddressComponent[] | undefined,
+  type: string,
+) {
+  return components?.find((item) => item.types?.includes(type));
+}
+
+function componentLong(components: AddressComponent[] | undefined, type: string) {
+  const match = componentMatch(components, type);
   return match?.longText ?? match?.long_name ?? null;
+}
+
+function componentShort(components: AddressComponent[] | undefined, type: string) {
+  const match = componentMatch(components, type);
+  return match?.shortText ?? match?.short_name ?? null;
 }

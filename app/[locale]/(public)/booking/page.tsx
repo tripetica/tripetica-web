@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BookingPage } from "@/components/booking/booking-page";
 import { bookingPath } from "@/lib/booking/page-config";
 import { bookingPageCopy } from "@/lib/booking/page-copy";
+import { loadBookingDraftView } from "@/lib/booking/transfer-draft-hydration";
 import { isLocale } from "@/lib/i18n/config";
 import { localeAlternates } from "@/lib/seo/metadata";
 
@@ -35,5 +36,5 @@ export default async function BookingRoute({ params }: BookingRouteProps) {
     notFound();
   }
 
-  return <BookingPage locale={locale} />;
+  return <BookingPage locale={locale} draft={await loadBookingDraftView(locale)} />;
 }

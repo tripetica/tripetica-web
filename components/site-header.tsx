@@ -1,5 +1,6 @@
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { MobileNav } from "@/components/mobile-nav";
+import { SiteHeaderLogoLink } from "@/components/site-header-logo";
 import { type Locale } from "@/lib/i18n/config";
 import { contactSectionId } from "@/lib/contact/links";
 import { headerCopy } from "@/lib/i18n/header";
@@ -21,7 +22,10 @@ export function SiteHeader({
 }: SiteHeaderProps) {
   const copy = headerCopy[locale];
   const homeHref = localizedPath(locale);
+  const isHomePage = !pathWithoutLocale || pathWithoutLocale === "/";
   const isServicePage = variant === "service";
+  const logoClassName =
+    "header-foreground shrink min-w-0 px-2 py-1 text-[clamp(0.98rem,4.2vw,1.35rem)] font-semibold tracking-[0.08em] sm:tracking-[0.14em]";
   const mobileNav = (
     <MobileNav
       copy={copy}
@@ -35,12 +39,13 @@ export function SiteHeader({
   return (
     <header className="absolute inset-x-0 top-0 z-[100] bg-transparent">
       <div className="flex items-center justify-between gap-2 px-[clamp(0.75rem,4vw,2.75rem)] py-[clamp(0.65rem,1.8vw,1.15rem)] sm:gap-3">
-        <a
-          href={homeHref}
-          className="header-foreground shrink min-w-0 cursor-pointer px-2 py-1 text-[clamp(0.98rem,4.2vw,1.35rem)] font-semibold tracking-[0.08em] sm:tracking-[0.14em]"
-        >
-          Tripetica
-        </a>
+        {isHomePage ? (
+          <span className={`${logoClassName} cursor-default`}>Tripetica</span>
+        ) : (
+          <SiteHeaderLogoLink href={homeHref} className={logoClassName}>
+            Tripetica
+          </SiteHeaderLogoLink>
+        )}
 
         <div className="flex shrink-0 items-center gap-[clamp(0.15rem,1.2vw,1.75rem)]">
           <nav
