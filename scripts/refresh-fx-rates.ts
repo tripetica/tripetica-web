@@ -12,6 +12,7 @@ async function main() {
     console.log(`source=${rates.source}`);
     console.log(`fetchedAt=${rates.fetchedAt}`);
     console.log(`expiresAt=${rates.expiresAt}`);
+    console.log(`providerNextUpdateAt=${rates.providerNextUpdateAt}`);
     console.log(`EUR_TO_USD=${rates.USD}`);
     console.log(`EUR_TO_TRY=${rates.TRY}`);
     console.log(`MARKET_EUR_TO_RUB=${rates.marketEurToRub}`);

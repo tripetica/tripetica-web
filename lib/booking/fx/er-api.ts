@@ -49,8 +49,22 @@ export function eurQuoteRatesFromApi(rates: FxEurBaseRates): EurQuoteRates {
   };
 }
 
+/** Parse ExchangeRate-API `time_next_update_utc` into an ISO timestamptz string. */
+export function parseTimeNextUpdateUtc(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  const ms = Date.parse(value.trim());
+  if (!Number.isFinite(ms)) {
+    return null;
+  }
+  return new Date(ms).toISOString();
+}
+
 export function parseErApiLatestPayload(payload: unknown): {
   timeLastUpdateUnix: number | null;
+  timeNextUpdateUtc: string;
+  providerNextUpdateAt: string;
   rates: FxEurBaseRates;
 } {
   if (!payload || typeof payload !== "object") {
@@ -76,6 +90,14 @@ export function parseErApiLatestPayload(payload: unknown): {
   if (eur < 0.999 || eur > 1.001) {
     throw new Error("invalid_rate");
   }
+  if (typeof raw.time_next_update_utc !== "string") {
+    throw new Error("missing_next_update");
+  }
+  const timeNextUpdateUtc = raw.time_next_update_utc.trim();
+  const providerNextUpdateAt = parseTimeNextUpdateUtc(timeNextUpdateUtc);
+  if (!providerNextUpdateAt) {
+    throw new Error("missing_next_update");
+  }
   const timeLastUpdateUnix =
     typeof raw.time_last_update_unix === "number" &&
     Number.isFinite(raw.time_last_update_unix)
@@ -83,6 +105,8 @@ export function parseErApiLatestPayload(payload: unknown): {
       : null;
   return {
     timeLastUpdateUnix,
+    timeNextUpdateUtc,
+    providerNextUpdateAt,
     rates: { USD: usd, EUR: 1, TRY: tryRate, RUB: rub, GBP: gbp },
   };
 }
@@ -117,6 +141,7 @@ export function quoteCacheFromErApiPayload(
     TRY: parsed.rates.TRY,
     RUB: parsed.rates.RUB,
     GBP: parsed.rates.GBP,
+    timeNextUpdateUtc: parsed.timeNextUpdateUtc,
   };
   if (parsed.timeLastUpdateUnix != null) {
     rawRates.timeLastUpdateUnix = parsed.timeLastUpdateUnix;
@@ -125,6 +150,7 @@ export function quoteCacheFromErApiPayload(
     source: FX_SOURCE,
     fetchedAt,
     expiresAt,
+    providerNextUpdateAt: parsed.providerNextUpdateAt,
     USD: quotes.EUR_TO_USD,
     EUR: quotes.EUR_TO_EUR,
     TRY: quotes.EUR_TO_TRY,

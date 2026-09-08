@@ -107,9 +107,21 @@ export type BookingDateTime = {
 };
 
 export type TransferFormHydration = {
+  serviceType?: ServiceType;
+  tourId?: TourId | null;
   pickup: LocationValue;
   dropoff: LocationValue;
   pickupAtLocal: string;
+  durationHours?: number | null;
+  currency?: string | null;
+  passengerCount?: number | null;
+  luggageCount?: number | null;
+  babySeatCount?: number | null;
+  editMode?: boolean;
+  opsEditMode?: boolean;
+  editReservationId?: string | null;
+  editReservationCode?: string | null;
+  opsEditWithinSixHours?: boolean;
 };
 
 export type AirportCode = "IST" | "SAW" | "AYT";
@@ -142,11 +154,7 @@ export type TourId =
   | "sapanca"
   | "bursa"
   | "bosphorus-dinner"
-  | "cappadocia"
-  | "pamukkale"
-  | "ephesus"
-  | "gobeklitepe"
-  | "custom";
+  | "private-turkey-tours";
 
 export type TourOption = {
   id: TourId;

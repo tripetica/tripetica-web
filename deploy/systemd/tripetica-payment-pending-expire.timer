@@ -1,0 +1,13 @@
+[Unit]
+Description=Expire stale SBP payment_pending reservations
+ConditionPathExists=/srv/tripetica/current/scripts/expire-stale-payment-pending.ts
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Persistent=true
+Unit=tripetica-payment-pending-expire.service
+
+[Install]
+WantedBy=timers.target

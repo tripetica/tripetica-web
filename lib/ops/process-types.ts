@@ -1,0 +1,24 @@
+export type ProcessListItem = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: string | null;
+  currentStage: string | null;
+  locale: string | null;
+  serviceType: string | null;
+  tourCode: string | null;
+  durationHours: string | null;
+  pickupName: string | null;
+  dropoffName: string | null;
+  pickupAt: string | null;
+  passengerCount: number | null;
+  vehicleLabel: string | null;
+  price: string | null;
+  currency: string | null;
+  email: string | null;
+  phone: string | null;
+  paymentMethod: string | null;
+  converted: boolean;
+  reservationCode: string | null;
+  reservationId: string | null;
+};

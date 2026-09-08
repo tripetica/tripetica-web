@@ -66,7 +66,7 @@ test("flag emoji is derived from ISO alpha-2", () => {
   assert.equal(countryFlagEmoji("DE"), "🇩🇪");
 });
 
-test("phone copy has no numeric placeholder and no default country", () => {
+test("phone copy has no numeric placeholder", () => {
   for (const locale of ["tr", "en", "ru"] as const) {
     assert.equal(/\d/.test(phoneFieldCopy[locale].phonePlaceholder), false);
     assert.match(phoneFieldCopy[locale].selectCode, /Kod|Select|Выберите/);

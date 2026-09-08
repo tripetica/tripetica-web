@@ -3,16 +3,45 @@
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type BookingDraftView, type VehicleQuoteView } from "@/lib/booking/draft-view";
+import {
+  canSelectVehicle,
+  hasUnappliedTripChanges,
+  type BookingDraftView,
+  type VehicleQuoteView,
+} from "@/lib/booking/draft-view";
+import {
+  formatHourlyVehicleTariffRows,
+  hourlyVehicleTariffCopy,
+} from "@/lib/booking/catalog";
 import { displayAmountFromEur } from "@/lib/booking/fx/convert";
 import { normalizeMeetAndGreet } from "@/lib/booking/meet-and-greet";
-import { BOOKING_SELECT_BLOCKED_EVENT, hasAppliedPassengerCount } from "@/lib/booking/occupancy";
+import {
+  BOOKING_SELECT_BLOCKED_EVENT,
+  displayPassengerCount,
+  PASSENGER_COUNT_UNSET,
+} from "@/lib/booking/occupancy";
 import { includesFirstClassAmenities } from "@/lib/booking/pricing/vehicle-quote";
 import {
   DISPLAY_CURRENCIES,
   formatCurrencyPill,
   type DisplayCurrency,
 } from "@/lib/booking/pricing/format-eur";
+import {
+  BURSA_BRIDGE_ROUTE_SURCHARGE_EUR,
+  BURSA_ULUDAG_ASCENT_SURCHARGE_EUR,
+  hasBursaUludagAscent,
+  isBursaBridgeRoute,
+  isBursaTour,
+} from "@/lib/booking/pricing/bursa-pricing";
+import { HOURLY_SERVICE_TYPE } from "@/lib/booking/pricing/hourly-pricing";
+import { isLayoverTour } from "@/lib/booking/pricing/layover-pricing";
+import { isIstanbulAddressPackageTour } from "@/lib/booking/pricing/istanbul-address-package-tour";
+import {
+  formatLayoverPackageCoverage,
+  formatPackageCoverageForTour,
+  layoverVehicleTariffCopyForVehicle,
+  packageTourVehicleTariffCopy,
+} from "@/lib/booking/tour-display";
 import { type Locale } from "@/lib/i18n/config";
 import { BOOKING_WIDE_QUERY, useMediaQuery } from "@/lib/ui/use-media-query";
 import {
@@ -44,13 +73,19 @@ export function VehicleCard({
   const desktop = useMediaQuery(BOOKING_WIDE_QUERY);
   const [active, setActive] = useState<VehicleGalleryKey>("exterior");
   const [lightbox, setLightbox] = useState(false);
-  const selected = draft.appliedVehicleCode === quote.vehicleCode;
+  const unapplied = hasUnappliedTripChanges(draft.selected, draft.applied);
+  const selectBlocked = !canSelectVehicle(draft.selected, draft.applied);
+  const passengerUnset =
+    displayPassengerCount(draft.selected.passengerCount) <= PASSENGER_COUNT_UNSET;
+  const blockedTipCopy =
+    unapplied && !passengerUnset
+      ? copy.selectUnappliedDesktop
+      : copy.selectBlockedDesktop;
   const mainButtonRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const persistSeq = useRef(0);
   const [blockedTip, setBlockedTip] = useState(false);
-  const selectBlocked = !hasAppliedPassengerCount(draft.applied.passengerCount);
   const titleId = useId();
   const currencyGroupId = useId();
   const image = images[active];
@@ -129,15 +164,64 @@ export function VehicleCard({
     };
   }, [lightboxOpen]);
 
-  const feeRows = [
-    { label: copy.baseFee, amount: quote.baseServiceFeeEur },
-    { label: copy.extraPassenger, amount: quote.extraPassengerFeeEur },
-    { label: copy.extraLuggage, amount: quote.extraLuggageFeeEur },
-    { label: copy.babySeat, amount: quote.babySeatFeeEur },
-    ...(copy.includedServices
-      ? []
-      : [{ label: copy.meetAndGreet, amount: quote.meetAndGreetFeeEur }]),
-  ].map((row) => ({
+  const layover = isLayoverTour(draft.serviceType, draft.tourCode);
+  const isHourly = draft.serviceType === HOURLY_SERVICE_TYPE;
+  const hourlyTariffRows = isHourly
+    ? formatHourlyVehicleTariffRows(
+        draft.applied.durationHours,
+        locale,
+        quote.multiplier,
+      )
+    : null;
+  const hourlyTariff = hourlyVehicleTariffCopy[locale];
+  const packageTourTariff = packageTourVehicleTariffCopy(
+    draft.tourCode,
+    locale,
+    quote.multiplier,
+  );
+  const packageTourCoverage = formatPackageCoverageForTour(
+    draft.tourCode,
+    locale,
+    { bursaRoute: draft.applied.bursaRoute },
+  );
+  const layoverTariff = layoverVehicleTariffCopyForVehicle(
+    locale,
+    quote.multiplier,
+  );
+  const bursaTour = isBursaTour(draft.serviceType, draft.tourCode);
+  const bursaBridgeApplied =
+    bursaTour && isBursaBridgeRoute(draft.applied.bursaRoute);
+  const bursaUludagApplied =
+    bursaTour && hasBursaUludagAscent(draft.applied.bursaRoute);
+  const feeRows = (() => {
+    const transferQuote = draft.transferQuote;
+    const rows = [
+      { label: copy.baseFee, amount: quote.baseServiceFeeEur },
+      ...(bursaBridgeApplied
+        ? [
+            {
+              label: copy.bursaBridgeRoute,
+              amount: BURSA_BRIDGE_ROUTE_SURCHARGE_EUR,
+            },
+          ]
+        : []),
+      ...(bursaUludagApplied
+        ? [
+            {
+              label: copy.bursaUludagAscent,
+              amount: BURSA_ULUDAG_ASCENT_SURCHARGE_EUR,
+            },
+          ]
+        : []),
+      { label: copy.extraPassenger, amount: quote.extraPassengerFeeEur },
+      { label: copy.extraLuggage, amount: quote.extraLuggageFeeEur },
+      { label: copy.babySeat, amount: quote.babySeatFeeEur },
+      ...(copy.includedServices
+        ? []
+        : [{ label: copy.meetAndGreet, amount: quote.meetAndGreetFeeEur }]),
+    ];
+    return rows;
+  })().map((row) => ({
     ...row,
     display: formatCurrencyPill(
       currency,
@@ -242,10 +326,11 @@ export function VehicleCard({
 
   return (
     <article
-      className={`vehicle-card glass-surface${selected ? " is-selected" : ""}`}
+      className="vehicle-card glass-surface"
       aria-labelledby={titleId}
       data-vehicle-code={quote.vehicleCode}
       data-display-currency={currency}
+      data-service-type={draft.serviceType}
     >
       <div className="vehicle-card-heading">
         <h2 id={titleId} className="vehicle-card-title">
@@ -362,7 +447,6 @@ export function VehicleCard({
           <button
             type="button"
             className={`vehicle-card-select${selectBlocked ? " is-blocked" : ""}`}
-            aria-pressed={selected}
             aria-disabled={selectBlocked || undefined}
             aria-describedby={selectBlocked && desktop && blockedTip ? `${titleId}-select-tip` : undefined}
             onMouseEnter={() => {
@@ -379,15 +463,59 @@ export function VehicleCard({
             onBlur={() => setBlockedTip(false)}
             onClick={() => selectVehicle()}
           >
-            {selected ? copy.selected : copy.select}
+            {copy.select}
           </button>
           {selectBlocked && desktop && blockedTip ? (
             <span id={`${titleId}-select-tip`} className="vehicle-select-tooltip" role="tooltip">
-              {copy.selectBlockedDesktop}
+              {blockedTipCopy}
             </span>
           ) : null}
         </div>
       </div>
+
+      {layover ? (
+        <div className="vehicle-card-tariff-note" aria-label={layoverTariff.packageLabel}>
+          <p>
+            {layoverTariff.packageLabel}: {formatLayoverPackageCoverage(locale)}
+          </p>
+          <p>{layoverTariff.hourOverrun}</p>
+          <p>{layoverTariff.kmOverrun}</p>
+        </div>
+      ) : null}
+      {isHourly && hourlyTariffRows ? (
+        <div
+          className="vehicle-card-tariff-note"
+          aria-label={hourlyTariff.packageLabel}
+        >
+          <p>{hourlyTariffRows.packageCoverage}</p>
+          <p>{hourlyTariffRows.hourOverrun}</p>
+          <p>{hourlyTariffRows.kmOverrun}</p>
+          <p>{hourlyTariffRows.crossingFee}</p>
+        </div>
+      ) : null}
+      {packageTourTariff && packageTourCoverage ? (
+        <div
+          className="vehicle-card-tariff-note"
+          aria-label={packageTourTariff.packageLabel}
+        >
+          <p>
+            {packageTourTariff.packageLabel}: {packageTourCoverage}
+          </p>
+          <p>{packageTourTariff.hourOverrun}</p>
+          {packageTourTariff.kmOverrun ? (
+            <p>{packageTourTariff.kmOverrun}</p>
+          ) : null}
+          {packageTourTariff.crossingFee ? (
+            <p>{packageTourTariff.crossingFee}</p>
+          ) : null}
+          {packageTourTariff.bridgeRouteSurcharge && !bursaBridgeApplied ? (
+            <p>{packageTourTariff.bridgeRouteSurcharge}</p>
+          ) : null}
+          {packageTourTariff.uludagVehicleAscent && !bursaUludagApplied ? (
+            <p>{packageTourTariff.uludagVehicleAscent}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {lightboxOpen
         ? createPortal(

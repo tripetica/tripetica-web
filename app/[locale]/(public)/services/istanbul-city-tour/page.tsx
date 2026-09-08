@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { IstanbulCityTourPage } from "@/components/services/istanbul-city-tour-page";
 import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
-import { getSiteUrl, localeAlternates } from "@/lib/seo/metadata";
+import { getSiteUrl, publicPageSeo } from "@/lib/seo/metadata";
 import { servicePath } from "@/lib/services/catalog";
 import { istanbulCityTourCopy } from "@/lib/services/istanbul-city-tour-copy";
 
@@ -27,7 +27,7 @@ export async function generateMetadata({
   return {
     title: copy.metaTitle,
     description: copy.metaDescription,
-    alternates: localeAlternates(locale, SERVICE_PATH),
+    ...publicPageSeo(locale, SERVICE_PATH),
   };
 }
 

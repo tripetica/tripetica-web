@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { checkoutCopy } from "@/lib/booking/checkout-copy";
 import { panelBelowField } from "@/lib/booking/panel-position";
@@ -25,6 +25,13 @@ type CountryPickerProps = {
   ariaLabel: string;
   active?: boolean;
   invalid?: boolean;
+  /** Measure this element for panel width/position (e.g. full phone control). */
+  anchorRef?: RefObject<HTMLElement | null>;
+  /**
+   * `anchored` = always panel below the field (no mobile bottom sheet).
+   * Use inside modals so the list opens under the control, not at the screen bottom.
+   */
+  layout?: "auto" | "anchored";
   onChange: (iso2: string) => void;
   onEmptyBlur?: () => void;
 };
@@ -37,12 +44,15 @@ export function CountryPicker({
   ariaLabel,
   active = true,
   invalid = false,
+  anchorRef,
+  layout = "auto",
   onChange,
   onEmptyBlur,
 }: CountryPickerProps) {
   const copy = checkoutCopy[locale];
   const phone = phoneFieldCopy[locale];
   const desktop = useMediaQuery(BOOKING_WIDE_QUERY);
+  const anchored = layout === "anchored" || desktop;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -56,41 +66,48 @@ export function CountryPicker({
   const results = useMemo(() => searchCountries(query, locale), [query, locale]);
   const selected = countryByIso2(value);
   const openRef = useRef(false);
-  const menuStyle = desktop
+  const phoneWidthOpts =
+    variant === "phone" && !anchorRef
+      ? { minWidth: 340, maxWidth: 380 }
+      : {};
+  const menuStyle = anchored
     ? panelBelowField(menuBox, {
         maxHeight: 360,
         gutter: 8,
-        ...(variant === "phone" ? { minWidth: 340, maxWidth: 380 } : {}),
+        zIndex: 260,
+        ...phoneWidthOpts,
       })
     : undefined;
 
   const resultsRef = useRef(results);
   const activeIndexRef = useRef(0);
-  resultsRef.current = results;
-  activeIndexRef.current = activeIndex;
-  openRef.current = open;
 
   useEffect(() => {
-    if (!active) {
-      setOpen(false);
-    }
-  }, [active]);
+    resultsRef.current = results;
+    activeIndexRef.current = activeIndex;
+    openRef.current = open;
+  }, [activeIndex, open, results]);
+
+  if (!active && open) {
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (!open || !active) {
-      setQuery("");
+      queueMicrotask(() => setQuery(""));
       return;
     }
     const selectedIndex = Math.max(
       0,
       resultsRef.current.findIndex((country) => country.iso2 === value),
     );
-    setActiveIndex(selectedIndex);
+    queueMicrotask(() => setActiveIndex(selectedIndex));
     activeIndexRef.current = selectedIndex;
 
     function measure() {
-      if (triggerRef.current) {
-        setMenuBox(triggerRef.current.getBoundingClientRect());
+      const anchor = anchorRef?.current ?? triggerRef.current;
+      if (anchor) {
+        setMenuBox(anchor.getBoundingClientRect());
       }
     }
     measure();
@@ -100,12 +117,14 @@ export function CountryPicker({
       const list = resultsRef.current;
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         setOpen(false);
         triggerRef.current?.focus();
         return;
       }
       if (event.key === "ArrowDown") {
         event.preventDefault();
+        event.stopPropagation();
         setActiveIndex((index) => {
           const next = Math.min(list.length - 1, index + 1);
           activeIndexRef.current = next;
@@ -115,6 +134,7 @@ export function CountryPicker({
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
+        event.stopPropagation();
         setActiveIndex((index) => {
           const next = Math.max(0, index - 1);
           activeIndexRef.current = next;
@@ -126,6 +146,7 @@ export function CountryPicker({
         const country = list[activeIndexRef.current] ?? list[0];
         if (country) {
           event.preventDefault();
+          event.stopPropagation();
           onChange(country.iso2);
           setOpen(false);
           triggerRef.current?.focus();
@@ -141,18 +162,18 @@ export function CountryPicker({
       setOpen(false);
     }
 
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     document.addEventListener("pointerdown", onOutside);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => {
       window.clearTimeout(timer);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("pointerdown", onOutside);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [active, desktop, onChange, open, value]);
+  }, [active, anchorRef, onChange, open, value]);
 
   useEffect(() => {
     if (!open) {
@@ -182,7 +203,7 @@ export function CountryPicker({
   const triggerFace = selected
     ? variant === "phone"
       ? `${countryFlagEmoji(selected.iso2)} ${formatDialCode(selected.iso2)}`
-      : `${countryFlagEmoji(selected.iso2)} ${selected.iso2} — ${selected.names[locale]}`
+      : `${countryFlagEmoji(selected.iso2)} ${selected.names[locale]}`
     : variant === "phone"
       ? `🌐 ${phone.selectCode}`
       : copy.nationalityPlaceholder;
@@ -191,13 +212,13 @@ export function CountryPicker({
     <div
       ref={listRef}
       id={listId}
-      className={`country-picker-panel${desktop ? " is-desktop" : " is-mobile"} is-${variant}`}
-      style={desktop ? menuStyle : undefined}
+      className={`country-picker-panel${anchored ? " is-desktop" : " is-mobile"} is-${variant}`}
+      style={anchored ? menuStyle : undefined}
       role="listbox"
       aria-labelledby={labelledBy}
       aria-activedescendant={results[activeIndex] ? `${listId}-${results[activeIndex].iso2}` : undefined}
     >
-      {!desktop ? (
+      {!anchored ? (
         <div className="country-picker-sheet-head">
           <p className="country-picker-sheet-title">{ariaLabel}</p>
           <button
@@ -279,9 +300,9 @@ export function CountryPicker({
       >
         <span className="country-picker-trigger-face">{triggerFace}</span>
       </button>
-      {active && open && typeof document !== "undefined" && (!desktop || menuBox)
+      {active && open && typeof document !== "undefined" && (!anchored || menuBox)
         ? createPortal(
-            desktop ? (
+            anchored ? (
               panel
             ) : (
               <div className="country-picker-sheet">

@@ -10,6 +10,7 @@ const SAMPLE_ER = {
   result: "success",
   base_code: "EUR",
   time_last_update_unix: 1756123200,
+  time_next_update_utc: "Wed, 26 Aug 2026 00:00:01 +0000",
   rates: { EUR: 1, USD: 1.2, TRY: 40, RUB: 97, GBP: 0.85 },
 };
 

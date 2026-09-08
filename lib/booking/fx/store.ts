@@ -8,6 +8,7 @@ type FxQuoteCacheRow = {
   source: string;
   fetched_at: Date;
   expires_at: Date;
+  provider_next_update_at: Date | null;
   eur_to_usd: string;
   eur_to_eur: string;
   eur_to_try: string;
@@ -55,6 +56,9 @@ function parseRawRates(value: unknown): FxQuoteCacheRecord["rawRates"] | null {
   ) {
     parsed.timeLastUpdateUnix = raw.timeLastUpdateUnix;
   }
+  if (typeof raw.timeNextUpdateUtc === "string" && raw.timeNextUpdateUtc.trim()) {
+    parsed.timeNextUpdateUtc = raw.timeNextUpdateUtc.trim();
+  }
   return parsed;
 }
 
@@ -64,6 +68,9 @@ function mapRow(row: FxQuoteCacheRow): FxQuoteCacheRecord | null {
   }
   const fetchedAt = row.fetched_at.toISOString();
   const expiresAt = row.expires_at.toISOString();
+  const providerNextUpdateAt = row.provider_next_update_at
+    ? row.provider_next_update_at.toISOString()
+    : null;
   const rawRates = parseRawRates(row.raw_rates);
   if (
     !rawRates ||
@@ -72,10 +79,17 @@ function mapRow(row: FxQuoteCacheRow): FxQuoteCacheRecord | null {
   ) {
     return null;
   }
+  if (
+    providerNextUpdateAt &&
+    !Number.isFinite(Date.parse(providerNextUpdateAt))
+  ) {
+    return null;
+  }
   const record: FxQuoteCacheRecord = {
     source: FX_SOURCE,
     fetchedAt,
     expiresAt,
+    providerNextUpdateAt,
     USD: numericString(row.eur_to_usd),
     EUR: numericString(row.eur_to_eur),
     TRY: numericString(row.eur_to_try),
@@ -106,7 +120,7 @@ function mapRow(row: FxQuoteCacheRow): FxQuoteCacheRecord | null {
 export async function loadActiveQuoteCache(): Promise<FxQuoteCacheRecord | null> {
   try {
     const result = await query<FxQuoteCacheRow>(
-      `SELECT source, fetched_at, expires_at,
+      `SELECT source, fetched_at, expires_at, provider_next_update_at,
               eur_to_usd, eur_to_eur, eur_to_try,
               market_eur_to_rub, eur_to_rub, eur_to_gbp,
               raw_rates
@@ -136,20 +150,21 @@ export async function saveQuoteCache(record: FxQuoteCacheRecord) {
     );
     await client.query(
       `INSERT INTO fx_quote_cache (
-         source, fetched_at, expires_at,
+         source, fetched_at, expires_at, provider_next_update_at,
          eur_to_usd, eur_to_eur, eur_to_try,
          market_eur_to_rub, eur_to_rub, eur_to_gbp,
          raw_rates, is_active
        ) VALUES (
-         $1, $2::timestamptz, $3::timestamptz,
-         $4::numeric, $5::numeric, $6::numeric,
-         $7::numeric, $8::numeric, $9::numeric,
-         $10::jsonb, TRUE
+         $1, $2::timestamptz, $3::timestamptz, $4::timestamptz,
+         $5::numeric, $6::numeric, $7::numeric,
+         $8::numeric, $9::numeric, $10::numeric,
+         $11::jsonb, TRUE
        )`,
       [
         FX_SOURCE,
         record.fetchedAt,
         record.expiresAt,
+        record.providerNextUpdateAt,
         record.USD,
         record.EUR,
         record.TRY,
@@ -181,5 +196,39 @@ export async function logFxFetchAttempt(input: {
   } catch (error) {
     console.error("[Tripetica fx] fetch log failed");
     console.error(error);
+  }
+}
+
+export async function loadLatestFxFetchAttempt(): Promise<{
+  status: "ok" | "error";
+  errorCode: string | null;
+  fetchedAt: string;
+} | null> {
+  try {
+    const result = await query<{
+      status: string;
+      error_code: string | null;
+      fetched_at: Date;
+    }>(
+      `SELECT status, error_code, fetched_at
+       FROM fx_rate_fetch_attempts
+       WHERE source = $1
+       ORDER BY fetched_at DESC
+       LIMIT 1`,
+      [FX_SOURCE],
+    );
+    const row = result.rows[0];
+    if (!row || (row.status !== "ok" && row.status !== "error")) {
+      return null;
+    }
+    return {
+      status: row.status,
+      errorCode: row.error_code,
+      fetchedAt: row.fetched_at.toISOString(),
+    };
+  } catch (error) {
+    console.error("[Tripetica fx] load latest fetch attempt failed");
+    console.error(error);
+    return null;
   }
 }

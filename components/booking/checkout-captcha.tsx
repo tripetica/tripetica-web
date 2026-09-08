@@ -6,7 +6,8 @@ import { type Locale } from "@/lib/i18n/config";
 
 type CheckoutCaptchaProps = {
   locale: Locale;
-  onVerified: (verified: boolean) => void;
+  invalid?: boolean;
+  onTokenChange: (token: string | null) => void;
 };
 
 type GoogleRecaptcha = {
@@ -41,14 +42,17 @@ function googleHl(locale: Locale) {
   return "en";
 }
 
-export function CheckoutCaptcha({ locale, onVerified }: CheckoutCaptchaProps) {
+export function CheckoutCaptcha({ locale, invalid = false, onTokenChange }: CheckoutCaptchaProps) {
   const bundledKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim() ?? "";
   const [siteKey, setSiteKey] = useState(bundledKey);
   const hostRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<number | null>(null);
   const started = useRef(false);
-  const verifiedRef = useRef(onVerified);
-  verifiedRef.current = onVerified;
+  const onTokenChangeRef = useRef(onTokenChange);
+
+  useEffect(() => {
+    onTokenChangeRef.current = onTokenChange;
+  }, [onTokenChange]);
 
   useEffect(() => {
     if (bundledKey) {
@@ -86,16 +90,16 @@ export function CheckoutCaptcha({ locale, onVerified }: CheckoutCaptchaProps) {
         sitekey: siteKey,
         hl: googleHl(locale),
         theme: "light",
-        callback: () => verifiedRef.current(true),
-        "expired-callback": () => verifiedRef.current(false),
-        "error-callback": () => verifiedRef.current(false),
+        callback: (token) => onTokenChangeRef.current(token),
+        "expired-callback": () => onTokenChangeRef.current(null),
+        "error-callback": () => onTokenChangeRef.current(null),
       });
     });
   }, [locale, siteKey]);
 
   useEffect(() => {
     return () => {
-      verifiedRef.current(false);
+      onTokenChangeRef.current(null);
       const id = widgetId.current;
       widgetId.current = null;
       started.current = false;
@@ -123,7 +127,8 @@ export function CheckoutCaptcha({ locale, onVerified }: CheckoutCaptchaProps) {
 
   return (
     <div
-      className="checkout-captcha"
+      id="checkout-captcha"
+      className={`checkout-captcha${invalid ? " is-invalid" : ""}`}
       data-captcha-provider="google"
       data-captcha-configured={siteKey ? "true" : "false"}
     >

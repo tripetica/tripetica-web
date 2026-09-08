@@ -254,6 +254,8 @@ async function loadPlaceDetailsLegacy(
 
 export type PlaceGeoDetails = {
   placeId: string;
+  name: string | null;
+  formattedAddress: string | null;
   lat: number | null;
   lng: number | null;
   city: string | null;
@@ -281,6 +283,8 @@ export async function loadPlaceGeoDetails(
   }
   return {
     placeId: details.placeId,
+    name: details.name,
+    formattedAddress: details.formattedAddress,
     lat: details.lat,
     lng: details.lng,
     city: details.city,

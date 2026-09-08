@@ -1,6 +1,6 @@
 import { type Locale } from "@/lib/i18n/config";
 
-/** Copy for the future checkout phone field. No default country in any locale. */
+/** Copy for the checkout phone field. Dial defaults come from locale-defaults. */
 export const phoneFieldCopy: Record<
   Locale,
   {

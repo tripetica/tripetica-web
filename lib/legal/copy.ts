@@ -68,7 +68,7 @@ export const legalDocuments: Record<
           title: "5. Ek ücretler ve ek hizmetler",
           paragraphs: [
             "Rezervasyon sırasında seçilen fazla yolcu, fazla bagaj, bebek koltuğu, karşılama hizmeti veya benzeri ek hizmetler, araç seçim ekranında ve/veya rezervasyon özetinde kullanıcıya gösterilir. Kullanıcı, rezervasyonu tamamlamadan önce toplam fiyatı ve varsa ek hizmet ücretlerini görerek kabul eder.",
-            "Rezervasyon tamamlandıktan sonra talep edilen ek durak, rota değişikliği, ekstra bekleme, farklı varış noktası, ilave yolcu, fazla bagaj veya benzeri operasyonel değişiklikler ek ücrete tabi olabilir.",
+            "Rezervasyon tamamlandıktan sonra talep edilen ek durak, rota değişikliği, 8. maddede düzenlenen bekleme süreleri dışındaki ekstra bekleme, farklı varış noktası, ilave yolcu, fazla bagaj veya benzeri operasyonel değişiklikler ek ücrete tabi olabilir.",
             "Ek ücret gerektiren durumlarda kullanıcıya mümkün olduğu ölçüde önceden bilgi verilir.",
           ],
         },
@@ -90,26 +90,17 @@ export const legalDocuments: Record<
               },
               " sayfasında açıklanır.",
             ],
-            "Genel kural olarak rezervasyon, kullanıcının rezervasyon sırasında belirttiği tarih ve saatten en geç 12 saat öncesine kadar ücretsiz iptal edilebilir.",
-            "Kullanıcının rezervasyon sırasında belirttiği tarih ve saate 12 saatten az kala yapılan iptallerde veya no-show durumunda ödeme iade edilmeyebilir.",
+            "Genel kural olarak rezervasyon, hizmet başlangıç saatine 6 saatten fazla süre kaldığı sürece iptal edilebilir veya değiştirilebilir.",
+            "İzin verilen süre içinde yapılan iptallerde, önceden tahsil edilmiş ve henüz iade edilmemiş net tutarın %100’ü iade edilir. Hizmet başlangıcına 6 saat veya daha az kaldığında iptal veya değişiklik yapılamaz. No-show durumunda ödeme iade edilmeyebilir.",
           ],
         },
         {
           title: "8. Ücretsiz bekleme süreleri ve no-show",
           paragraphs: [
-            "Ücretsiz bekleme süresi, alış noktasının türüne ve kullanıcının rezervasyon sırasında paylaştığı bilgilere göre değerlendirilir.",
-            "Havalimanı alışlarında, kullanıcı rezervasyon sırasında geçerli bir uçuş numarası paylaşmışsa ücretsiz bekleme süresi uçağın gerçek iniş saatinden itibaren başlar. Uçuş numarası paylaşılmamışsa veya uçuş bilgisi doğrulanamıyorsa, ücretsiz bekleme süresi kullanıcının rezervasyon sırasında belirttiği tarih ve saatten itibaren başlar.",
-            "Tren garı, otobüs terminali, liman, kruvaziyer terminali veya benzeri ulaşım noktalarındaki alışlarda, kullanıcı rezervasyon sırasında geçerli sefer bilgisi paylaşmışsa ücretsiz bekleme süresi tren, otobüs, gemi veya ilgili ulaşım aracının gerçek varış saatinden itibaren başlar. Sefer bilgisi paylaşılmamışsa veya doğrulanamıyorsa, ücretsiz bekleme süresi kullanıcının rezervasyon sırasında belirttiği tarih ve saatten itibaren başlar.",
-            "Otel, özel adres, hastane, iş yeri, restoran veya benzeri diğer alış noktalarında ücretsiz bekleme süresi kullanıcının rezervasyon sırasında belirttiği tarih ve saatten itibaren başlar.",
-            "Ücretsiz bekleme süreleri aşağıdaki şekildedir:",
-          ],
-          bullets: [
-            "Havalimanı alışları: 90 dakika",
-            "Tren garı, otobüs terminali, liman, kruvaziyer terminali ve benzeri ulaşım noktaları: 30 dakika",
-            "Otel, özel adres, hastane, iş yeri, restoran ve diğer alış noktaları: 20 dakika",
-          ],
-          afterBullets: [
-            "Yolcu, belirlenen ücretsiz bekleme süresi içinde alış noktasına gelmezse rezervasyon no-show olarak değerlendirilebilir.",
+            "Alış noktasına göre ücretsiz bekleme süreleri; havalimanlarında 90 dakika, gar, otogar, liman, kruvaziyer terminali ve benzeri noktalarda 30 dakika, otel, özel adres, hastane, iş yeri, restoran ve benzeri noktalarda 20 dakikadır.",
+            "Transfer hizmetlerinde, ilgili ücretsiz bekleme süresi sona erdiği halde yolcunun belirlenen alış veya buluşma noktasına gelmemesi halinde rezervasyon no-show olarak değerlendirilebilir. No-show olarak değerlendirilen rezervasyonlarda hizmet bedeli iade edilmez.",
+            "Belirli bir süre için satın alınan Saatlik Şoförlü Araç ve aynı süre esasına tabi hizmetlerde ise ücretsiz bekleme süresinin sona ermesi doğrudan no-show oluşturmaz. Şoför yolcuyu beklemeye devam eder ve ücretsiz bekleme süresinin sona erdiği andan itibaren satın alınan hizmet süresi işlemeye başlar. Bu andan sonra geçen bekleme süresi müşterinin satın aldığı toplam hizmet süresinden düşülür. Yolcunun daha sonra gelmesi halinde hizmet, kalan süre boyunca devam eder. Satın alınan hizmet süresinin tamamı sona erdiği halde yolcunun hizmeti başlatmamış olması halinde rezervasyon no-show olarak değerlendirilebilir.",
+            "Sabit program veya hareket saatine bağlı tur ve etkinliklerde, ilgili hizmet için rezervasyon sırasında ve rezervasyon belgesinde bildirilen özel katılım, buluşma, servis ve hareket saati kuralları uygulanır.",
           ],
         },
         {
@@ -226,7 +217,7 @@ export const legalDocuments: Record<
           title: "5. Ek hizmetler ve ek ücretler",
           paragraphs: [
             "Rezervasyon sırasında seçilen fazla yolcu, fazla bagaj, bebek koltuğu, karşılama hizmeti veya benzeri ek hizmetler, araç seçim ekranında ve/veya rezervasyon özetinde kullanıcıya gösterilir. Kullanıcı, rezervasyonu tamamlamadan önce toplam fiyatı ve varsa ek hizmet ücretlerini görerek kabul eder.",
-            "Rezervasyon tamamlandıktan sonra talep edilen ek durak, rota değişikliği, ekstra bekleme, farklı varış noktası, ilave yolcu, fazla bagaj veya benzeri operasyonel değişiklikler ek ücrete tabi olabilir.",
+            "Rezervasyon tamamlandıktan sonra talep edilen ek durak, rota değişikliği, farklı varış noktası, ilave yolcu, fazla bagaj, satın alınan hizmet kapsamı veya süresi dışındaki ilave bekleme ve benzeri operasyonel değişiklikler ek ücrete tabi olabilir.",
             "Ek ücret gerektiren durumlarda kullanıcıya mümkün olduğu ölçüde önceden bilgi verilir.",
           ],
         },
@@ -268,7 +259,9 @@ export const legalDocuments: Record<
             "Otel, özel adres, hastane, iş yeri, restoran ve diğer alış noktaları: 20 dakika",
           ],
           afterBullets: [
-            "Yolcu, belirlenen ücretsiz bekleme süresi içinde alış noktasına gelmezse rezervasyon no-show olarak değerlendirilebilir.",
+            "Transfer hizmetlerinde, ilgili ücretsiz bekleme süresi sona erdiği halde yolcunun belirlenen alış veya buluşma noktasına gelmemesi halinde rezervasyon no-show olarak değerlendirilebilir.",
+            "Belirli bir süre için satın alınan Saatlik Şoförlü Araç ve aynı süre esasına tabi hizmetlerde ise ücretsiz bekleme süresinin sona ermesi doğrudan no-show oluşturmaz. Şoför yolcuyu beklemeye devam eder ve ücretsiz bekleme süresinin sona erdiği andan itibaren satın alınan hizmet süresi işlemeye başlar. Bu andan sonra geçen bekleme süresi müşterinin satın aldığı toplam hizmet süresinden düşülür. Yolcunun daha sonra gelmesi halinde hizmet, kalan süre boyunca devam eder. Satın alınan hizmet süresinin tamamı sona erdiği halde yolcunun hizmeti başlatmamış olması halinde rezervasyon no-show olarak değerlendirilebilir.",
+            "Sabit program veya hareket saatine bağlı tur ve etkinliklerde, ilgili hizmet için rezervasyon sırasında ve rezervasyon belgesinde bildirilen özel katılım, buluşma, servis ve hareket saati kuralları uygulanır.",
           ],
         },
         {
@@ -282,8 +275,8 @@ export const legalDocuments: Record<
               },
               " sayfasında açıklanır.",
             ],
-            "Genel kural olarak rezervasyon, kullanıcının rezervasyon sırasında belirttiği tarih ve saatten en geç 12 saat öncesine kadar ücretsiz iptal edilebilir.",
-            "Kullanıcının rezervasyon sırasında belirttiği tarih ve saate 12 saatten az kala yapılan iptallerde veya no-show durumunda ödeme iade edilmeyebilir.",
+            "Genel kural olarak rezervasyon, hizmet başlangıç saatine 6 saatten fazla süre kaldığı sürece iptal edilebilir veya değiştirilebilir.",
+            "İzin verilen süre içinde yapılan iptallerde, önceden tahsil edilmiş ve henüz iade edilmemiş net tutarın %100’ü iade edilir. Hizmet başlangıcına 6 saat veya daha az kaldığında iptal veya değişiklik yapılamaz. 9. maddede belirtilen koşullara göre oluşan no-show durumlarında ödeme iade edilmeyebilir.",
           ],
         },
         {
@@ -370,16 +363,16 @@ export const legalDocuments: Record<
           ],
         },
         {
-          title: "2. Ücretsiz iptal hakkı",
+          title: "2. İptal ve değişiklik hakkı",
           paragraphs: [
-            "Genel kural olarak rezervasyon, kullanıcının rezervasyon sırasında belirttiği tarih ve saatten en geç 12 saat öncesine kadar ücretsiz iptal edilebilir.",
-            "Bu süre içinde yapılan iptal taleplerinde, online ödeme yapılmışsa ödeme iadesi işleme alınabilir. Şoföre nakit ödeme seçilmişse kullanıcıdan herhangi bir hizmet bedeli tahsil edilmez.",
+            "Genel kural olarak rezervasyon, hizmet başlangıç saatine 6 saatten fazla süre kaldığı sürece iptal edilebilir veya değiştirilebilir.",
+            "İzin verilen süre içinde yapılan iptallerde, online ödeme yapılmışsa önceden tahsil edilmiş ve henüz iade edilmemiş net tutarın %100’ü iade edilir. Şoföre nakit ödeme seçilmişse kullanıcıdan herhangi bir hizmet bedeli tahsil edilmez.",
           ],
         },
         {
-          title: "3. 12 saatten az kala yapılan iptaller",
+          title: "3. 6 saat veya daha az kala yapılan iptal ve değişiklik talepleri",
           paragraphs: [
-            "Kullanıcının rezervasyon sırasında belirttiği tarih ve saate 12 saatten az kala yapılan iptallerde ödeme iade edilmeyebilir.",
+            "Hizmet başlangıç saatine 6 saat veya daha az kaldığında müşteri rezervasyonu iptal edemez veya değiştiremez ve ödeme iade edilmez.",
             "Şoföre nakit ödeme seçeneğiyle yapılan rezervasyonlarda, hizmet sağlayıcı tekrarlanan, kötüye kullanım niteliğinde veya operasyonel zarara sebep olan rezervasyonları ileride reddetme hakkını saklı tutar.",
           ],
         },
@@ -401,7 +394,9 @@ export const legalDocuments: Record<
         {
           title: "5. No-show",
           paragraphs: [
-            "Yolcu, belirlenen ücretsiz bekleme süresi içinde alış noktasına gelmezse rezervasyon no-show olarak değerlendirilebilir.",
+            "Transfer hizmetlerinde, ilgili ücretsiz bekleme süresi sona erdiği halde yolcunun belirlenen alış veya buluşma noktasına gelmemesi halinde rezervasyon no-show olarak değerlendirilebilir.",
+            "Belirli bir süre için satın alınan Saatlik Şoförlü Araç ve aynı süre esasına tabi hizmetlerde ücretsiz bekleme süresinin sona ermesi doğrudan no-show oluşturmaz. Şoför yolcuyu beklemeye devam eder ve ücretsiz bekleme süresinin sona erdiği andan itibaren satın alınan hizmet süresi işlemeye başlar. Bu andan sonra geçen bekleme süresi müşterinin satın aldığı toplam hizmet süresinden düşülür. Yolcunun daha sonra gelmesi halinde hizmet, kalan süre boyunca devam eder. Satın alınan hizmet süresinin tamamı sona erdiği halde yolcunun hizmeti başlatmamış olması halinde rezervasyon no-show olarak değerlendirilebilir.",
+            "Sabit program veya hareket saatine bağlı tur ve etkinliklerde, ilgili hizmet için rezervasyon sırasında ve rezervasyon belgesinde bildirilen özel katılım, buluşma, servis ve hareket saati kuralları uygulanır. Yolcunun bu kurallara uymaması nedeniyle hizmete katılamaması durumunda ilgili rezervasyon no-show olarak değerlendirilebilir.",
             "No-show durumunda ödeme iade edilmeyebilir.",
             "Kullanıcının yanlış alış noktası, yanlış tarih, yanlış saat, eksik iletişim bilgisi, hatalı uçuş/sefer bilgisi veya benzeri yanlış/eksik bilgi vermesi nedeniyle hizmetin sağlanamaması halinde de rezervasyon no-show kapsamında değerlendirilebilir.",
           ],
@@ -424,7 +419,7 @@ export const legalDocuments: Record<
         {
           title: "8. Rota değişikliği, ek durak ve ek hizmetler",
           paragraphs: [
-            "Rezervasyon tamamlandıktan sonra talep edilen ek durak, rota değişikliği, ekstra bekleme, farklı varış noktası, ilave yolcu, fazla bagaj veya benzeri operasyonel değişiklikler ek ücrete tabi olabilir.",
+            "Rezervasyon tamamlandıktan sonra talep edilen ek durak, rota değişikliği, farklı varış noktası, ilave yolcu, fazla bagaj, satın alınan hizmet kapsamı veya süresi dışındaki ilave bekleme ve benzeri operasyonel değişiklikler ek ücrete tabi olabilir.",
             "Kullanıcı ek ücreti kabul etmezse, hizmet onaylanan rezervasyon bilgilerine göre sağlanır. Onaylanan rezervasyon dışında talep edilen değişikliklerin sağlanamaması iade hakkı doğurmaz.",
           ],
         },
@@ -470,7 +465,7 @@ export const legalDocuments: Record<
       sections: [
         {
           paragraphs: [
-            "Tripetica.com üzerinden yapılan özel transfer, havalimanı transferi, şoförlü araç ve benzeri ulaşım hizmeti rezervasyonlarında kullanıcıdan alınan kişisel verilerin hangi amaçlarla işlendiğini, nasıl kullanıldığını, hangi durumlarda paylaşılabileceğini ve 6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında kullanıcıya yapılan bilgilendirmeyi açıklamak amacıyla hazırlanmıştır.",
+            "Tripetica.com üzerinden yapılan özel transfer, havalimanı transferi, şoförlü araç, tur, etkinlik ve benzeri seyahat veya ulaşım hizmeti rezervasyonlarında kullanıcıdan alınan kişisel verilerin hangi amaçlarla işlendiğini, nasıl kullanıldığını, hangi durumlarda paylaşılabileceğini ve 6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında kullanıcıya yapılan bilgilendirmeyi açıklamak amacıyla hazırlanmıştır.",
           ],
         },
         {
@@ -499,11 +494,12 @@ export const legalDocuments: Record<
             "E-posta adresi",
             "Alış noktası ve bırakma noktası",
             "Rezervasyon tarihi ve saati",
+            "Seçilen hizmet veya tur bilgisi",
             "Yolcu sayısı",
             "Bagaj bilgisi",
             "Bebek koltuğu, karşılama hizmeti veya benzeri ek hizmet tercihleri",
             "Uçuş numarası, tren/otobüs/gemi sefer bilgisi",
-            "Yolcu bilgileri",
+            "Yolcu ve katılımcı bilgileri",
             "Uyruk bilgisi",
             "Pasaport bilgisi",
             "Ödeme yöntemi",
@@ -519,8 +515,8 @@ export const legalDocuments: Record<
           ],
           bullets: [
             "Rezervasyonun oluşturulması",
-            "Transfer, şoförlü araç veya benzeri ulaşım hizmetinin sağlanması",
-            "Yolcu, araç ve operasyon planlamasının yapılması",
+            "Transfer, şoförlü araç, tur, etkinlik veya rezervasyonu yapılan diğer hizmetlerin sağlanması",
+            "Yolcu, katılımcı, araç ve operasyon planlamasının yapılması ve gerekli rezervasyon bilgilerinin operasyon ekibine aktarılması",
             "Kullanıcı ile rezervasyon, ödeme, buluşma noktası, değişiklik veya iptal konularında iletişim kurulması",
             "Voucher, rezervasyon onayı ve operasyonel bilgilendirme gönderilmesi",
             "Yasal bildirimlerin, resmi kayıtların ve zorunlu operasyonel işlemlerin yapılması",
@@ -562,6 +558,7 @@ export const legalDocuments: Record<
           bullets: [
             "Sürücüler",
             "Araç tedarikçileri",
+            "Tur, etkinlik ve rezervasyonu yapılan hizmetin yerine getirilmesinde görev alan hizmet sağlayıcıları",
             "Operasyon ekibi",
             "Ödeme sağlayıcıları",
             "E-posta, mesajlaşma veya bildirim hizmeti sağlayıcıları",
@@ -576,7 +573,7 @@ export const legalDocuments: Record<
         {
           title: "9. İletişim ve operasyonel bildirimler",
           paragraphs: [
-            "Kullanıcı, rezervasyonla ilgili bilgilendirme, operasyonel destek, buluşma noktası açıklamaları, sürücü/araç bilgileri, ödeme durumu, iptal/değişiklik ve benzeri konularda telefon, e-posta, WhatsApp, Telegram, Viber veya benzeri iletişim kanalları üzerinden bilgilendirilebilir.",
+            "Kullanıcı, rezervasyonla ilgili bilgilendirme, operasyonel destek, buluşma noktası, servis saati, katılım ve hareket saati açıklamaları, sürücü/araç bilgileri, ödeme durumu, iptal/değişiklik ve benzeri konularda telefon, e-posta, WhatsApp, Telegram, Viber veya benzeri iletişim kanalları üzerinden bilgilendirilebilir.",
             "Bu bildirimler, hizmetin sağlanması ve rezervasyonun doğru şekilde yürütülmesi amacıyla yapılır.",
           ],
         },
@@ -682,7 +679,7 @@ export const legalDocuments: Record<
           title: "5. Additional charges and additional services",
           paragraphs: [
             "Additional services selected during the reservation process, such as extra passengers, extra luggage, baby seat, meet & greet service or similar services, are shown to the user on the vehicle selection screen and/or in the reservation summary. The user accepts the total price and any additional service charges before completing the reservation.",
-            "Additional stops, route changes, extra waiting time, different destination, additional passengers, extra luggage or similar operational changes requested after the reservation has been completed may be subject to additional charges.",
+            "Additional stops, route changes, extra waiting time outside the waiting periods governed by Section 8, a different destination, additional passengers, extra luggage or similar operational changes requested after the reservation has been completed may be subject to additional charges.",
             "Where additional charges are required, the user will be informed in advance as far as reasonably possible.",
           ],
         },
@@ -704,26 +701,17 @@ export const legalDocuments: Record<
               },
               " page.",
             ],
-            "As a general rule, the reservation may be cancelled free of charge up to 12 hours before the date and time specified by the user during the reservation process.",
-            "For cancellations made less than 12 hours before the date and time specified by the user during the reservation process, or in case of no-show, the payment may not be refunded.",
+            "As a general rule, the reservation may be cancelled or changed while more than 6 hours remain before the service start time.",
+            "For cancellations made within the permitted period, 100% of the net amount previously collected and not yet refunded is refunded. When 6 hours or less remain before the service start time, cancellation or changes are not available. In case of no-show, the payment may not be refunded.",
           ],
         },
         {
           title: "8. Free waiting times and no-show",
           paragraphs: [
-            "The free waiting time is evaluated according to the type of pickup point and the information shared by the user during the reservation process.",
-            "For airport pickups, if the user has provided a valid flight number during the reservation process, the free waiting time starts from the actual landing time of the flight. If no flight number has been provided or the flight information cannot be verified, the free waiting time starts from the date and time specified by the user during the reservation process.",
-            "For pickups from train stations, bus terminals, ports, cruise terminals or similar transportation points, if the user has provided valid service information during the reservation process, the free waiting time starts from the actual arrival time of the train, bus, ship or relevant means of transportation. If service information has not been provided or cannot be verified, the free waiting time starts from the date and time specified by the user during the reservation process.",
-            "For hotels, private addresses, hospitals, workplaces, restaurants or other similar pickup points, the free waiting time starts from the date and time specified by the user during the reservation process.",
-            "The free waiting times are as follows:",
-          ],
-          bullets: [
-            "Airport pickups: 90 minutes",
-            "Train stations, bus terminals, ports, cruise terminals and similar transportation points: 30 minutes",
-            "Hotels, private addresses, hospitals, workplaces, restaurants and other pickup points: 20 minutes",
-          ],
-          afterBullets: [
-            "If the passenger does not arrive at the pickup point within the specified free waiting time, the reservation may be considered a no-show.",
+            "Free waiting time is 90 minutes for airport pickups; 30 minutes for pickups from train stations, bus terminals, ports, cruise terminals and similar locations; and 20 minutes for pickups from hotels, private addresses, hospitals, workplaces, restaurants and similar locations.",
+            "For transfer services, if the passenger has not arrived at the designated pickup or meeting point when the applicable free waiting period ends, the reservation may be considered a no-show. No refund is issued for reservations considered a no-show.",
+            "For Hourly Chauffeur Service and other services purchased for a defined period, the end of the free waiting period does not immediately constitute a no-show. The chauffeur will continue to wait, and the purchased service duration will begin to run from the moment the free waiting period ends. Any waiting time thereafter will be deducted from the total service duration purchased by the customer. If the passenger arrives later, the service will continue for the remaining duration. If the passenger has not started the service by the time the entire purchased service duration has elapsed, the reservation may be considered a no-show.",
+            "For tours and activities tied to a fixed programme or departure time, the specific participation, meeting, shuttle service and departure-time rules communicated during the reservation process and in the reservation document for the relevant service will apply.",
           ],
         },
         {
@@ -845,7 +833,7 @@ export const legalDocuments: Record<
           title: "5. Additional services and additional charges",
           paragraphs: [
             "Additional services selected during the reservation process, such as extra passengers, extra luggage, baby seat, meet & greet service or similar services, are shown to the user on the vehicle selection screen and/or in the reservation summary. The user accepts the total price and any additional service charges before completing the reservation.",
-            "Additional stops, route changes, extra waiting time, different destination, additional passengers, extra luggage or similar operational changes requested after the reservation has been completed may be subject to additional charges.",
+            "Additional stops, route changes, a different destination, additional passengers, extra luggage, additional waiting outside the scope or duration of the purchased service, or similar operational changes requested after the reservation has been completed may be subject to additional charges.",
             "Where additional charges are required, the user will be informed in advance as far as reasonably possible.",
           ],
         },
@@ -887,7 +875,9 @@ export const legalDocuments: Record<
             "Hotels, private addresses, hospitals, workplaces, restaurants and other pickup points: 20 minutes",
           ],
           afterBullets: [
-            "If the passenger does not arrive at the pickup point within the specified free waiting time, the reservation may be considered a no-show.",
+            "For transfer services, if the passenger has not arrived at the designated pickup or meeting point when the applicable free waiting period ends, the reservation may be considered a no-show.",
+            "For Hourly Chauffeur Service and other services purchased for a defined period, the end of the free waiting period does not immediately constitute a no-show. The chauffeur will continue to wait, and the purchased service duration will begin to run from the moment the free waiting period ends. Any waiting time thereafter will be deducted from the total service duration purchased by the customer. If the passenger arrives later, the service will continue for the remaining duration. If the passenger has not started the service by the time the entire purchased service duration has elapsed, the reservation may be considered a no-show.",
+            "For tours and activities tied to a fixed programme or departure time, the specific participation, meeting, shuttle service and departure-time rules communicated during the reservation process and in the reservation document for the relevant service will apply.",
           ],
         },
         {
@@ -901,8 +891,8 @@ export const legalDocuments: Record<
               },
               " page.",
             ],
-            "As a general rule, the reservation may be cancelled free of charge up to 12 hours before the date and time specified by the user during the reservation process.",
-            "For cancellations made less than 12 hours before the date and time specified by the user during the reservation process, or in case of no-show, the payment may not be refunded.",
+            "As a general rule, the reservation may be cancelled or changed while more than 6 hours remain before the service start time.",
+            "For cancellations made within the permitted period, 100% of the net amount previously collected and not yet refunded is refunded. When 6 hours or less remain before the service start time, cancellation or changes are not available. In no-show cases arising under the conditions set out in Section 9, the payment may not be refunded.",
           ],
         },
         {
@@ -989,16 +979,16 @@ export const legalDocuments: Record<
           ],
         },
         {
-          title: "2. Free cancellation right",
+          title: "2. Cancellation and change rights",
           paragraphs: [
-            "As a general rule, the reservation may be cancelled free of charge up to 12 hours before the date and time specified by the user during the reservation process.",
-            "For cancellation requests made within this period, if an online payment has been made, the refund may be processed. If cash to driver has been selected, no service fee is charged to the user.",
+            "As a general rule, the reservation may be cancelled or changed while more than 6 hours remain before the service start time.",
+            "For cancellations made within the permitted period, if an online payment has been made, 100% of the net amount previously collected and not yet refunded is refunded. If cash to driver has been selected, no service fee is charged to the user.",
           ],
         },
         {
-          title: "3. Cancellations made less than 12 hours before the service time",
+          title: "3. Cancellation and change requests when 6 hours or less remain",
           paragraphs: [
-            "For cancellations made less than 12 hours before the date and time specified by the user during the reservation process, the payment may not be refunded.",
+            "When 6 hours or less remain before the service start time, the customer cannot cancel or change the reservation and no refund is issued.",
             "For reservations made with the cash to driver option, the service provider reserves the right to refuse future reservations that are repeated, abusive or cause operational loss.",
           ],
         },
@@ -1020,7 +1010,9 @@ export const legalDocuments: Record<
         {
           title: "5. No-show",
           paragraphs: [
-            "If the passenger does not arrive at the pickup point within the specified free waiting time, the reservation may be considered a no-show.",
+            "For transfer services, if the passenger has not arrived at the designated pickup or meeting point when the applicable free waiting period ends, the reservation may be considered a no-show.",
+            "For Hourly Chauffeur Service and other services purchased for a defined period, the end of the free waiting period does not immediately constitute a no-show. The chauffeur will continue to wait, and the purchased service duration will begin to run from the moment the free waiting period ends. Any waiting time thereafter will be deducted from the total service duration purchased by the customer. If the passenger arrives later, the service will continue for the remaining duration. If the passenger has not started the service by the time the entire purchased service duration has elapsed, the reservation may be considered a no-show.",
+            "For tours and activities tied to a fixed programme or departure time, the specific participation, meeting, shuttle service and departure-time rules communicated during the reservation process and in the reservation document for the relevant service will apply. If the passenger is unable to participate in the service because they failed to comply with those rules, the reservation may be considered a no-show.",
             "In case of no-show, the payment may not be refunded.",
             "If the service cannot be provided due to the user providing an incorrect pickup point, incorrect date, incorrect time, incomplete contact information, incorrect flight/service information or similar incorrect/incomplete information, the reservation may also be considered within the scope of no-show.",
           ],
@@ -1043,7 +1035,7 @@ export const legalDocuments: Record<
         {
           title: "8. Route changes, additional stops and additional services",
           paragraphs: [
-            "Additional stops, route changes, extra waiting time, different destination, additional passengers, extra luggage or similar operational changes requested after the reservation has been completed may be subject to additional charges.",
+            "Additional stops, route changes, a different destination, additional passengers, extra luggage, additional waiting outside the scope or duration of the purchased service, or similar operational changes requested after the reservation has been completed may be subject to additional charges.",
             "If the user does not accept the additional charge, the service will be provided according to the confirmed reservation information. Failure to provide changes requested outside the confirmed reservation does not create a right to refund.",
           ],
         },
@@ -1090,7 +1082,7 @@ export const legalDocuments: Record<
       sections: [
         {
           paragraphs: [
-            "This text has been prepared to explain how personal data collected from users during private transfer, airport transfer, chauffeur service and similar transportation service reservations made through Tripetica.com is processed, used, shared where necessary, and to provide information regarding the protection of personal data.",
+            "This text has been prepared to explain how personal data collected from users during reservations for private transfers, airport transfers, chauffeur services, tours, activities and similar travel or transportation services made through Tripetica.com is processed, used, shared where necessary, and protected.",
           ],
         },
         {
@@ -1119,11 +1111,12 @@ export const legalDocuments: Record<
             "Email address",
             "Pickup point and drop-off point",
             "Reservation date and time",
+            "Selected service or tour information",
             "Passenger count",
             "Luggage information",
             "Baby seat, meet & greet service or similar additional service preferences",
             "Flight number, train/bus/ship service information",
-            "Passenger information",
+            "Passenger and participant information",
             "Nationality information",
             "Passport information",
             "Payment method",
@@ -1139,8 +1132,8 @@ export const legalDocuments: Record<
           ],
           bullets: [
             "Creating the reservation",
-            "Providing transfer, chauffeur service or similar transportation services",
-            "Planning passengers, vehicles and operations",
+            "Providing transfer, chauffeur, tour, activity or other reserved services",
+            "Planning passengers, participants, vehicles and operations and providing the operations team with the reservation information required",
             "Communicating with the user regarding reservation, payment, meeting point, changes or cancellation",
             "Sending voucher, reservation confirmation and operational notifications",
             "Carrying out legal notifications, official records and mandatory operational procedures",
@@ -1182,6 +1175,7 @@ export const legalDocuments: Record<
           bullets: [
             "Drivers",
             "Vehicle suppliers",
+            "Service providers involved in delivering tours, activities or other reserved services",
             "Operations team",
             "Payment providers",
             "Email, messaging or notification service providers",
@@ -1196,7 +1190,7 @@ export const legalDocuments: Record<
         {
           title: "9. Communication and operational notifications",
           paragraphs: [
-            "The user may be contacted through phone, email, WhatsApp, Telegram, Viber or similar communication channels regarding reservation information, operational support, meeting point instructions, driver/vehicle information, payment status, cancellation/change and similar matters.",
+            "The user may be contacted through phone, email, WhatsApp, Telegram, Viber or similar communication channels regarding reservation information, operational support, meeting point, shuttle time, participation and departure-time instructions, driver/vehicle information, payment status, cancellation/change and similar matters.",
             "These notifications are made for the purpose of providing the service and carrying out the reservation correctly.",
           ],
         },
@@ -1302,7 +1296,7 @@ export const legalDocuments: Record<
           title: "5. Дополнительные сборы и дополнительные услуги",
           paragraphs: [
             "Дополнительные услуги, выбранные в процессе бронирования, такие как дополнительные пассажиры, дополнительный багаж, детское кресло, услуга встречи или аналогичные услуги, отображаются пользователю на экране выбора автомобиля и/или в резюме бронирования. Пользователь принимает итоговую стоимость и возможные дополнительные сборы до завершения бронирования.",
-            "Дополнительные остановки, изменение маршрута, дополнительное время ожидания, другой пункт назначения, дополнительные пассажиры, дополнительный багаж или аналогичные операционные изменения, запрошенные после завершения бронирования, могут подлежать дополнительной оплате.",
+            "Дополнительные остановки, изменение маршрута, дополнительное время ожидания, не относящееся к периодам ожидания, регулируемым разделом 8, другой пункт назначения, дополнительные пассажиры, дополнительный багаж или аналогичные операционные изменения, запрошенные после завершения бронирования, могут подлежать дополнительной оплате.",
             "В случаях, когда требуется дополнительная оплата, пользователь будет по возможности заранее проинформирован.",
           ],
         },
@@ -1325,26 +1319,17 @@ export const legalDocuments: Record<
               },
               ".",
             ],
-            "Как общее правило, бронирование может быть бесплатно отменено не позднее чем за 12 часов до даты и времени, указанных пользователем в процессе бронирования.",
-            "При отмене менее чем за 12 часов до даты и времени, указанных пользователем в процессе бронирования, а также в случае no-show, оплата может не возвращаться.",
+            "Как общее правило, бронирование можно отменить или изменить, если до начала услуги остаётся больше 6 часов.",
+            "При отмене в разрешённый срок возвращается 100% ранее полученной и ещё не возвращённой чистой суммы. Если до начала услуги осталось 6 часов или меньше, отмена и изменение недоступны. В случае no-show оплата может не возвращаться.",
           ],
         },
         {
           title: "8. Бесплатное время ожидания и no-show",
           paragraphs: [
-            "Бесплатное время ожидания оценивается в зависимости от типа пункта посадки и информации, предоставленной пользователем в процессе бронирования.",
-            "При посадке в аэропорту, если пользователь указал действительный номер рейса в процессе бронирования, бесплатное время ожидания начинается с фактического времени посадки самолета. Если номер рейса не был предоставлен или информацию о рейсе невозможно проверить, бесплатное время ожидания начинается с даты и времени, указанных пользователем в процессе бронирования.",
-            "При посадке на железнодорожном вокзале, автобусном терминале, в порту, круизном терминале или аналогичных транспортных пунктах, если пользователь предоставил действительную информацию о рейсе/маршруте, бесплатное время ожидания начинается с фактического времени прибытия поезда, автобуса, судна или соответствующего транспортного средства. Если такая информация не была предоставлена или ее невозможно проверить, бесплатное время ожидания начинается с даты и времени, указанных пользователем в процессе бронирования.",
-            "Для отелей, частных адресов, больниц, рабочих мест, ресторанов или других аналогичных пунктов посадки бесплатное время ожидания начинается с даты и времени, указанных пользователем в процессе бронирования.",
-            "Бесплатное время ожидания составляет:",
-          ],
-          bullets: [
-            "Посадка в аэропорту: 90 минут",
-            "Железнодорожные вокзалы, автобусные терминалы, порты, круизные терминалы и аналогичные транспортные пункты: 30 минут",
-            "Отели, частные адреса, больницы, рабочие места, рестораны и другие пункты посадки: 20 минут",
-          ],
-          afterBullets: [
-            "Если пассажир не прибудет в пункт посадки в течение указанного бесплатного времени ожидания, бронирование может считаться no-show.",
+            "Бесплатное время ожидания составляет 90 минут при посадке в аэропорту, 30 минут при посадке на железнодорожном вокзале, автобусном терминале, в порту, круизном терминале и аналогичном месте и 20 минут при посадке у отеля, по частному адресу, у больницы, места работы, ресторана и в аналогичном месте.",
+            "При оказании услуг трансфера, если пассажир не прибыл в установленный пункт посадки или место встречи к моменту окончания соответствующего бесплатного времени ожидания, бронирование может быть признано no-show. Стоимость услуги по бронированию, признанному no-show, не возвращается.",
+            "Для услуги «Автомобиль с водителем с почасовой оплатой» и иных услуг, приобретённых на определённый срок, окончание бесплатного времени ожидания не означает немедленного признания бронирования no-show. Водитель продолжает ожидать пассажира, а приобретённая продолжительность услуги начинает исчисляться с момента окончания бесплатного времени ожидания. Последующее время ожидания вычитается из общей продолжительности услуги, приобретённой клиентом. Если пассажир прибывает позднее, услуга оказывается в течение оставшегося времени. Если пассажир не приступил к получению услуги до истечения всей приобретённой продолжительности услуги, бронирование может быть признано no-show.",
+            "Для туров и мероприятий, связанных с фиксированной программой или временем отправления, применяются специальные правила участия, встречи, трансферного обслуживания и времени отправления, сообщённые при бронировании и указанные в документе бронирования для соответствующей услуги.",
           ],
         },
         {
@@ -1471,7 +1456,7 @@ export const legalDocuments: Record<
           title: "5. Дополнительные услуги и дополнительные сборы",
           paragraphs: [
             "Дополнительные услуги, выбранные в процессе бронирования, такие как дополнительные пассажиры, дополнительный багаж, детское кресло, услуга встречи или аналогичные услуги, отображаются пользователю на экране выбора автомобиля и/или в резюме бронирования. Пользователь принимает итоговую стоимость и возможные дополнительные сборы до завершения бронирования.",
-            "Дополнительные остановки, изменение маршрута, дополнительное время ожидания, другой пункт назначения, дополнительные пассажиры, дополнительный багаж или аналогичные операционные изменения, запрошенные после завершения бронирования, могут подлежать дополнительной оплате.",
+            "Дополнительные остановки, изменение маршрута, другой пункт назначения, дополнительные пассажиры, дополнительный багаж, дополнительное ожидание за пределами объёма или продолжительности приобретённой услуги и аналогичные операционные изменения, запрошенные после завершения бронирования, могут подлежать дополнительной оплате.",
             "В случаях, когда требуется дополнительная оплата, пользователь будет по возможности заранее проинформирован.",
           ],
         },
@@ -1513,7 +1498,9 @@ export const legalDocuments: Record<
             "Отели, частные адреса, больницы, рабочие места, рестораны и другие пункты посадки: 20 минут",
           ],
           afterBullets: [
-            "Если пассажир не прибудет в пункт посадки в течение указанного бесплатного времени ожидания, бронирование может считаться no-show.",
+            "При оказании услуг трансфера, если пассажир не прибыл в установленный пункт посадки или место встречи к моменту окончания соответствующего бесплатного времени ожидания, бронирование может быть признано no-show.",
+            "Для услуги «Автомобиль с водителем с почасовой оплатой» и иных услуг, приобретённых на определённый срок, окончание бесплатного времени ожидания не означает немедленного признания бронирования no-show. Водитель продолжает ожидать пассажира, а приобретённая продолжительность услуги начинает исчисляться с момента окончания бесплатного времени ожидания. Последующее время ожидания вычитается из общей продолжительности услуги, приобретённой клиентом. Если пассажир прибывает позднее, услуга оказывается в течение оставшегося времени. Если пассажир не приступил к получению услуги до истечения всей приобретённой продолжительности услуги, бронирование может быть признано no-show.",
+            "Для туров и мероприятий, связанных с фиксированной программой или временем отправления, применяются специальные правила участия, встречи, трансферного обслуживания и времени отправления, сообщённые при бронировании и указанные в документе бронирования для соответствующей услуги.",
           ],
         },
         {
@@ -1527,8 +1514,8 @@ export const legalDocuments: Record<
               },
               ".",
             ],
-            "Как общее правило, бронирование может быть бесплатно отменено не позднее чем за 12 часов до даты и времени, указанных пользователем в процессе бронирования.",
-            "При отмене менее чем за 12 часов до даты и времени, указанных пользователем в процессе бронирования, а также в случае no-show, оплата может не возвращаться.",
+            "Как общее правило, бронирование можно отменить или изменить, если до начала услуги остаётся больше 6 часов.",
+            "При отмене в разрешённый срок возвращается 100% ранее полученной и ещё не возвращённой чистой суммы. Если до начала услуги осталось 6 часов или меньше, отмена и изменение недоступны. В случаях no-show, возникших при условиях, указанных в разделе 9, оплата может не возвращаться.",
           ],
         },
         {
@@ -1621,16 +1608,16 @@ export const legalDocuments: Record<
           ],
         },
         {
-          title: "2. Право на бесплатную отмену",
+          title: "2. Право на отмену и изменение",
           paragraphs: [
-            "Как общее правило, бронирование может быть бесплатно отменено не позднее чем за 12 часов до даты и времени, указанных пользователем в процессе бронирования.",
-            "По запросам на отмену, сделанным в течение этого срока, если была произведена онлайн-оплата, возврат может быть обработан. Если был выбран вариант оплаты наличными водителю, с пользователя не взимается плата за услугу.",
+            "Как общее правило, бронирование можно отменить или изменить, если до начала услуги остаётся больше 6 часов.",
+            "При отмене в разрешённый срок, если была произведена онлайн-оплата, возвращается 100% ранее полученной и ещё не возвращённой чистой суммы. Если был выбран вариант оплаты наличными водителю, с пользователя не взимается плата за услугу.",
           ],
         },
         {
-          title: "3. Отмена менее чем за 12 часов",
+          title: "3. Отмена и изменение при остатке 6 часов или меньше",
           paragraphs: [
-            "При отмене менее чем за 12 часов до даты и времени, указанных пользователем в процессе бронирования, оплата может не возвращаться.",
+            "Если до начала услуги осталось 6 часов или меньше, клиент не может отменить или изменить бронирование, и возврат не производится.",
             "Для бронирований с вариантом оплаты наличными водителю поставщик услуги оставляет за собой право отказать в будущих бронированиях, если они являются повторяющимися, злоупотребляющими системой или вызывающими операционные убытки.",
           ],
         },
@@ -1652,7 +1639,9 @@ export const legalDocuments: Record<
         {
           title: "5. No-show",
           paragraphs: [
-            "Если пассажир не прибудет в пункт посадки в течение указанного бесплатного времени ожидания, бронирование может считаться no-show.",
+            "При оказании услуг трансфера, если пассажир не прибыл в установленный пункт посадки или место встречи к моменту окончания соответствующего бесплатного времени ожидания, бронирование может быть признано no-show.",
+            "Для услуги «Автомобиль с водителем с почасовой оплатой» и иных услуг, приобретённых на определённый срок, окончание бесплатного времени ожидания не означает немедленного признания бронирования no-show. Водитель продолжает ожидать пассажира, а приобретённая продолжительность услуги начинает исчисляться с момента окончания бесплатного времени ожидания. Последующее время ожидания вычитается из общей продолжительности услуги, приобретённой клиентом. Если пассажир прибывает позднее, услуга оказывается в течение оставшегося времени. Если пассажир не приступил к получению услуги до истечения всей приобретённой продолжительности услуги, бронирование может быть признано no-show.",
+            "Для туров и мероприятий, связанных с фиксированной программой или временем отправления, применяются специальные правила участия, встречи, трансферного обслуживания и времени отправления, сообщённые при бронировании и указанные в документе бронирования для соответствующей услуги. Если пассажир не смог принять участие в услуге из-за несоблюдения этих правил, бронирование может быть признано no-show.",
             "В случае no-show оплата может не возвращаться.",
             "Если услуга не может быть предоставлена из-за того, что пользователь указал неверный пункт посадки, неверную дату, неверное время, неполные контактные данные, неверную информацию о рейсе/маршруте или аналогичную неверную/неполную информацию, бронирование также может рассматриваться как no-show.",
           ],
@@ -1675,7 +1664,7 @@ export const legalDocuments: Record<
         {
           title: "8. Изменения маршрута, дополнительные остановки и дополнительные услуги",
           paragraphs: [
-            "Дополнительные остановки, изменение маршрута, дополнительное время ожидания, другой пункт назначения, дополнительные пассажиры, дополнительный багаж или аналогичные операционные изменения, запрошенные после завершения бронирования, могут подлежать дополнительной оплате.",
+            "Дополнительные остановки, изменение маршрута, другой пункт назначения, дополнительные пассажиры, дополнительный багаж, дополнительное ожидание за пределами объёма или продолжительности приобретённой услуги и аналогичные операционные изменения, запрошенные после завершения бронирования, могут подлежать дополнительной оплате.",
             "Если пользователь не принимает дополнительную оплату, услуга предоставляется в соответствии с подтвержденной информацией бронирования. Невозможность предоставления изменений, запрошенных вне подтвержденного бронирования, не создает права на возврат.",
           ],
         },
@@ -1722,7 +1711,7 @@ export const legalDocuments: Record<
       sections: [
         {
           paragraphs: [
-            "Данный текст подготовлен для объяснения того, как обрабатываются, используются и при необходимости передаются персональные данные, полученные от пользователей при бронировании частного трансфера, трансфера из/в аэропорт, услуги автомобиля с водителем и аналогичных транспортных услуг через Tripetica.com, а также для предоставления информации о защите персональных данных.",
+            "Данный текст подготовлен для объяснения того, как обрабатываются, используются и при необходимости передаются персональные данные, полученные от пользователей при бронировании через Tripetica.com частного трансфера, трансфера из/в аэропорт, услуги автомобиля с водителем, тура, мероприятия и аналогичных туристических или транспортных услуг, а также для предоставления информации о защите персональных данных.",
           ],
         },
         {
@@ -1751,11 +1740,12 @@ export const legalDocuments: Record<
             "Адрес электронной почты",
             "Пункт посадки и пункт назначения",
             "Дата и время бронирования",
+            "Информация о выбранной услуге или туре",
             "Количество пассажиров",
             "Информация о багаже",
             "Предпочтения по детскому креслу, услуге встречи или аналогичным дополнительным услугам",
             "Номер рейса, информация о рейсе поезда/автобуса/судна",
-            "Информация о пассажирах",
+            "Информация о пассажирах и участниках",
             "Информация о гражданстве",
             "Паспортные данные",
             "Способ оплаты",
@@ -1771,8 +1761,8 @@ export const legalDocuments: Record<
           ],
           bullets: [
             "Создание бронирования",
-            "Предоставление трансфера, услуги автомобиля с водителем или аналогичных транспортных услуг",
-            "Планирование пассажиров, автомобилей и операций",
+            "Предоставление трансфера, услуги автомобиля с водителем, тура, мероприятия или других забронированных услуг",
+            "Планирование пассажиров, участников, автомобилей и операций, а также передача операционной команде необходимых сведений о бронировании",
             "Связь с пользователем по вопросам бронирования, оплаты, места встречи, изменений или отмены",
             "Отправка ваучера, подтверждения бронирования и операционных уведомлений",
             "Выполнение юридических уведомлений, официальных записей и обязательных операционных процедур",
@@ -1814,6 +1804,7 @@ export const legalDocuments: Record<
           bullets: [
             "Водители",
             "Поставщики автомобилей",
+            "Поставщики услуг, участвующие в проведении туров, мероприятий или оказании других забронированных услуг",
             "Операционная команда",
             "Платежные провайдеры",
             "Поставщики услуг электронной почты, сообщений или уведомлений",
@@ -1828,7 +1819,7 @@ export const legalDocuments: Record<
         {
           title: "9. Связь и операционные уведомления",
           paragraphs: [
-            "С пользователем могут связываться по телефону, электронной почте, WhatsApp, Telegram, Viber или аналогичным каналам связи по вопросам информации о бронировании, операционной поддержки, инструкций по месту встречи, информации о водителе/автомобиле, статуса оплаты, отмены/изменения и аналогичных вопросов.",
+            "С пользователем могут связываться по телефону, электронной почте, WhatsApp, Telegram, Viber или аналогичным каналам связи по вопросам информации о бронировании, операционной поддержки, места встречи, времени трансферного обслуживания, участия и времени отправления, информации о водителе/автомобиле, статуса оплаты, отмены/изменения и аналогичных вопросов.",
             "Такие уведомления направляются с целью предоставления услуги и корректного выполнения бронирования.",
           ],
         },

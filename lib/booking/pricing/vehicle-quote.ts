@@ -305,7 +305,7 @@ export function meetAndGreetForVehicleSelection(
   );
 }
 
-/** Counts come from applied occupancy; M&G follows the live switch state. */
+/** Counts and meet & greet for vehicle quotes use applied trip state. */
 export function occupancyForVehicleQuotes(
   counts: Pick<VehicleOccupancy, "passengerCount" | "luggageCount" | "babySeatCount">,
   meetAndGreetRequested: boolean | null,
@@ -380,7 +380,7 @@ export function quotePremiumEconomySedan(
 
   return {
     vehicleCode: PREMIUM_ECONOMY_SEDAN.code,
-    multiplier: 1,
+    multiplier: Number(PREMIUM_ECONOMY_SEDAN.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -447,7 +447,7 @@ export function quoteStandardMinivan(
 
   return {
     vehicleCode: STANDARD_MINIVAN.code,
-    multiplier: 1.1,
+    multiplier: Number(STANDARD_MINIVAN.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -496,7 +496,7 @@ export function quoteBusinessMinivan(
 
   return {
     vehicleCode: BUSINESS_MINIVAN.code,
-    multiplier: 1.2,
+    multiplier: Number(BUSINESS_MINIVAN.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -545,7 +545,7 @@ export function quoteFirstClassMinivan(
 
   return {
     vehicleCode: FIRST_CLASS_MINIVAN.code,
-    multiplier: 2.7,
+    multiplier: Number(FIRST_CLASS_MINIVAN.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -594,7 +594,7 @@ export function quoteFirstClassSedan(
 
   return {
     vehicleCode: FIRST_CLASS_SEDAN.code,
-    multiplier: 8,
+    multiplier: Number(FIRST_CLASS_SEDAN.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -643,7 +643,7 @@ export function quoteMinibus(
 
   return {
     vehicleCode: MINIBUS.code,
-    multiplier: 1.6,
+    multiplier: Number(MINIBUS.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -692,7 +692,7 @@ export function quoteMidibus(
 
   return {
     vehicleCode: MIDIBUS.code,
-    multiplier: 5.4,
+    multiplier: Number(MIDIBUS.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -741,7 +741,7 @@ export function quoteBus(
 
   return {
     vehicleCode: BUS.code,
-    multiplier: 10,
+    multiplier: Number(BUS.multiplier),
     baseServiceFeeEur: microEurToNumber(baseService),
     extraPassengerFeeEur: microEurToNumber(extraPassenger),
     extraLuggageFeeEur: microEurToNumber(extraLuggage),
@@ -751,31 +751,63 @@ export function quoteBus(
   };
 }
 
+function withFlatVehicleSurcharge(
+  quote: VehicleQuoteBreakdown,
+  base: TransferPricingBreakdown,
+): VehicleQuoteBreakdown {
+  const flat = base.flatVehicleSurchargeEur ?? 0;
+  if (flat <= 0) {
+    return quote;
+  }
+  const totalEur = microEurToNumber(
+    addMicroEur(microEurFromDecimal(String(quote.totalEur)), microEurFromDecimal(String(flat))),
+  );
+  return { ...quote, totalEur };
+}
+
+export function vehicleMultiplierForCode(
+  vehicleCode: string | null | undefined,
+): number {
+  if (vehicleCode === BUS_CODE) return Number(BUS.multiplier);
+  if (vehicleCode === MIDIBUS_CODE) return Number(MIDIBUS.multiplier);
+  if (vehicleCode === MINIBUS_CODE) return Number(MINIBUS.multiplier);
+  if (vehicleCode === FIRST_CLASS_SEDAN_CODE) {
+    return Number(FIRST_CLASS_SEDAN.multiplier);
+  }
+  if (vehicleCode === FIRST_CLASS_MINIVAN_CODE) {
+    return Number(FIRST_CLASS_MINIVAN.multiplier);
+  }
+  if (vehicleCode === BUSINESS_MINIVAN_CODE) {
+    return Number(BUSINESS_MINIVAN.multiplier);
+  }
+  if (vehicleCode === STANDARD_MINIVAN_CODE) {
+    return Number(STANDARD_MINIVAN.multiplier);
+  }
+  return Number(PREMIUM_ECONOMY_SEDAN.multiplier);
+}
+
 export function quoteVehicle(
   vehicleCode: string,
   base: TransferPricingBreakdown,
   occupancy: VehicleOccupancy,
 ): VehicleQuoteBreakdown {
+  let quote: VehicleQuoteBreakdown;
   if (vehicleCode === BUS_CODE) {
-    return quoteBus(base, occupancy);
+    quote = quoteBus(base, occupancy);
+  } else if (vehicleCode === MIDIBUS_CODE) {
+    quote = quoteMidibus(base, occupancy);
+  } else if (vehicleCode === MINIBUS_CODE) {
+    quote = quoteMinibus(base, occupancy);
+  } else if (vehicleCode === FIRST_CLASS_SEDAN_CODE) {
+    quote = quoteFirstClassSedan(base, occupancy);
+  } else if (vehicleCode === FIRST_CLASS_MINIVAN_CODE) {
+    quote = quoteFirstClassMinivan(base, occupancy);
+  } else if (vehicleCode === BUSINESS_MINIVAN_CODE) {
+    quote = quoteBusinessMinivan(base, occupancy);
+  } else if (vehicleCode === STANDARD_MINIVAN_CODE) {
+    quote = quoteStandardMinivan(base, occupancy);
+  } else {
+    quote = quotePremiumEconomySedan(base, occupancy);
   }
-  if (vehicleCode === MIDIBUS_CODE) {
-    return quoteMidibus(base, occupancy);
-  }
-  if (vehicleCode === MINIBUS_CODE) {
-    return quoteMinibus(base, occupancy);
-  }
-  if (vehicleCode === FIRST_CLASS_SEDAN_CODE) {
-    return quoteFirstClassSedan(base, occupancy);
-  }
-  if (vehicleCode === FIRST_CLASS_MINIVAN_CODE) {
-    return quoteFirstClassMinivan(base, occupancy);
-  }
-  if (vehicleCode === BUSINESS_MINIVAN_CODE) {
-    return quoteBusinessMinivan(base, occupancy);
-  }
-  if (vehicleCode === STANDARD_MINIVAN_CODE) {
-    return quoteStandardMinivan(base, occupancy);
-  }
-  return quotePremiumEconomySedan(base, occupancy);
+  return withFlatVehicleSurcharge(quote, base);
 }

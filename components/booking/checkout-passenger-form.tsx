@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { CountryPicker } from "@/components/booking/country-picker";
 import { checkoutCopy } from "@/lib/booking/checkout-copy";
 import { type BookingPassengerView } from "@/lib/booking/draft-view";
+import { defaultCountryIso2ForLocale } from "@/lib/geo/locale-defaults";
 import { type Locale } from "@/lib/i18n/config";
 
 export type PassengerFormValue = {
@@ -57,9 +58,12 @@ export function firstIncompleteExtraSequence(
 
 export function emptyPassengerForm(
   passenger?: BookingPassengerView | null,
+  locale?: Locale,
 ): PassengerFormValue {
   return {
-    countryCode: passenger?.countryCode ?? null,
+    countryCode:
+      passenger?.countryCode ??
+      (locale ? defaultCountryIso2ForLocale(locale) : null),
     identityNumber: passenger?.identityNumber ?? "",
     firstName: passenger?.firstName ?? "",
     lastName: passenger?.lastName ?? "",
@@ -90,7 +94,10 @@ export function CheckoutPassengerForm({
   const genderId = `${prefix}-gender`;
   const autoSection = idPrefix ? `section-${idPrefix} ` : "";
   const valueRef = useRef(value);
-  valueRef.current = value;
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   function patch(partial: Partial<PassengerFormValue>, persist = false) {
     const next = { ...valueRef.current, ...partial };

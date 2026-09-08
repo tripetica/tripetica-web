@@ -1,5 +1,6 @@
 import "server-only";
 
+import { type PoolClient } from "pg";
 import { fxSnapshotForVehicle, parseFxSnapshot, isKnownVehicleCode, isVehicleCodeVisible, vehicleQuoteViewFromApplied } from "@/lib/booking/fx/vehicle-totals";
 import { getActiveFxBook } from "@/lib/booking/fx/service";
 import { type FxSnapshot } from "@/lib/booking/fx/types";
@@ -8,9 +9,18 @@ import { toE164 } from "@/lib/booking/phone";
 import { normalizeIso2 } from "@/lib/geo/countries";
 import { type Locale } from "@/lib/i18n/config";
 import { query } from "@/lib/db/postgres";
+import { type ManualPriceTotals, parseManualPriceTotals } from "@/lib/ops/price-override";
+import { hasUnappliedTripChanges, type BookingTripView } from "@/lib/booking/draft-view";
 import { timestamptzToIstanbulLocal } from "@/lib/booking/istanbul-time";
-import { type PersistedLocation, resolveLocationGeo } from "@/lib/booking/location-persist";
-import { normalizeMeetAndGreet } from "@/lib/booking/meet-and-greet";
+import {
+  type PersistedLocation,
+  resolveLocationGeo,
+  UntrustedLocationError,
+} from "@/lib/booking/location-persist";
+import {
+  normalizeMeetAndGreet,
+  pickupAirportCode,
+} from "@/lib/booking/meet-and-greet";
 import {
   BABY_SEAT_COUNT_MAX,
   BABY_SEAT_COUNT_MIN,
@@ -26,6 +36,50 @@ import {
   type LocationGeo,
 } from "@/lib/booking/pricing/location-codes";
 import {
+  HOURLY_MAX_HOURS,
+  HOURLY_MIN_HOURS,
+  HOURLY_SERVICE_TYPE,
+  quoteHourlyBase,
+} from "@/lib/booking/pricing/hourly-pricing";
+import {
+  FULL_DAY_TOUR_CODE,
+  HALF_DAY_TOUR_CODE,
+} from "@/lib/booking/pricing/istanbul-address-package-tour";
+import {
+  isNoKmPackageTour,
+  noKmPackageTourDurationHours,
+  quoteNoKmPackageTourBase,
+} from "@/lib/booking/pricing/no-km-package-tour";
+import {
+  BURSA_ROUTE_FERRY,
+  BURSA_TOUR_CODE,
+  isBursaTour,
+  normalizeBursaRoute,
+  type BursaRouteOption,
+} from "@/lib/booking/pricing/bursa-pricing";
+import {
+  BOSPHORUS_DINNER_PRICING_VERSION,
+  BOSPHORUS_DINNER_TOUR_CODE,
+  bosphorusHasBookablePax,
+  bosphorusTotalPax,
+  clampBosphorusPaxAdultRule,
+  emptyBosphorusPaxCounts,
+  isBosphorusDinnerTour,
+  quoteBosphorusDinnerPackageTotalEur,
+  type BosphorusPaxCounts,
+} from "@/lib/booking/pricing/bosphorus-dinner-pricing";
+import {
+  SAPANCA_TOUR_CODE,
+} from "@/lib/booking/pricing/sapanca-pricing";
+import {
+  LAYOVER_PACKAGE_HOURS,
+  LAYOVER_TOUR_CODE,
+  TOUR_SERVICE_TYPE,
+  isLayoverTour,
+  quoteLayoverBase,
+} from "@/lib/booking/pricing/layover-pricing";
+import { draftLocationsRepresentSamePlace } from "@/lib/booking/hourly-dropoff-distance";
+import {
   quoteTransferBase,
   type TransferPricingBreakdown,
 } from "@/lib/booking/pricing/transfer-pricing";
@@ -36,24 +90,44 @@ import {
   type VehicleOccupancy,
 } from "@/lib/booking/pricing/vehicle-quote";
 import { vehicleCardCopyFor } from "@/lib/booking/vehicles/copy";
+import { bookingCopy } from "@/lib/booking/copy";
+import { buildFxSnapshot } from "@/lib/booking/fx/convert";
 import {
   computeDrivingRoute,
   coordsFromLatLng,
 } from "@/lib/booking/route-distance";
+import { type LocationValue } from "@/lib/booking/types";
 
 export const TRANSFER_SERVICE_TYPE = "transfer";
+export {
+  HOURLY_SERVICE_TYPE,
+  TOUR_SERVICE_TYPE,
+  LAYOVER_TOUR_CODE,
+  HALF_DAY_TOUR_CODE,
+  FULL_DAY_TOUR_CODE,
+  SAPANCA_TOUR_CODE,
+  BURSA_TOUR_CODE,
+  BOSPHORUS_DINNER_TOUR_CODE,
+};
 export const DRAFT_STATUS = "draft";
+export const COMPLETED_STATUS = "completed";
+/** Soft-closed edit/booking draft; frees unique draft indexes without hard DELETE. */
+export const ABANDONED_STATUS = "abandoned";
 export const VEHICLE_SELECTION_STAGE = "vehicle_selection";
 export const CHECKOUT_STAGE = "checkout";
+export const COMPLETED_STAGE = "completed";
 export const PASSENGER_GENDERS = ["female", "male"] as const;
 export type PassengerGender = (typeof PASSENGER_GENDERS)[number];
 
 export type TransferSearchFields = {
   locale: Locale;
+  serviceType: "transfer" | "hourly" | "tour";
+  tourCode: string | null;
   pickup: PersistedLocation;
   dropoff: PersistedLocation;
   pickupAt: Date;
   distanceKm: number | null;
+  durationHours: number | null;
 };
 
 type SearchIdRow = {
@@ -75,15 +149,19 @@ export type DraftLocation = {
 };
 
 export type DraftTrip = {
+  tourCode?: string | null;
   pickup: DraftLocation;
   dropoff: DraftLocation;
   pickupAt: Date | null;
   distanceKm: number | null;
+  durationHours: number | null;
   passengerCount: number | null;
   luggageCount: number | null;
   babySeatCount: number | null;
   meetAndGreet: boolean | null;
   flightCode: string | null;
+  bursaRoute: BursaRouteOption | null;
+  bosphorusPax: BosphorusPaxCounts | null;
 };
 
 export type DraftPassenger = {
@@ -96,9 +174,26 @@ export type DraftPassenger = {
   isPrimaryPassenger: boolean;
 };
 
+export type EditOriginalFinancialSnapshot = {
+  reservationId: string;
+  reservationCode: string;
+  totalPrice: number | null;
+  currency: string | null;
+  paymentMethod: string | null;
+  paymentStatus: string | null;
+  paymentAmount: number | null;
+  paymentCurrency: string | null;
+  paymentProvider: string | null;
+  paymentProviderOrderId: string | null;
+  fxSnapshot: FxSnapshot | null;
+  /** Set when an ops user started this edit draft (not customer self-service). */
+  opsUserId: string | null;
+};
+
 export type ActiveDraft = {
   id: string;
   serviceType: string | null;
+  tourCode: string | null;
   currentStage: string | null;
   locale: string | null;
   serviceTimezone: string | null;
@@ -112,6 +207,8 @@ export type ActiveDraft = {
   appliedVehicleLabelTr: string | null;
   appliedVehicleTotalEur: number | null;
   appliedVehicleTotal: number | null;
+  priceManuallyOverridden: boolean;
+  manualPriceTotals: ManualPriceTotals | null;
   customerEmail: string | null;
   customerPhone: string | null;
   customerCountryCode: string | null;
@@ -119,6 +216,8 @@ export type ActiveDraft = {
   customerLastName: string | null;
   notes: string | null;
   passengers: DraftPassenger[];
+  /** Set only when this draft edits an existing reservation (Stage 2). */
+  editingOriginal: EditOriginalFinancialSnapshot | null;
 };
 
 /** @deprecated Use ActiveDraft.applied.pickup */
@@ -126,6 +225,8 @@ export type ActiveDraftLocation = DraftLocation;
 
 type DraftRow = SearchIdRow & {
   service_type: string | null;
+  tour_code: string | null;
+  selected_tour_code: string | null;
   current_stage: string | null;
   locale: string | null;
   service_timezone: string | null;
@@ -133,6 +234,8 @@ type DraftRow = SearchIdRow & {
   applied_pickup_at: Date | null;
   selected_distance_km: string | number | null;
   applied_distance_km: string | number | null;
+  selected_duration_hours: string | number | null;
+  applied_duration_hours: string | number | null;
   selected_pickup_name_customer: string | null;
   selected_pickup_address_customer: string | null;
   selected_pickup_name_tr: string | null;
@@ -179,6 +282,16 @@ type DraftRow = SearchIdRow & {
   applied_meet_and_greet: boolean | null;
   selected_flight_code: string | null;
   applied_flight_code: string | null;
+  selected_bursa_route: string | null;
+  applied_bursa_route: string | null;
+  selected_bosphorus_adult_soft: string | number | null;
+  selected_bosphorus_adult_alcohol: string | number | null;
+  selected_bosphorus_child_5_9: string | number | null;
+  selected_bosphorus_child_0_4: string | number | null;
+  applied_bosphorus_adult_soft: string | number | null;
+  applied_bosphorus_adult_alcohol: string | number | null;
+  applied_bosphorus_child_5_9: string | number | null;
+  applied_bosphorus_child_0_4: string | number | null;
   selected_pickup_province_code: string | null;
   selected_pickup_district_code: string | null;
   applied_pickup_province_code: string | null;
@@ -199,12 +312,26 @@ type DraftRow = SearchIdRow & {
   selected_vehicle_label_tr: string | null;
   applied_vehicle_total_eur: string | number | null;
   applied_vehicle_total: string | number | null;
+  price_manually_overridden: boolean;
+  manual_price_totals: unknown;
   customer_email: string | null;
   customer_phone: string | null;
   customer_country_code: string | null;
   customer_first_name: string | null;
   customer_last_name: string | null;
   notes: string | null;
+  editing_reservation_id: string | null;
+  editing_ops_user_id: string | null;
+  edit_original_reservation_code: string | null;
+  edit_original_total_price: string | number | null;
+  edit_original_currency: string | null;
+  edit_original_payment_method: string | null;
+  edit_original_payment_status: string | null;
+  edit_original_payment_amount: string | number | null;
+  edit_original_payment_currency: string | null;
+  edit_original_payment_provider: string | null;
+  edit_original_payment_provider_order_id: string | null;
+  edit_original_fx_snapshot: unknown;
 };
 
 type PassengerRow = {
@@ -220,6 +347,8 @@ type PassengerRow = {
 const DRAFT_SELECT = `
        id,
        service_type,
+       tour_code,
+       selected_tour_code,
        current_stage,
        locale,
        service_timezone,
@@ -227,6 +356,8 @@ const DRAFT_SELECT = `
        applied_pickup_at,
        selected_distance_km,
        applied_distance_km,
+       selected_duration_hours,
+       applied_duration_hours,
        selected_pickup_name_customer,
        selected_pickup_address_customer,
        selected_pickup_name_tr,
@@ -273,6 +404,16 @@ const DRAFT_SELECT = `
        applied_meet_and_greet,
        selected_flight_code,
        applied_flight_code,
+       selected_bursa_route,
+       applied_bursa_route,
+       selected_bosphorus_adult_soft,
+       selected_bosphorus_adult_alcohol,
+       selected_bosphorus_child_5_9,
+       selected_bosphorus_child_0_4,
+       applied_bosphorus_adult_soft,
+       applied_bosphorus_adult_alcohol,
+       applied_bosphorus_child_5_9,
+       applied_bosphorus_child_0_4,
        selected_pickup_province_code,
        selected_pickup_district_code,
        applied_pickup_province_code,
@@ -293,12 +434,26 @@ const DRAFT_SELECT = `
        selected_vehicle_label_tr,
        applied_vehicle_total_eur,
        applied_vehicle_total,
+       price_manually_overridden,
+       manual_price_totals,
        customer_email,
        customer_phone,
-       customer_country_code,
-       customer_first_name,
-       customer_last_name,
-       notes
+      customer_country_code,
+      customer_first_name,
+      customer_last_name,
+      notes,
+      editing_reservation_id,
+      editing_ops_user_id,
+      edit_original_reservation_code,
+      edit_original_total_price,
+      edit_original_currency,
+      edit_original_payment_method,
+      edit_original_payment_status,
+      edit_original_payment_amount,
+      edit_original_payment_currency,
+      edit_original_payment_provider,
+      edit_original_payment_provider_order_id,
+      edit_original_fx_snapshot
 `;
 
 function asDistanceKm(value: string | number | null) {
@@ -307,6 +462,32 @@ function asDistanceKm(value: string | number | null) {
   }
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function asDurationHours(value: string | number | null) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  const hours = Math.round(parsed);
+  if (hours < HOURLY_MIN_HOURS || hours > HOURLY_MAX_HOURS) {
+    return null;
+  }
+  return hours;
+}
+
+function normalizeDurationHours(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return asDurationHours(value);
+}
+
+function isDraftLocationFilled(location: DraftLocation) {
+  return Boolean(location.nameCustomer?.trim() || location.placeId);
 }
 
 function asMoney(value: string | number | null) {
@@ -404,34 +585,123 @@ function asQuote(value: TransferPricingBreakdown | null): TransferPricingBreakdo
   return value;
 }
 
+function draftBursaRoute(
+  serviceType: string | null | undefined,
+  tourCode: string | null | undefined,
+  value: string | null | undefined,
+): BursaRouteOption | null {
+  if (!isBursaTour(serviceType, tourCode)) {
+    return null;
+  }
+  return normalizeBursaRoute(value ?? BURSA_ROUTE_FERRY);
+}
+
+function draftBosphorusPax(
+  serviceType: string | null | undefined,
+  tourCode: string | null | undefined,
+  adultSoft: string | number | null | undefined,
+  adultAlcohol: string | number | null | undefined,
+  child5to9: string | number | null | undefined,
+  child0to4: string | number | null | undefined,
+): BosphorusPaxCounts | null {
+  if (!isBosphorusDinnerTour(serviceType, tourCode)) {
+    return null;
+  }
+  return clampBosphorusPaxAdultRule({
+    adultSoft: asInteger(adultSoft ?? null) ?? 0,
+    adultAlcohol: asInteger(adultAlcohol ?? null) ?? 0,
+    child5to9: asInteger(child5to9 ?? null) ?? 0,
+    child0to4: asInteger(child0to4 ?? null) ?? 0,
+  });
+}
+
+function quoteBosphorusDinnerBase(
+  counts: BosphorusPaxCounts,
+  pickup: LocationGeo,
+  dropoff: LocationGeo,
+  airportCode: string | null,
+  meetAndGreet: boolean,
+): TransferPricingBreakdown {
+  const total = quoteBosphorusDinnerPackageTotalEur(
+    counts,
+    airportCode,
+    meetAndGreet,
+  );
+  return {
+    openingFeeEur: 0,
+    distanceFeeEur: 0,
+    locationSurchargeEur: 0,
+    timeSurchargeEur: 0,
+    baseTransferFeeEur: total,
+    pricingVersion: BOSPHORUS_DINNER_PRICING_VERSION,
+    pickupProvinceCode: pickup.provinceCode,
+    pickupDistrictCode: pickup.districtCode,
+    dropoffProvinceCode: dropoff.provinceCode,
+    dropoffDistrictCode: dropoff.districtCode,
+  };
+}
+
 function mapDraft(row: DraftRow): ActiveDraft {
+  const appliedTourCode = row.tour_code?.trim() || null;
+  const selectedTourCode = row.selected_tour_code?.trim() || appliedTourCode;
   return {
     id: row.id,
     serviceType: row.service_type,
+    tourCode: appliedTourCode,
     currentStage: row.current_stage,
     locale: row.locale,
     serviceTimezone: row.service_timezone,
     selected: {
+      tourCode: selectedTourCode,
       pickup: mapLocation(row, "selected", "pickup"),
       dropoff: mapLocation(row, "selected", "dropoff"),
       pickupAt: row.selected_pickup_at,
       distanceKm: asDistanceKm(row.selected_distance_km),
+      durationHours: asDurationHours(row.selected_duration_hours),
       passengerCount: asInteger(row.selected_passenger_count),
       luggageCount: asInteger(row.selected_luggage_count),
       babySeatCount: asInteger(row.selected_baby_seat_count),
       meetAndGreet: asBoolean(row.selected_meet_and_greet),
       flightCode: row.selected_flight_code,
+      bursaRoute: draftBursaRoute(
+        row.service_type,
+        selectedTourCode,
+        row.selected_bursa_route,
+      ),
+      bosphorusPax: draftBosphorusPax(
+        row.service_type,
+        selectedTourCode,
+        row.selected_bosphorus_adult_soft,
+        row.selected_bosphorus_adult_alcohol,
+        row.selected_bosphorus_child_5_9,
+        row.selected_bosphorus_child_0_4,
+      ),
     },
     applied: {
+      tourCode: appliedTourCode,
       pickup: mapLocation(row, "applied", "pickup"),
       dropoff: mapLocation(row, "applied", "dropoff"),
       pickupAt: row.applied_pickup_at,
       distanceKm: asDistanceKm(row.applied_distance_km),
+      durationHours: asDurationHours(row.applied_duration_hours),
       passengerCount: asInteger(row.applied_passenger_count),
       luggageCount: asInteger(row.applied_luggage_count),
       babySeatCount: asInteger(row.applied_baby_seat_count),
       meetAndGreet: asBoolean(row.applied_meet_and_greet),
       flightCode: row.applied_flight_code,
+      bursaRoute: draftBursaRoute(
+        row.service_type,
+        row.tour_code,
+        row.applied_bursa_route,
+      ),
+      bosphorusPax: draftBosphorusPax(
+        row.service_type,
+        row.tour_code,
+        row.applied_bosphorus_adult_soft,
+        row.applied_bosphorus_adult_alcohol,
+        row.applied_bosphorus_child_5_9,
+        row.applied_bosphorus_child_0_4,
+      ),
     },
     appliedTransferQuote: asQuote(row.applied_transfer_quote),
     appliedFxSnapshot: parseFxSnapshot(row.applied_fx_snapshot),
@@ -441,6 +711,8 @@ function mapDraft(row: DraftRow): ActiveDraft {
     appliedVehicleLabelTr: row.applied_vehicle_label_tr,
     appliedVehicleTotalEur: asMoney(row.applied_vehicle_total_eur),
     appliedVehicleTotal: asMoney(row.applied_vehicle_total),
+    priceManuallyOverridden: row.price_manually_overridden === true,
+    manualPriceTotals: parseManualPriceTotals(row.manual_price_totals),
     customerEmail: row.customer_email,
     customerPhone: row.customer_phone,
     customerCountryCode: row.customer_country_code,
@@ -448,6 +720,31 @@ function mapDraft(row: DraftRow): ActiveDraft {
     customerLastName: row.customer_last_name,
     notes: row.notes,
     passengers: [],
+    editingOriginal: mapEditingOriginal(row),
+  };
+}
+
+function mapEditingOriginal(
+  row: DraftRow,
+): EditOriginalFinancialSnapshot | null {
+  const reservationId = row.editing_reservation_id?.trim() || null;
+  if (!reservationId) {
+    return null;
+  }
+  return {
+    reservationId,
+    reservationCode: row.edit_original_reservation_code?.trim() || "",
+    totalPrice: asMoney(row.edit_original_total_price),
+    currency: row.edit_original_currency?.trim().toUpperCase() || null,
+    paymentMethod: row.edit_original_payment_method,
+    paymentStatus: row.edit_original_payment_status,
+    paymentAmount: asMoney(row.edit_original_payment_amount),
+    paymentCurrency:
+      row.edit_original_payment_currency?.trim().toUpperCase() || null,
+    paymentProvider: row.edit_original_payment_provider,
+    paymentProviderOrderId: row.edit_original_payment_provider_order_id,
+    fxSnapshot: parseFxSnapshot(row.edit_original_fx_snapshot),
+    opsUserId: row.editing_ops_user_id?.trim() || null,
   };
 }
 
@@ -472,14 +769,61 @@ export async function findActiveDraft(
   return draft;
 }
 
+export async function findActiveDraftWithClient(
+  client: PoolClient,
+  browserSessionId: string,
+): Promise<ActiveDraft | null> {
+  const result = await client.query<DraftRow>(
+    `SELECT ${DRAFT_SELECT}
+     FROM reservation_searches
+     WHERE browser_session_id = $1
+       AND status = $2
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [browserSessionId, DRAFT_STATUS],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+  const draft = mapDraft(row);
+  const passengers = await client.query<PassengerRow>(
+    `SELECT sequence_no, first_name, last_name, country_code, identity_number,
+            gender, is_primary_passenger
+     FROM reservation_searches_passengers
+     WHERE reservation_search_id = $1
+     ORDER BY sequence_no`,
+    [draft.id],
+  );
+  draft.passengers = passengers.rows.map(mapPassenger).filter((item) => item.sequenceNo > 0);
+  return draft;
+}
+
+function packageTourDurationHours(
+  serviceType: string | null | undefined,
+  tourCode: string | null | undefined,
+): number | null {
+  if (isLayoverTour(serviceType, tourCode)) {
+    return LAYOVER_PACKAGE_HOURS;
+  }
+  return noKmPackageTourDurationHours(serviceType, tourCode);
+}
+
 function persistValues(browserSessionId: string, fields: TransferSearchFields) {
   const { pickup, dropoff } = fields;
+  const isHourly = fields.serviceType === HOURLY_SERVICE_TYPE;
+  const durationHours = isHourly
+    ? normalizeDurationHours(fields.durationHours)
+    : packageTourDurationHours(fields.serviceType, fields.tourCode);
+  const distanceKm = fields.distanceKm;
+  const tourCode = fields.tourCode;
   return [
     browserSessionId,
     DRAFT_STATUS,
     VEHICLE_SELECTION_STAGE,
     fields.locale,
-    TRANSFER_SERVICE_TYPE,
+    fields.serviceType,
+    tourCode,
     pickup.nameCustomer,
     pickup.addressCustomer,
     pickup.nameTr,
@@ -519,8 +863,10 @@ function persistValues(browserSessionId: string, fields: TransferSearchFields) {
     fields.pickupAt,
     fields.pickupAt,
     "Europe/Istanbul",
-    fields.distanceKm,
-    fields.distanceKm,
+    distanceKm,
+    distanceKm,
+    durationHours,
+    durationHours,
     pickup.provinceCode,
     pickup.districtCode,
     pickup.provinceCode,
@@ -544,6 +890,8 @@ async function insertDraft(
        current_stage,
        locale,
        service_type,
+       tour_code,
+       selected_tour_code,
        selected_pickup_name_customer,
        selected_pickup_address_customer,
        selected_pickup_name_tr,
@@ -585,6 +933,8 @@ async function insertDraft(
        service_timezone,
        selected_distance_km,
        applied_distance_km,
+       selected_duration_hours,
+       applied_duration_hours,
        selected_pickup_province_code,
        selected_pickup_district_code,
        applied_pickup_province_code,
@@ -597,13 +947,13 @@ async function insertDraft(
        selected_meet_and_greet,
        applied_meet_and_greet
      ) VALUES (
-       $1, $2, $3, $4, $5,
-       $6, $7, $8, $9, $10, $11, $12, $13, $14,
-       $15, $16, $17, $18, $19, $20, $21, $22, $23,
-       $24, $25, $26, $27, $28, $29, $30, $31, $32,
-       $33, $34, $35, $36, $37, $38, $39, $40, $41,
-       $42, $43, $44, $45, $46,
-       $47, $48, $49, $50, $51, $52, $53, $54, $55,
+       $1, $2, $3, $4, $5, $6, $6,
+       $7, $8, $9, $10, $11, $12, $13, $14, $15,
+       $16, $17, $18, $19, $20, $21, $22, $23, $24,
+       $25, $26, $27, $28, $29, $30, $31, $32, $33,
+       $34, $35, $36, $37, $38, $39, $40, $41, $42,
+       $43, $44, $45, $46, $47, $48, $49,
+       $50, $51, $52, $53, $54, $55, $56, $57, $58,
        FALSE,
        FALSE
      )
@@ -624,65 +974,76 @@ async function updateDraft(id: string, fields: TransferSearchFields) {
   // do not null those columns here.
   // Keep the last applied meet-and-greet preference. Never reset it to
   // false here; selected follows applied so the booking UI hydrates it.
+  const isHourly = fields.serviceType === HOURLY_SERVICE_TYPE;
+  const durationHours = isHourly
+    ? normalizeDurationHours(fields.durationHours)
+    : packageTourDurationHours(fields.serviceType, fields.tourCode);
+  const distanceKm = fields.distanceKm;
+  const tourCode = fields.tourCode;
   await query(
     `UPDATE reservation_searches SET
        service_type = $2,
-       locale = $3,
-       current_stage = $4,
+       tour_code = $3,
+       selected_tour_code = $3,
+       locale = $4,
+       current_stage = $5,
        selected_meet_and_greet = applied_meet_and_greet,
-       selected_pickup_name_customer = $5,
-       selected_pickup_address_customer = $6,
-       selected_pickup_name_tr = $7,
-       selected_pickup_address_tr = $8,
-       selected_pickup_place_id = $9,
-       selected_pickup_latitude = $10,
-       selected_pickup_longitude = $11,
-       selected_pickup_location_type = $12,
-       selected_pickup_airport_code = $13,
-       applied_pickup_name_customer = $14,
-       applied_pickup_address_customer = $15,
-       applied_pickup_name_tr = $16,
-       applied_pickup_address_tr = $17,
-       applied_pickup_place_id = $18,
-       applied_pickup_latitude = $19,
-       applied_pickup_longitude = $20,
-       applied_pickup_location_type = $21,
-       applied_pickup_airport_code = $22,
-       selected_dropoff_name_customer = $23,
-       selected_dropoff_address_customer = $24,
-       selected_dropoff_name_tr = $25,
-       selected_dropoff_address_tr = $26,
-       selected_dropoff_place_id = $27,
-       selected_dropoff_latitude = $28,
-       selected_dropoff_longitude = $29,
-       selected_dropoff_location_type = $30,
-       selected_dropoff_airport_code = $31,
-       applied_dropoff_name_customer = $32,
-       applied_dropoff_address_customer = $33,
-       applied_dropoff_name_tr = $34,
-       applied_dropoff_address_tr = $35,
-       applied_dropoff_place_id = $36,
-       applied_dropoff_latitude = $37,
-       applied_dropoff_longitude = $38,
-       applied_dropoff_location_type = $39,
-       applied_dropoff_airport_code = $40,
-       selected_pickup_at = $41,
-       applied_pickup_at = $42,
-       selected_distance_km = $43,
-       applied_distance_km = $44,
-       selected_pickup_province_code = $46,
-       selected_pickup_district_code = $47,
-       applied_pickup_province_code = $48,
-       applied_pickup_district_code = $49,
-       selected_dropoff_province_code = $50,
-       selected_dropoff_district_code = $51,
-       applied_dropoff_province_code = $52,
-       applied_dropoff_district_code = $53
+       selected_pickup_name_customer = $6,
+       selected_pickup_address_customer = $7,
+       selected_pickup_name_tr = $8,
+       selected_pickup_address_tr = $9,
+       selected_pickup_place_id = $10,
+       selected_pickup_latitude = $11,
+       selected_pickup_longitude = $12,
+       selected_pickup_location_type = $13,
+       selected_pickup_airport_code = $14,
+       applied_pickup_name_customer = $15,
+       applied_pickup_address_customer = $16,
+       applied_pickup_name_tr = $17,
+       applied_pickup_address_tr = $18,
+       applied_pickup_place_id = $19,
+       applied_pickup_latitude = $20,
+       applied_pickup_longitude = $21,
+       applied_pickup_location_type = $22,
+       applied_pickup_airport_code = $23,
+       selected_dropoff_name_customer = $24,
+       selected_dropoff_address_customer = $25,
+       selected_dropoff_name_tr = $26,
+       selected_dropoff_address_tr = $27,
+       selected_dropoff_place_id = $28,
+       selected_dropoff_latitude = $29,
+       selected_dropoff_longitude = $30,
+       selected_dropoff_location_type = $31,
+       selected_dropoff_airport_code = $32,
+       applied_dropoff_name_customer = $33,
+       applied_dropoff_address_customer = $34,
+       applied_dropoff_name_tr = $35,
+       applied_dropoff_address_tr = $36,
+       applied_dropoff_place_id = $37,
+       applied_dropoff_latitude = $38,
+       applied_dropoff_longitude = $39,
+       applied_dropoff_location_type = $40,
+       applied_dropoff_airport_code = $41,
+       selected_pickup_at = $42,
+       applied_pickup_at = $43,
+       selected_distance_km = $44,
+       applied_distance_km = $45,
+       selected_duration_hours = $47,
+       applied_duration_hours = $48,
+       selected_pickup_province_code = $49,
+       selected_pickup_district_code = $50,
+       applied_pickup_province_code = $51,
+       applied_pickup_district_code = $52,
+       selected_dropoff_province_code = $53,
+       selected_dropoff_district_code = $54,
+       applied_dropoff_province_code = $55,
+       applied_dropoff_district_code = $56
      WHERE id = $1
-       AND status = $45`,
+       AND status = $46`,
     [
       id,
-      TRANSFER_SERVICE_TYPE,
+      fields.serviceType,
+      tourCode,
       fields.locale,
       VEHICLE_SELECTION_STAGE,
       fields.pickup.nameCustomer,
@@ -723,9 +1084,11 @@ async function updateDraft(id: string, fields: TransferSearchFields) {
       fields.dropoff.airportCode,
       fields.pickupAt,
       fields.pickupAt,
-      fields.distanceKm,
-      fields.distanceKm,
+      distanceKm,
+      distanceKm,
       DRAFT_STATUS,
+      durationHours,
+      durationHours,
       fields.pickup.provinceCode,
       fields.pickup.districtCode,
       fields.pickup.provinceCode,
@@ -756,7 +1119,15 @@ export async function storeAppliedTransferQuote(id: string) {
     return;
   }
   const draft = mapDraft(row);
-  if (draft.applied.distanceKm === null || !draft.applied.pickupAt) {
+  const isHourly = draft.serviceType === HOURLY_SERVICE_TYPE;
+  const layover = isLayoverTour(draft.serviceType, draft.tourCode);
+  const noKmPackage = isNoKmPackageTour(
+    draft.serviceType,
+    draft.tourCode,
+  );
+  const bosphorus = isBosphorusDinnerTour(draft.serviceType, draft.tourCode);
+
+  const clearQuote = async () => {
     await query(
       `UPDATE reservation_searches
        SET applied_transfer_quote = NULL,
@@ -773,36 +1144,108 @@ export async function storeAppliedTransferQuote(id: string) {
        WHERE id = $1`,
       [id],
     );
+  };
+
+  if (isHourly) {
+    if (
+      draft.applied.durationHours === null ||
+      !draft.applied.pickupAt ||
+      !isDraftLocationFilled(draft.applied.pickup)
+    ) {
+      await clearQuote();
+      return;
+    }
+  } else if (layover) {
+    if (!draft.applied.pickupAt || !isDraftLocationFilled(draft.applied.pickup)) {
+      await clearQuote();
+      return;
+    }
+  } else if (noKmPackage) {
+    if (
+      !draft.applied.pickupAt ||
+      !isDraftLocationFilled(draft.applied.pickup)
+    ) {
+      await clearQuote();
+      return;
+    }
+  } else if (bosphorus) {
+    const counts = draft.applied.bosphorusPax ?? emptyBosphorusPaxCounts();
+    if (
+      !draft.applied.pickupAt ||
+      !isDraftLocationFilled(draft.applied.pickup) ||
+      !bosphorusHasBookablePax(counts)
+    ) {
+      await clearQuote();
+      return;
+    }
+  } else if (draft.applied.distanceKm === null || !draft.applied.pickupAt) {
+    await clearQuote();
     return;
   }
 
   const rules = await loadActiveTransferPricingRules();
   const pickupGeo = await geoFromLocation(draft.applied.pickup);
   const dropoffGeo = await geoFromLocation(draft.applied.dropoff);
-  const quote = quoteTransferBase(
-    {
-      distanceKm: draft.applied.distanceKm,
-      pickupAtLocal: timestamptzToIstanbulLocal(draft.applied.pickupAt),
-      pickup: pickupGeo,
-      dropoff: dropoffGeo,
-    },
-    rules,
-  );
+  const bosphorusCounts = draft.applied.bosphorusPax ?? emptyBosphorusPaxCounts();
   const meetAndGreet = normalizeMeetAndGreet(
     draft.applied.pickup,
     draft.applied.meetAndGreet,
   );
+  const quote = isHourly
+    ? quoteHourlyBase(
+        {
+          durationHours: draft.applied.durationHours!,
+          pickup: pickupGeo,
+          pickupAirportCode: draft.applied.pickup.airportCode,
+          dropoffDistanceKm: draft.applied.distanceKm ?? 0,
+        },
+        rules,
+      )
+    : layover
+      ? quoteLayoverBase(pickupGeo, {
+          pickupAirportCode: draft.applied.pickup.airportCode,
+          dropoffAirportCode: draft.applied.dropoff.airportCode,
+          pickupLocationType: draft.applied.pickup.locationType,
+          dropoffLocationType: draft.applied.dropoff.locationType,
+        })
+      : bosphorus
+        ? quoteBosphorusDinnerBase(
+            bosphorusCounts,
+            pickupGeo,
+            dropoffGeo,
+            pickupAirportCode(draft.applied.pickup),
+            meetAndGreet,
+          )
+        : noKmPackage
+          ? quoteNoKmPackageTourBase(draft.tourCode, pickupGeo, {
+              bursaRoute: draft.applied.bursaRoute,
+            })
+          : quoteTransferBase(
+              {
+                distanceKm: draft.applied.distanceKm!,
+                pickupAtLocal: timestamptzToIstanbulLocal(draft.applied.pickupAt!),
+                pickup: pickupGeo,
+                dropoff: dropoffGeo,
+              },
+              rules,
+            );
+  if (!quote) {
+    await clearQuote();
+    return;
+  }
   const book = await getActiveFxBook();
-  const snapshot = fxSnapshotForVehicle(
-    quote,
-    {
-      passengerCount: draft.applied.passengerCount,
-      luggageCount: draft.applied.luggageCount,
-      babySeatCount: draft.applied.babySeatCount,
-      meetAndGreet,
-    },
-    book,
-  );
+  const snapshot = bosphorus
+    ? buildFxSnapshot(quote.baseTransferFeeEur, book)
+    : fxSnapshotForVehicle(
+        quote,
+        {
+          passengerCount: draft.applied.passengerCount,
+          luggageCount: draft.applied.luggageCount,
+          babySeatCount: draft.applied.babySeatCount,
+          meetAndGreet,
+        },
+        book,
+      );
   await query(
     `UPDATE reservation_searches
      SET applied_transfer_quote = $2::jsonb,
@@ -824,8 +1267,8 @@ export async function storeAppliedTransferQuote(id: string) {
       DEFAULT_DISPLAY_CURRENCY,
       pickupGeo.provinceCode,
       pickupGeo.districtCode,
-      dropoffGeo.provinceCode,
-      dropoffGeo.districtCode,
+      isHourly || layover ? quote.dropoffProvinceCode : dropoffGeo.provinceCode,
+      isHourly || layover ? quote.dropoffDistrictCode : dropoffGeo.districtCode,
       meetAndGreet,
       JSON.stringify(snapshot),
     ],
@@ -845,8 +1288,8 @@ function isUniqueViolation(error: unknown) {
 function appliedOccupancy(draft: ActiveDraft): VehicleOccupancy {
   return occupancyForVehicleQuotes(
     draft.applied,
-    draft.selected.meetAndGreet,
-    draft.selected.pickup,
+    draft.applied.meetAndGreet,
+    draft.applied.pickup,
   );
 }
 
@@ -920,6 +1363,17 @@ function frozenVehicleTotals(draft: ActiveDraft, vehicleCode: string) {
   };
 }
 
+/** Pick the already-captured package total for the active currency from frozen FX snapshot. */
+function frozenPackageTotalFromSnapshot(draft: ActiveDraft): number | null {
+  const currency = normalizeDisplayCurrency(draft.currency);
+  const raw = draft.appliedFxSnapshot?.totals?.[currency];
+  if (raw != null && String(raw).trim() !== "") {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return currency === "EUR" ? draft.appliedVehicleTotalEur : null;
+}
+
 export async function syncAppliedVehicleTotals(id: string) {
   const result = await query<DraftRow>(
     `SELECT ${DRAFT_SELECT}
@@ -934,24 +1388,79 @@ export async function syncAppliedVehicleTotals(id: string) {
   }
   const draft = mapDraft(row);
   const code = draft.appliedVehicleCode;
-  if (!code || !isKnownVehicleCode(code)) {
-    if (code) {
+  if (code && isKnownVehicleCode(code)) {
+    const frozen = frozenVehicleTotals(draft, code);
+    if (!frozen) {
       await clearAppliedVehicle(id);
+      return;
     }
+    await writeAppliedVehicle(id, {
+      code,
+      labelCustomer: draft.appliedVehicleLabelCustomer,
+      labelTr: draft.appliedVehicleLabelTr,
+      totalEur: frozen.totalEur,
+      total: frozen.total,
+    });
     return;
   }
-  const frozen = frozenVehicleTotals(draft, code);
-  if (!frozen) {
+
+  if (code) {
     await clearAppliedVehicle(id);
     return;
   }
+
+  // Package flows (e.g. Bosphorus): use frozen snapshot totals — no new FX conversion.
+  if (draft.appliedVehicleTotalEur == null) {
+    return;
+  }
+  const total = frozenPackageTotalFromSnapshot(draft);
   await writeAppliedVehicle(id, {
-    code,
+    code: null,
     labelCustomer: draft.appliedVehicleLabelCustomer,
     labelTr: draft.appliedVehicleLabelTr,
-    totalEur: frozen.totalEur,
-    total: frozen.total,
+    totalEur: draft.appliedVehicleTotalEur,
+    total,
   });
+}
+
+function locationValueFromDraftLocation(stored: DraftLocation): LocationValue {
+  const restoredProvince =
+    stored.provinceCode && stored.provinceCode !== "other"
+      ? stored.provinceCode
+      : null;
+  return {
+    source: stored.placeId ? "google" : "query",
+    name: stored.nameCustomer?.trim() ?? "",
+    formattedAddress: stored.addressCustomer,
+    placeId: stored.placeId,
+    lat: stored.latitude,
+    lng: stored.longitude,
+    city: restoredProvince,
+    district: stored.districtCode,
+    region: null,
+    country: null,
+    countryCode: null,
+    airportCode: stored.airportCode,
+    type: stored.locationType === "airport" ? "airport" : stored.nameCustomer ? "place" : null,
+    placeTypes: stored.locationType === "airport" ? ["airport"] : null,
+  };
+}
+
+function tripViewForDirtyCheck(trip: DraftTrip): BookingTripView {
+  return {
+    pickup: locationValueFromDraftLocation(trip.pickup),
+    dropoff: locationValueFromDraftLocation(trip.dropoff),
+    pickupAtLocal: trip.pickupAt ? timestamptzToIstanbulLocal(trip.pickupAt) : "",
+    distanceKm: trip.distanceKm,
+    durationHours: trip.durationHours,
+    passengerCount: trip.passengerCount,
+    luggageCount: trip.luggageCount,
+    babySeatCount: trip.babySeatCount,
+    meetAndGreet: trip.meetAndGreet,
+    flightCode: trip.flightCode,
+    bursaRoute: trip.bursaRoute,
+    bosphorusPax: trip.bosphorusPax,
+  };
 }
 
 export async function applySelectedVehicle(
@@ -975,6 +1484,14 @@ export async function applySelectedVehicle(
     return { status: "incomplete", draft: existing };
   }
   if (!hasAppliedPassengerCount(existing.applied.passengerCount)) {
+    return { status: "incomplete", draft: existing };
+  }
+  if (
+    hasUnappliedTripChanges(
+      tripViewForDirtyCheck(existing.selected),
+      tripViewForDirtyCheck(existing.applied),
+    )
+  ) {
     return { status: "incomplete", draft: existing };
   }
   const meetAndGreet = meetAndGreetForVehicleSelection(
@@ -1029,13 +1546,29 @@ export async function upsertTransferDraft(
   browserSessionId: string,
   fields: TransferSearchFields,
 ) {
+  const resolvedFields =
+    fields.serviceType === HOURLY_SERVICE_TYPE ||
+    isLayoverTour(fields.serviceType, fields.tourCode)
+      ? {
+          ...fields,
+          distanceKm: await computeHourlyDropoffDistanceKm(
+            fields.pickup,
+            fields.dropoff,
+          ),
+        }
+      : isNoKmPackageTour(fields.serviceType, fields.tourCode) ||
+          isBosphorusDinnerTour(fields.serviceType, fields.tourCode)
+        ? { ...fields, distanceKm: null }
+        : fields;
   const existing = await findActiveDraft(browserSessionId);
   let id: string;
+  let created = false;
   if (existing) {
-    id = await updateDraft(existing.id, fields);
+    id = await updateDraft(existing.id, resolvedFields);
   } else {
     try {
-      id = await insertDraft(browserSessionId, fields);
+      id = await insertDraft(browserSessionId, resolvedFields);
+      created = true;
     } catch (error) {
       if (!isUniqueViolation(error)) {
         throw error;
@@ -1044,11 +1577,11 @@ export async function upsertTransferDraft(
       if (!raced) {
         throw error;
       }
-      id = await updateDraft(raced.id, fields);
+      id = await updateDraft(raced.id, resolvedFields);
     }
   }
   await storeAppliedTransferQuote(id);
-  return id;
+  return { id, created };
 }
 
 export async function computeSelectedRoute(
@@ -1069,22 +1602,44 @@ export async function computeSelectedDistanceKm(
   return route?.distanceKm ?? null;
 }
 
+export async function computeHourlyDropoffDistanceKm(
+  pickup: DraftLocation | PersistedLocation,
+  dropoff: DraftLocation | PersistedLocation,
+) {
+  if (!isDraftLocationFilled(pickup) || !isDraftLocationFilled(dropoff)) {
+    return 0;
+  }
+  if (draftLocationsRepresentSamePlace(pickup, dropoff)) {
+    return 0;
+  }
+  return computeSelectedDistanceKm(pickup, dropoff);
+}
+
 export type SelectedTripPatch = {
+  tourCode?: string | null;
   pickup?: PersistedLocation;
   dropoff?: PersistedLocation;
   pickupAt?: Date;
+  durationHours?: number | null;
   passengerCount?: number | null;
   luggageCount?: number | null;
   babySeatCount?: number | null;
   meetAndGreet?: boolean | null;
   flightCode?: string | null;
   currency?: string | null;
+  bursaRoute?: BursaRouteOption | null;
+  bosphorusAdultSoft?: number | null;
+  bosphorusAdultAlcohol?: number | null;
+  bosphorusChild5to9?: number | null;
+  bosphorusChild0to4?: number | null;
 };
 
 export type ClearDraftFields = {
   pickup?: boolean;
   dropoff?: boolean;
   pickupAt?: boolean;
+  durationHours?: boolean;
+  tourCode?: boolean;
 };
 
 const PICKUP_CLEAR_SQL = `
@@ -1158,6 +1713,15 @@ export async function clearDraftTripFields(
   if (fields.pickupAt) {
     assignments.push("selected_pickup_at = NULL", "applied_pickup_at = NULL");
   }
+  if (fields.durationHours) {
+    assignments.push(
+      "selected_duration_hours = NULL",
+      "applied_duration_hours = NULL",
+    );
+  }
+  if (fields.tourCode) {
+    assignments.push("tour_code = NULL", "selected_tour_code = NULL");
+  }
   if (fields.pickup || fields.dropoff) {
     assignments.push("selected_distance_km = NULL", "applied_distance_km = NULL");
   }
@@ -1187,16 +1751,76 @@ export async function updateSelectedTrip(
     return null;
   }
 
+  const previousSelectedTourCode =
+    existing.selected.tourCode ?? existing.tourCode;
+  const selectedTourCode =
+    patch.tourCode !== undefined
+      ? patch.tourCode
+      : (existing.selected.tourCode ?? existing.tourCode);
+  const isHourly = existing.serviceType === HOURLY_SERVICE_TYPE;
+  const layover = isLayoverTour(existing.serviceType, selectedTourCode);
+  const noKmPackage = isNoKmPackageTour(
+    existing.serviceType,
+    selectedTourCode,
+  );
+  const bosphorus = isBosphorusDinnerTour(
+    existing.serviceType,
+    selectedTourCode,
+  );
+  const leavingBosphorus =
+    patch.tourCode !== undefined &&
+    isBosphorusDinnerTour(existing.serviceType, previousSelectedTourCode) &&
+    !bosphorus;
+  const enteringBosphorus =
+    patch.tourCode !== undefined &&
+    !isBosphorusDinnerTour(existing.serviceType, previousSelectedTourCode) &&
+    bosphorus;
   const pickup = patch.pickup ?? existing.selected.pickup;
   const dropoff = patch.dropoff ?? existing.selected.dropoff;
   const pickupAt = patch.pickupAt ?? existing.selected.pickupAt;
-  const passengerCount = normalizeOccupancyCount(
-    patch.passengerCount !== undefined
-      ? patch.passengerCount
-      : existing.selected.passengerCount,
-    PASSENGER_COUNT_UNSET,
-    PASSENGER_COUNT_MAX,
+  const syncAppliedPickupAt =
+    patch.pickupAt !== undefined &&
+    bosphorus &&
+    existing.currentStage === CHECKOUT_STAGE;
+  const durationHours = normalizeDurationHours(
+    patch.durationHours !== undefined
+      ? patch.durationHours
+      : existing.selected.durationHours,
   );
+  const existingBosphorus = existing.selected.bosphorusPax ?? emptyBosphorusPaxCounts();
+  const bosphorusPax = bosphorus
+    ? clampBosphorusPaxAdultRule({
+        adultSoft:
+          patch.bosphorusAdultSoft !== undefined
+            ? (patch.bosphorusAdultSoft ?? 0)
+            : existingBosphorus.adultSoft,
+        adultAlcohol:
+          patch.bosphorusAdultAlcohol !== undefined
+            ? (patch.bosphorusAdultAlcohol ?? 0)
+            : existingBosphorus.adultAlcohol,
+        child5to9:
+          patch.bosphorusChild5to9 !== undefined
+            ? (patch.bosphorusChild5to9 ?? 0)
+            : existingBosphorus.child5to9,
+        child0to4:
+          patch.bosphorusChild0to4 !== undefined
+            ? (patch.bosphorusChild0to4 ?? 0)
+            : existingBosphorus.child0to4,
+      })
+    : null;
+  const passengerCount = bosphorus
+    ? enteringBosphorus
+      ? existing.selected.passengerCount
+      : bosphorusTotalPax(bosphorusPax ?? emptyBosphorusPaxCounts())
+    : normalizeOccupancyCount(
+        patch.passengerCount !== undefined
+          ? patch.passengerCount
+          : leavingBosphorus
+            ? null
+            : existing.selected.passengerCount,
+        PASSENGER_COUNT_UNSET,
+        PASSENGER_COUNT_MAX,
+      );
   const luggageCount = normalizeOccupancyCount(
     patch.luggageCount !== undefined
       ? patch.luggageCount
@@ -1221,24 +1845,41 @@ export async function updateSelectedTrip(
     patch.flightCode !== undefined
       ? patch.flightCode
       : existing.selected.flightCode;
+  const bursaRoute =
+    patch.bursaRoute !== undefined
+      ? patch.bursaRoute
+      : existing.selected.bursaRoute;
   const currency =
     patch.currency !== undefined
       ? patch.currency
       : (existing.currency ?? DEFAULT_DISPLAY_CURRENCY);
-  const locationChanged = Boolean(patch.pickup || patch.dropoff);
+  const locationChanged = Boolean(
+    patch.pickup || patch.dropoff || patch.tourCode !== undefined,
+  );
+  if (bosphorus && pickup.provinceCode !== "istanbul") {
+    throw new UntrustedLocationError();
+  }
 
   let distanceKm = existing.selected.distanceKm;
   let distanceError = false;
   if (locationChanged) {
-    const origin = coordsFromLatLng(pickup.latitude, pickup.longitude);
-    const destination = coordsFromLatLng(dropoff.latitude, dropoff.longitude);
-    if (!origin || !destination) {
+    if (isHourly || layover) {
+      distanceKm = await computeHourlyDropoffDistanceKm(pickup, dropoff);
+      distanceError = distanceKm === null;
+    } else if (noKmPackage || bosphorus) {
       distanceKm = null;
-      distanceError = true;
+      distanceError = false;
     } else {
-      const route = await computeDrivingRoute(origin, destination);
-      distanceKm = route?.distanceKm ?? null;
-      distanceError = route === null;
+      const origin = coordsFromLatLng(pickup.latitude, pickup.longitude);
+      const destination = coordsFromLatLng(dropoff.latitude, dropoff.longitude);
+      if (!origin || !destination) {
+        distanceKm = null;
+        distanceError = true;
+      } else {
+        const route = await computeDrivingRoute(origin, destination);
+        distanceKm = route?.distanceKm ?? null;
+        distanceError = route === null;
+      }
     }
   }
 
@@ -1263,20 +1904,28 @@ export async function updateSelectedTrip(
        selected_dropoff_location_type = $19,
        selected_dropoff_airport_code = $20,
        selected_pickup_at = $21,
+       applied_pickup_at = CASE WHEN $40::boolean THEN $21 ELSE applied_pickup_at END,
        selected_distance_km = $22,
        selected_passenger_count = $23,
        selected_luggage_count = $24,
        selected_baby_seat_count = $25,
        selected_meet_and_greet = $26,
        selected_flight_code = $27,
+       selected_bursa_route = $28,
        selected_pickup_province_code = $29,
        selected_pickup_district_code = $30,
        selected_dropoff_province_code = $31,
        selected_dropoff_district_code = $32,
-       currency = $33
+       currency = $33,
+       selected_duration_hours = $34,
+       selected_bosphorus_adult_soft = $35,
+       selected_bosphorus_adult_alcohol = $36,
+       selected_bosphorus_child_5_9 = $37,
+       selected_bosphorus_child_0_4 = $38,
+       selected_tour_code = $41
      WHERE id = $1
        AND browser_session_id = $2
-       AND status = $28
+       AND status = $39
      RETURNING ${DRAFT_SELECT}`,
     [
       existing.id,
@@ -1306,12 +1955,22 @@ export async function updateSelectedTrip(
       babySeatCount,
       meetAndGreet,
       flightCode,
-      DRAFT_STATUS,
+      bursaRoute,
       pickup.provinceCode,
       pickup.districtCode,
       dropoff.provinceCode,
       dropoff.districtCode,
       currency,
+      isHourly
+        ? durationHours
+        : packageTourDurationHours(existing.serviceType, selectedTourCode),
+      bosphorus ? (bosphorusPax?.adultSoft ?? 0) : null,
+      bosphorus ? (bosphorusPax?.adultAlcohol ?? 0) : null,
+      bosphorus ? (bosphorusPax?.child5to9 ?? 0) : null,
+      bosphorus ? (bosphorusPax?.child0to4 ?? 0) : null,
+      DRAFT_STATUS,
+      syncAppliedPickupAt,
+      selectedTourCode,
     ],
   );
   const row = result.rows[0];
@@ -1340,18 +1999,70 @@ export async function applySelectedTripToApplied(browserSessionId: string) {
   if (!existing) {
     return { status: "missing" as const };
   }
-  if (
+  const selectedTourCode = existing.selected.tourCode ?? existing.tourCode;
+  const isHourly = existing.serviceType === HOURLY_SERVICE_TYPE;
+  const layover = isLayoverTour(existing.serviceType, selectedTourCode);
+  const noKmPackage = isNoKmPackageTour(
+    existing.serviceType,
+    selectedTourCode,
+  );
+  const bosphorus = isBosphorusDinnerTour(
+    existing.serviceType,
+    selectedTourCode,
+  );
+  const previouslyBosphorus = isBosphorusDinnerTour(
+    existing.serviceType,
+    existing.tourCode,
+  );
+  if (isHourly) {
+    if (
+      existing.selected.durationHours === null ||
+      existing.selected.pickupAt === null ||
+      !isDraftLocationFilled(existing.selected.pickup)
+    ) {
+      return { status: "incomplete" as const, draft: existing };
+    }
+  } else if (layover) {
+    if (
+      existing.selected.pickupAt === null ||
+      !isDraftLocationFilled(existing.selected.pickup) ||
+      (existing.selected.pickup.airportCode !== "IST" &&
+        existing.selected.pickup.airportCode !== "SAW")
+    ) {
+      return { status: "incomplete" as const, draft: existing };
+    }
+  } else if (noKmPackage) {
+    if (
+      existing.selected.pickupAt === null ||
+      !isDraftLocationFilled(existing.selected.pickup)
+    ) {
+      return { status: "incomplete" as const, draft: existing };
+    }
+  } else if (bosphorus) {
+    if (
+      existing.selected.pickupAt === null ||
+      !isDraftLocationFilled(existing.selected.pickup)
+    ) {
+      return { status: "incomplete" as const, draft: existing };
+    }
+  } else if (
     existing.selected.distanceKm === null ||
     existing.selected.pickupAt === null
   ) {
     return { status: "incomplete" as const, draft: existing };
   }
 
-  const passengerCount = normalizeOccupancyCount(
-    existing.selected.passengerCount,
-    PASSENGER_COUNT_UNSET,
-    PASSENGER_COUNT_MAX,
-  );
+  const selectedBosphorus =
+    existing.selected.bosphorusPax ?? emptyBosphorusPaxCounts();
+  const previousAppliedBosphorus =
+    existing.applied.bosphorusPax ?? emptyBosphorusPaxCounts();
+  const passengerCount = bosphorus
+    ? bosphorusTotalPax(selectedBosphorus)
+    : normalizeOccupancyCount(
+        existing.selected.passengerCount,
+        PASSENGER_COUNT_UNSET,
+        PASSENGER_COUNT_MAX,
+      );
   const luggageCount = normalizeOccupancyCount(
     existing.selected.luggageCount,
     LUGGAGE_COUNT_MIN,
@@ -1371,6 +2082,7 @@ export async function applySelectedTripToApplied(browserSessionId: string) {
 
   const result = await query<DraftRow>(
     `UPDATE reservation_searches SET
+       tour_code = COALESCE(selected_tour_code, tour_code),
        applied_pickup_name_customer = selected_pickup_name_customer,
        applied_pickup_address_customer = selected_pickup_address_customer,
        applied_pickup_name_tr = selected_pickup_name_tr,
@@ -1391,6 +2103,7 @@ export async function applySelectedTripToApplied(browserSessionId: string) {
        applied_dropoff_airport_code = selected_dropoff_airport_code,
        applied_pickup_at = selected_pickup_at,
        applied_distance_km = selected_distance_km,
+       applied_duration_hours = selected_duration_hours,
        selected_passenger_count = $4,
        applied_passenger_count = $4,
        selected_luggage_count = $5,
@@ -1400,6 +2113,11 @@ export async function applySelectedTripToApplied(browserSessionId: string) {
        selected_meet_and_greet = $7,
        applied_meet_and_greet = $7,
        applied_flight_code = selected_flight_code,
+       applied_bursa_route = selected_bursa_route,
+       applied_bosphorus_adult_soft = selected_bosphorus_adult_soft,
+       applied_bosphorus_adult_alcohol = selected_bosphorus_adult_alcohol,
+       applied_bosphorus_child_5_9 = selected_bosphorus_child_5_9,
+       applied_bosphorus_child_0_4 = selected_bosphorus_child_0_4,
        selected_pickup_province_code = $8,
        selected_pickup_district_code = $9,
        selected_dropoff_province_code = $10,
@@ -1411,8 +2129,22 @@ export async function applySelectedTripToApplied(browserSessionId: string) {
      WHERE id = $1
        AND browser_session_id = $2
        AND status = $3
-       AND selected_distance_km IS NOT NULL
        AND selected_pickup_at IS NOT NULL
+       AND (
+         (service_type = $12 AND selected_duration_hours IS NOT NULL)
+         OR (
+           service_type = $13
+           AND COALESCE(selected_tour_code, tour_code) IN ($14, $15, $16, $17, $18)
+         )
+         OR (
+           service_type IS DISTINCT FROM $12
+           AND NOT (
+             service_type = $13
+             AND COALESCE(selected_tour_code, tour_code) IN ($14, $15, $16, $17, $18)
+           )
+           AND selected_distance_km IS NOT NULL
+         )
+       )
      RETURNING ${DRAFT_SELECT}`,
     [
       existing.id,
@@ -1426,11 +2158,29 @@ export async function applySelectedTripToApplied(browserSessionId: string) {
       pickupGeo.districtCode,
       dropoffGeo.provinceCode,
       dropoffGeo.districtCode,
+      HOURLY_SERVICE_TYPE,
+      TOUR_SERVICE_TYPE,
+      HALF_DAY_TOUR_CODE,
+      FULL_DAY_TOUR_CODE,
+      SAPANCA_TOUR_CODE,
+      BURSA_TOUR_CODE,
+      BOSPHORUS_DINNER_TOUR_CODE,
     ],
   );
   const row = result.rows[0];
   if (!row) {
     return { status: "incomplete" as const, draft: existing };
+  }
+  if (
+    previouslyBosphorus !== bosphorus ||
+    (bosphorus &&
+      (previousAppliedBosphorus.adultSoft !== selectedBosphorus.adultSoft ||
+        previousAppliedBosphorus.adultAlcohol !==
+          selectedBosphorus.adultAlcohol ||
+        previousAppliedBosphorus.child5to9 !== selectedBosphorus.child5to9 ||
+        previousAppliedBosphorus.child0to4 !== selectedBosphorus.child0to4))
+  ) {
+    await clearAppliedVehicle(row.id);
   }
   await storeAppliedTransferQuote(row.id);
   const priced = await query<DraftRow>(
@@ -1514,7 +2264,14 @@ export async function setDraftStage(
   if (!existing) {
     return { status: "missing" as const };
   }
-  if (stage === CHECKOUT_STAGE && !existing.appliedVehicleCode) {
+  const bosphorusCheckoutOk =
+    isBosphorusDinnerTour(existing.serviceType, existing.tourCode) &&
+    existing.appliedVehicleTotal != null;
+  if (
+    stage === CHECKOUT_STAGE &&
+    !existing.appliedVehicleCode &&
+    !bosphorusCheckoutOk
+  ) {
     return { status: "incomplete" as const, draft: existing };
   }
   await setDraftStageById(existing.id, stage);
@@ -1522,6 +2279,111 @@ export async function setDraftStage(
   return next
     ? { status: "ok" as const, draft: next }
     : { status: "missing" as const };
+}
+
+export async function applyBosphorusPackage(
+  browserSessionId: string,
+  locale: Locale,
+): Promise<
+  | { status: "ok"; draft: ActiveDraft }
+  | { status: "missing" }
+  | { status: "incomplete"; draft: ActiveDraft }
+> {
+  let existing = await findActiveDraft(browserSessionId);
+  if (!existing) {
+    return { status: "missing" };
+  }
+  if (!isBosphorusDinnerTour(existing.serviceType, existing.tourCode)) {
+    return { status: "incomplete", draft: existing };
+  }
+
+  if (
+    hasUnappliedTripChanges(
+      tripViewForDirtyCheck(existing.selected),
+      tripViewForDirtyCheck(existing.applied),
+    )
+  ) {
+    const applied = await applySelectedTripToApplied(browserSessionId);
+    if (applied.status === "missing") {
+      return { status: "missing" };
+    }
+    if (applied.status !== "ok") {
+      return { status: "incomplete", draft: applied.draft };
+    }
+    existing = applied.draft;
+  }
+
+  const counts = existing.applied.bosphorusPax ?? emptyBosphorusPaxCounts();
+  if (!bosphorusHasBookablePax(counts)) {
+    return { status: "incomplete", draft: existing };
+  }
+
+  const airportCode = pickupAirportCode(existing.applied.pickup);
+  const meetAndGreet = normalizeMeetAndGreet(
+    existing.applied.pickup,
+    existing.applied.meetAndGreet,
+  );
+  const totalEur = quoteBosphorusDinnerPackageTotalEur(
+    counts,
+    airportCode,
+    meetAndGreet,
+  );
+  const book = await getActiveFxBook();
+  const snapshot = buildFxSnapshot(totalEur, book);
+  const currency = normalizeDisplayCurrency(existing.currency);
+  const totalRaw = snapshot.totals[currency];
+  const total =
+    totalRaw != null && String(totalRaw).trim() !== ""
+      ? Number(totalRaw)
+      : totalEur;
+
+  const tourName =
+    bookingCopy[locale].tours[BOSPHORUS_DINNER_TOUR_CODE] ??
+    bookingCopy.en.tours[BOSPHORUS_DINNER_TOUR_CODE];
+  const tourNameTr = bookingCopy.tr.tours[BOSPHORUS_DINNER_TOUR_CODE];
+
+  await query(
+    `UPDATE reservation_searches
+     SET applied_transfer_quote = $2::jsonb,
+         applied_transfer_pricing_version = $3,
+         applied_price = $4,
+         applied_fx_snapshot = $5::jsonb,
+         currency = COALESCE(currency, $6)
+     WHERE id = $1
+       AND status = $7`,
+    [
+      existing.id,
+      JSON.stringify(
+        quoteBosphorusDinnerBase(
+          counts,
+          await geoFromLocation(existing.applied.pickup),
+          await geoFromLocation(existing.applied.dropoff),
+          airportCode,
+          meetAndGreet,
+        ),
+      ),
+      BOSPHORUS_DINNER_PRICING_VERSION,
+      totalEur,
+      JSON.stringify(snapshot),
+      DEFAULT_DISPLAY_CURRENCY,
+      DRAFT_STATUS,
+    ],
+  );
+
+  await writeAppliedVehicle(existing.id, {
+    code: null,
+    labelCustomer: tourName,
+    labelTr: tourNameTr,
+    totalEur,
+    total: Number.isFinite(total) ? total : totalEur,
+  });
+  await setDraftStageById(existing.id, CHECKOUT_STAGE);
+
+  const next = await findActiveDraft(browserSessionId);
+  if (!next) {
+    return { status: "missing" };
+  }
+  return { status: "ok", draft: next };
 }
 
 export type DraftContactPatch = {

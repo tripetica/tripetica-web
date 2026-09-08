@@ -87,7 +87,7 @@ export function CheckoutOtherPassengers({
               copy={copy}
               sequence={sequence}
               open={openSequence === sequence}
-              initialValue={values[sequence] ?? emptyPassengerForm()}
+              initialValue={values[sequence] ?? emptyPassengerForm(null, locale)}
               onToggle={() => onToggle(sequence)}
               onChange={(value) => onChange(sequence, value)}
               onPersist={(value) => onPersist(sequence, value)}

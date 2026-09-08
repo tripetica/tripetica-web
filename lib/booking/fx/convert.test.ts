@@ -33,6 +33,7 @@ import { quoteTransferBase } from "@/lib/booking/pricing/transfer-pricing";
 const SAMPLE_ER = {
   result: "success",
   base_code: "EUR",
+  time_next_update_utc: "Wed, 26 Aug 2026 00:00:01 +0000",
   rates: { EUR: 1, USD: 1.2, TRY: 40, RUB: 97, GBP: 0.85 },
 };
 

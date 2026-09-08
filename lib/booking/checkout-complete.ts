@@ -45,7 +45,7 @@ export function checkoutCanComplete(input: {
   if (!input.payment || !input.legalAccepted) {
     return false;
   }
-  if (input.payment === "cash" && !input.captchaVerified) {
+  if (!input.captchaVerified) {
     return false;
   }
   return true;

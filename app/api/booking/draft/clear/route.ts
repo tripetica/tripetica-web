@@ -31,7 +31,9 @@ export async function POST(request: NextRequest) {
   const pickup = body.pickup === true;
   const dropoff = body.dropoff === true;
   const pickupAt = body.localDateTime === true;
-  if (!pickup && !dropoff && !pickupAt) {
+  const durationHours = body.durationHours === true;
+  const tourCode = body.tourCode === true;
+  if (!pickup && !dropoff && !pickupAt && !durationHours && !tourCode) {
     return NextResponse.json({ error: "No fields to clear" }, { status: 400 });
   }
 
@@ -44,6 +46,8 @@ export async function POST(request: NextRequest) {
       pickup,
       dropoff,
       pickupAt,
+      durationHours,
+      tourCode,
     });
     if (!draft) {
       return NextResponse.json({ ok: true, draft: null });

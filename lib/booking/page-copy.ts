@@ -15,10 +15,15 @@ export const bookingPageCopy: Record<
     estimatedDistance: string;
     distanceLoading: string;
     distanceError: string;
+    pickupDropoffDistance: string;
     applyError: string;
+    packageCoverage: string;
+    tourLabel: string;
     editDateTime: string;
     editPickup: string;
     editDropoff: string;
+    editDuration: string;
+    editTour: string;
     emptyDraft: string;
     passengerCount: string;
     luggageCount: string;
@@ -44,11 +49,16 @@ export const bookingPageCopy: Record<
     estimatedDistance: "Tahmini mesafe",
     distanceLoading: "Mesafe hesaplanıyor…",
     distanceError: "Mesafe hesaplanamadı. Konumları kontrol edip tekrar deneyin.",
+    pickupDropoffDistance: "Alış–bırakma mesafesi",
     applyError: "Seçimler uygulanamadı. Lütfen tekrar deneyin.",
+    packageCoverage: "Paket kapsamı",
+    tourLabel: "Tur",
     editDateTime: "Tarih ve saati düzenle",
     editPickup: "Alış noktasını düzenle",
     editDropoff: "Bırakma noktasını düzenle",
-    emptyDraft: "Aktif bir transfer araması yok. Ana sayfadan seçenekleri görüntüleyin.",
+    editDuration: "Süreyi düzenle",
+    editTour: "Turu düzenle",
+    emptyDraft: "Aktif bir rezervasyon araması yok. Ana sayfadan seçenekleri görüntüleyin.",
     passengerCount: "Yolcu sayısı",
     luggageCount: "Valiz sayısı",
     babySeatCount: "Bebek koltuğu",
@@ -72,11 +82,16 @@ export const bookingPageCopy: Record<
     estimatedDistance: "Estimated distance",
     distanceLoading: "Calculating distance…",
     distanceError: "Could not calculate distance. Check the locations and try again.",
+    pickupDropoffDistance: "Pickup–drop-off distance",
     applyError: "Could not apply selections. Please try again.",
+    packageCoverage: "Package coverage",
+    tourLabel: "Tour",
     editDateTime: "Edit date and time",
     editPickup: "Edit pickup location",
     editDropoff: "Edit drop-off location",
-    emptyDraft: "No active transfer search. View options from the homepage.",
+    editDuration: "Edit duration",
+    editTour: "Edit tour",
+    emptyDraft: "No active booking search. View options from the homepage.",
     passengerCount: "Passenger count",
     luggageCount: "Luggage count",
     babySeatCount: "Baby seat",
@@ -100,11 +115,16 @@ export const bookingPageCopy: Record<
     estimatedDistance: "Примерное расстояние",
     distanceLoading: "Расчёт расстояния…",
     distanceError: "Не удалось рассчитать расстояние. Проверьте адреса и попробуйте снова.",
+    pickupDropoffDistance: "Расстояние от подачи до высадки",
     applyError: "Не удалось применить выбор. Попробуйте ещё раз.",
+    packageCoverage: "Пакет включает",
+    tourLabel: "Тур",
     editDateTime: "Изменить дату и время",
     editPickup: "Изменить место подачи",
     editDropoff: "Изменить место назначения",
-    emptyDraft: "Нет активного поиска трансфера. Выберите варианты на главной странице.",
+    editDuration: "Изменить продолжительность",
+    editTour: "Изменить тур",
+    emptyDraft: "Нет активного поиска бронирования. Выберите варианты на главной странице.",
     passengerCount: "Количество пассажиров",
     luggageCount: "Количество багажа",
     babySeatCount: "Детское кресло",

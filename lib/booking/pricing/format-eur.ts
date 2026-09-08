@@ -49,6 +49,17 @@ export function formatAmountDigits(amount: number, locale: Locale): string {
   return `${negative ? "−" : ""}${digits}`;
 }
 
+export function formatRateDigits(amount: number, locale: Locale): string {
+  if (!Number.isFinite(amount)) {
+    return "0";
+  }
+  return new Intl.NumberFormat(numberLocale(locale), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  }).format(amount);
+}
+
 export function formatEurAmount(amount: number, locale: Locale): string {
   if (!Number.isFinite(amount)) {
     return "—";

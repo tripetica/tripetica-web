@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readBrowserSessionId } from "@/lib/booking/browser-session";
+import { tourOptions } from "@/lib/booking/catalog";
 import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
-import { toPersistedLocation } from "@/lib/booking/location-persist";
+import { bosphorusLocalDateTimeFromDate } from "@/lib/booking/pricing/bosphorus-dinner-pricing";
+import {
+  toPersistedLocation,
+  UntrustedLocationError,
+} from "@/lib/booking/location-persist";
 import {
   BABY_SEAT_COUNT_MAX,
   BABY_SEAT_COUNT_MIN,
@@ -12,6 +17,14 @@ import {
   normalizeFlightCode,
 } from "@/lib/booking/occupancy";
 import { updateSelectedTrip } from "@/lib/booking/reservation-search";
+import {
+  BURSA_ROUTE_BRIDGE,
+  BURSA_ROUTE_BRIDGE_ULUDAG,
+  BURSA_ROUTE_FERRY,
+  BURSA_ROUTE_FERRY_ULUDAG,
+  type BursaRouteOption,
+} from "@/lib/booking/pricing/bursa-pricing";
+import { BOSPHORUS_PAX_MAX } from "@/lib/booking/pricing/bosphorus-dinner-pricing";
 import { draftToView } from "@/lib/booking/transfer-draft-hydration";
 import { isDisplayCurrency } from "@/lib/booking/pricing/format-eur";
 import { isLocationFilled, type LocationValue } from "@/lib/booking/types";
@@ -62,6 +75,29 @@ function parseOptionalFlightCode(value: unknown): string | null | undefined | "i
   return normalized.length > 0 ? normalized : null;
 }
 
+const BOOKABLE_VEHICLE_TOUR_CODES: ReadonlySet<string> = new Set(
+  tourOptions
+    .filter(
+      (tour) =>
+        tour.behaviorType === "vehicleBooking" ||
+        tour.behaviorType === "perPersonBooking",
+    )
+    .map((tour) => tour.id),
+);
+
+function parseOptionalTourCode(value: unknown): string | undefined | "invalid" {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    typeof value !== "string" ||
+    !BOOKABLE_VEHICLE_TOUR_CODES.has(value.trim())
+  ) {
+    return "invalid";
+  }
+  return value.trim();
+}
+
 function parseLocation(value: unknown): LocationValue | null {
   if (!isRecord(value)) {
     return null;
@@ -96,6 +132,26 @@ function parseLocation(value: unknown): LocationValue | null {
   };
 }
 
+function parseBursaRoute(
+  value: unknown,
+): BursaRouteOption | null | undefined | "invalid" {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (
+    value === BURSA_ROUTE_FERRY ||
+    value === BURSA_ROUTE_BRIDGE ||
+    value === BURSA_ROUTE_FERRY_ULUDAG ||
+    value === BURSA_ROUTE_BRIDGE_ULUDAG
+  ) {
+    return value;
+  }
+  return "invalid";
+}
+
 export async function POST(request: NextRequest) {
   const browserSessionId = readBrowserSessionId(request);
   if (!browserSessionId) {
@@ -128,8 +184,11 @@ export async function POST(request: NextRequest) {
 
   let pickupAt: Date | undefined;
   if (body.localDateTime !== undefined) {
-    const localDateTime =
+    let localDateTime =
       typeof body.localDateTime === "string" ? body.localDateTime.trim() : "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(localDateTime)) {
+      localDateTime = bosphorusLocalDateTimeFromDate(localDateTime);
+    }
     const utcMs = istanbulLocalToUtcMs(localDateTime);
     if (!localDateTime || Number.isNaN(utcMs)) {
       return NextResponse.json({ error: "Date and time are required" }, { status: 400 });
@@ -154,12 +213,35 @@ export async function POST(request: NextRequest) {
   );
   const meetAndGreet = parseOptionalBoolean(body.meetAndGreet);
   const flightCode = parseOptionalFlightCode(body.flightCode);
+  const tourCode = parseOptionalTourCode(body.tourCode);
+  const durationHours = parseCount(body.durationHours, 5, 20);
   const currency =
     body.currency === undefined
       ? undefined
       : typeof body.currency === "string" && isDisplayCurrency(body.currency.trim())
         ? body.currency.trim()
         : "invalid";
+  const bursaRoute = parseBursaRoute(body.bursaRoute);
+  const bosphorusAdultSoft = parseCount(
+    body.bosphorusAdultSoft,
+    0,
+    BOSPHORUS_PAX_MAX,
+  );
+  const bosphorusAdultAlcohol = parseCount(
+    body.bosphorusAdultAlcohol,
+    0,
+    BOSPHORUS_PAX_MAX,
+  );
+  const bosphorusChild5to9 = parseCount(
+    body.bosphorusChild5to9,
+    0,
+    BOSPHORUS_PAX_MAX,
+  );
+  const bosphorusChild0to4 = parseCount(
+    body.bosphorusChild0to4,
+    0,
+    BOSPHORUS_PAX_MAX,
+  );
 
   if (
     passengerCount === "invalid" ||
@@ -167,7 +249,14 @@ export async function POST(request: NextRequest) {
     babySeatCount === "invalid" ||
     meetAndGreet === "invalid" ||
     flightCode === "invalid" ||
-    currency === "invalid"
+    tourCode === "invalid" ||
+    durationHours === "invalid" ||
+    currency === "invalid" ||
+    bursaRoute === "invalid" ||
+    bosphorusAdultSoft === "invalid" ||
+    bosphorusAdultAlcohol === "invalid" ||
+    bosphorusChild5to9 === "invalid" ||
+    bosphorusChild0to4 === "invalid"
   ) {
     return NextResponse.json({ error: "Invalid occupancy fields" }, { status: 400 });
   }
@@ -181,22 +270,36 @@ export async function POST(request: NextRequest) {
     babySeatCount === undefined &&
     meetAndGreet === undefined &&
     flightCode === undefined &&
-    currency === undefined
+    tourCode === undefined &&
+    durationHours === undefined &&
+    currency === undefined &&
+    bursaRoute === undefined &&
+    bosphorusAdultSoft === undefined &&
+    bosphorusAdultAlcohol === undefined &&
+    bosphorusChild5to9 === undefined &&
+    bosphorusChild0to4 === undefined
   ) {
     return NextResponse.json({ error: "No selected fields to update" }, { status: 400 });
   }
 
   try {
     const updated = await updateSelectedTrip(browserSessionId, {
+      tourCode,
       pickup: pickupInput ? await toPersistedLocation(pickupInput, locale) : undefined,
       dropoff: dropoffInput ? await toPersistedLocation(dropoffInput, locale) : undefined,
       pickupAt,
+      durationHours,
       passengerCount,
       luggageCount,
       babySeatCount,
       meetAndGreet,
       flightCode,
       currency,
+      bursaRoute,
+      bosphorusAdultSoft,
+      bosphorusAdultAlcohol,
+      bosphorusChild5to9,
+      bosphorusChild0to4,
     });
     if (!updated) {
       return NextResponse.json({ error: "No active search" }, { status: 404 });
@@ -205,6 +308,12 @@ export async function POST(request: NextRequest) {
       draft: await draftToView(updated.draft, locale, updated.distanceError),
     });
   } catch (error) {
+    if (error instanceof UntrustedLocationError) {
+      return NextResponse.json(
+        { error: "Location could not be verified" },
+        { status: 400 },
+      );
+    }
     console.error("[Tripetica draft-selected]", error);
     return NextResponse.json({ error: "Could not update selection" }, { status: 500 });
   }

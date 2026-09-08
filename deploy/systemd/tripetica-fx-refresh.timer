@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll Tripetica production FX schedule and mail queues
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=1min
+AccuracySec=15s
+Persistent=true
+Unit=tripetica-fx-refresh.service
+
+[Install]
+WantedBy=timers.target

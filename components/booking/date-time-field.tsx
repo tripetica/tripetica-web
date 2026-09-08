@@ -1,9 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { EditGlyph } from "@/components/booking/edit-glyph";
 import { formatIstanbulLocalDisplay } from "@/lib/booking/istanbul-time";
+import {
+  BOSPHORUS_SERVICE_PICKUP_WINDOW,
+  bosphorusLocalDateTimeFromDate,
+} from "@/lib/booking/pricing/bosphorus-dinner-pricing";
+import {
+  correctMinuteForHour,
+  dateHasBookingConstraint,
+  effectiveBookingMin,
+  firstValidHourItem,
+  firstValidMinuteItem,
+  hourWheelItems,
+  isDraftDatetimeValid,
+  isHourWheelItemDisabled,
+  isMinuteWheelItemDisabled,
+  minuteWheelItems,
+  snapHourWheelItem,
+  snapMinuteWheelItem,
+  valueToWheelItem,
+  wheelItemToValue,
+  WHEEL_UNSET_VALUE,
+} from "@/lib/booking/datetime-wheel-rules";
 import { panelAboveField, positionAnchoredPanel } from "@/lib/booking/panel-position";
 import { type Locale } from "@/lib/i18n/config";
 
@@ -34,6 +65,17 @@ type DateTimeFieldProps = {
   variant?: "field" | "icon";
   editLabel?: string;
   clearLabel?: string;
+  invalid?: boolean;
+  /** When true, only the calendar date is shown/edited; value is still full local datetime. */
+  dateOnly?: boolean;
+};
+
+export type DateTimeFieldHandle = {
+  openPicker: () => void;
+};
+
+type PickerHandle = {
+  openPicker: () => void;
 };
 
 function FieldClearButton({
@@ -63,58 +105,87 @@ function FieldClearButton({
   );
 }
 
-export function DateTimeField({
-  id,
-  locale,
-  label,
-  placeholder,
-  applyLabel,
-  hourLabel,
-  minuteLabel,
-  value,
-  min,
-  error,
-  todayDate = null,
-  onChange,
-  onPickerOpen,
-  variant = "field",
-  editLabel,
-  clearLabel,
-}: DateTimeFieldProps) {
-  const filled = value.length > 0;
-  const shared = {
-    locale,
-    label,
-    placeholder,
-    value,
-    min,
-    error,
-    filled,
-    variant,
-    editLabel,
-    clearLabel,
-    onChange,
-    onPickerOpen,
-  };
+export const DateTimeField = forwardRef<DateTimeFieldHandle, DateTimeFieldProps>(
+  function DateTimeField(
+    {
+      id,
+      locale,
+      label,
+      placeholder,
+      applyLabel,
+      hourLabel,
+      minuteLabel,
+      value,
+      min,
+      error,
+      todayDate = null,
+      onChange,
+      onPickerOpen,
+      variant = "field",
+      editLabel,
+      clearLabel,
+      invalid = false,
+      dateOnly = false,
+    },
+    ref,
+  ) {
+    const filled = value.length > 0;
+    const desktopRef = useRef<PickerHandle>(null);
+    const mobileRef = useRef<PickerHandle>(null);
+    const shared = {
+      locale,
+      label,
+      placeholder,
+      value,
+      min,
+      error,
+      filled,
+      variant,
+      editLabel,
+      clearLabel,
+      invalid,
+      dateOnly,
+      onChange,
+      onPickerOpen,
+    };
 
-  return (
-    <>
-      <div className="booking-pointer-fine">
-        <DesktopDateTimeField
-          {...shared}
-          id={`${id}-fine`}
-          applyLabel={applyLabel}
-          hourLabel={hourLabel}
-          minuteLabel={minuteLabel}
-          todayDate={todayDate}
-        />
-      </div>
-      <div className="booking-pointer-coarse">
-        <MobileDateTimeField {...shared} id={`${id}-coarse`} />
-      </div>
-    </>
-  );
-}
+    useImperativeHandle(ref, () => ({
+      openPicker() {
+        const fine =
+          typeof window !== "undefined" &&
+          window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+        if (fine) {
+          desktopRef.current?.openPicker();
+        } else {
+          mobileRef.current?.openPicker();
+        }
+      },
+    }));
+
+    return (
+      <>
+        <div className="booking-pointer-fine">
+          <DesktopDateTimeField
+            {...shared}
+            id={`${id}-fine`}
+            applyLabel={applyLabel}
+            hourLabel={hourLabel}
+            minuteLabel={minuteLabel}
+            todayDate={todayDate}
+            pickerRef={desktopRef}
+          />
+        </div>
+        <div className="booking-pointer-coarse">
+          <MobileDateTimeField
+            {...shared}
+            id={`${id}-coarse`}
+            pickerRef={mobileRef}
+          />
+        </div>
+      </>
+    );
+  },
+);
 
 function MobileDateTimeField({
   id,
@@ -128,8 +199,11 @@ function MobileDateTimeField({
   variant = "field",
   editLabel,
   clearLabel,
+  invalid = false,
+  dateOnly = false,
   onChange,
   onPickerOpen,
+  pickerRef,
 }: Pick<
   DateTimeFieldProps,
   | "id"
@@ -144,18 +218,121 @@ function MobileDateTimeField({
   | "variant"
   | "editLabel"
   | "clearLabel"
-> & { filled: boolean }) {
+  | "invalid"
+  | "dateOnly"
+> & { filled: boolean; pickerRef: RefObject<PickerHandle | null> }) {
+  return (
+    <NativeDateTimeField
+      id={id}
+      locale={locale}
+      label={label}
+      placeholder={placeholder}
+      value={value}
+      min={min}
+      error={error}
+      filled={filled}
+      variant={variant}
+      editLabel={editLabel}
+      clearLabel={clearLabel}
+      invalid={invalid}
+      dateOnly={dateOnly}
+      onChange={onChange}
+      onPickerOpen={onPickerOpen}
+      pickerRef={pickerRef}
+    />
+  );
+}
+
+function NativeDateTimeField({
+  id,
+  locale,
+  label,
+  placeholder,
+  value,
+  min,
+  error,
+  filled,
+  variant = "field",
+  editLabel,
+  clearLabel,
+  invalid = false,
+  dateOnly = false,
+  onChange,
+  onPickerOpen,
+  pickerRef,
+}: Pick<
+  DateTimeFieldProps,
+  | "id"
+  | "locale"
+  | "label"
+  | "placeholder"
+  | "value"
+  | "min"
+  | "error"
+  | "onChange"
+  | "onPickerOpen"
+  | "variant"
+  | "editLabel"
+  | "clearLabel"
+  | "invalid"
+  | "dateOnly"
+> & { filled: boolean; pickerRef: RefObject<PickerHandle | null> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value);
   const minRef = useRef(min);
   const onChangeRef = useRef(onChange);
+  const dateOnlyRef = useRef(dateOnly);
   const confirmedRef = useRef(false);
+
+  function toInputValue(local: string) {
+    if (!local) {
+      return "";
+    }
+    return dateOnlyRef.current ? local.slice(0, 10) : local;
+  }
+
+  function fromInputValue(raw: string) {
+    if (!raw) {
+      return "";
+    }
+    if (dateOnlyRef.current) {
+      return bosphorusLocalDateTimeFromDate(raw.slice(0, 10));
+    }
+    return raw;
+  }
 
   useEffect(() => {
     valueRef.current = value;
     minRef.current = min;
     onChangeRef.current = onChange;
+    dateOnlyRef.current = dateOnly;
   });
+
+  useImperativeHandle(pickerRef, () => ({
+    openPicker() {
+      const input = inputRef.current;
+      if (!input) {
+        return;
+      }
+      onPickerOpen();
+      if (!valueRef.current && minRef.current) {
+        input.value = toInputValue(minRef.current);
+      }
+      input.focus();
+      const showPicker = (
+        input as HTMLInputElement & { showPicker?: () => void }
+      ).showPicker;
+      if (typeof showPicker === "function") {
+        try {
+          showPicker.call(input);
+        } catch {
+          input.click();
+        }
+      } else {
+        input.click();
+      }
+    },
+  }));
 
   useEffect(() => {
     const input = inputRef.current;
@@ -163,13 +340,13 @@ function MobileDateTimeField({
       return;
     }
     if (value) {
-      input.value = value;
+      input.value = toInputValue(value);
       return;
     }
     if (document.activeElement !== input) {
       input.value = "";
     }
-  }, [value]);
+  }, [value, dateOnly]);
 
   useEffect(() => {
     const input = inputRef.current;
@@ -188,8 +365,9 @@ function MobileDateTimeField({
       if (!raw) {
         return;
       }
+      const nextRaw = fromInputValue(raw);
       const floor = minRef.current;
-      const next = floor && raw < floor ? floor : raw;
+      const next = floor && nextRaw < floor ? floor : nextRaw;
       confirmedRef.current = true;
       if (next !== valueRef.current) {
         onChangeRef.current(next);
@@ -205,12 +383,16 @@ function MobileDateTimeField({
     confirmedRef.current = false;
     if (isIosDateTimePicker()) {
       if (!valueRef.current && minRef.current) {
-        input.value = minRef.current;
+        input.value = toInputValue(minRef.current);
       }
       return;
     }
     onPickerOpen();
   }
+
+  const displayValue = filled
+    ? formatIstanbulLocalDisplay(value, locale)
+    : placeholder;
 
   return (
     <label
@@ -218,7 +400,7 @@ function MobileDateTimeField({
       className={
         variant === "icon"
           ? "booking-edit-anchor booking-edit-native-wrap"
-          : `booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`
+          : `booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}${invalid ? " is-invalid" : ""}`
       }
     >
       {variant === "icon" ? null : (
@@ -242,27 +424,26 @@ function MobileDateTimeField({
           >
             <span className="booking-field-label booking-field-label-in">{label}</span>
             {filled ? <CalendarGlyph /> : null}
-            <span className="min-w-0 truncate">
-              {filled ? formatIstanbulLocalDisplay(value, locale) : placeholder}
-            </span>
+            <span className="min-w-0 truncate">{displayValue}</span>
             {filled ? null : <Chevron />}
           </span>
         )}
         <input
           ref={inputRef}
           id={id}
-          type="datetime-local"
-          step={60}
-          min={min ?? undefined}
+          type={dateOnly ? "date" : "datetime-local"}
+          step={dateOnly ? undefined : 60}
+          min={dateOnly ? (min?.slice(0, 10) ?? undefined) : (min ?? undefined)}
           defaultValue=""
           aria-label={variant === "icon" ? editLabel ?? label : undefined}
+          aria-invalid={invalid || undefined}
           onPointerDown={(event) => {
             if (!isIosDateTimePicker()) {
               return;
             }
             const input = event.currentTarget;
             if (!valueRef.current && minRef.current) {
-              input.value = minRef.current;
+              input.value = toInputValue(minRef.current);
             }
           }}
           onFocus={(event) => showPickerDefault(event.currentTarget)}
@@ -281,24 +462,25 @@ function MobileDateTimeField({
             if (isIosDateTimePicker()) {
               const raw = input.value;
               if (!raw) {
-                input.value = valueRef.current;
+                input.value = toInputValue(valueRef.current);
                 return;
               }
-              if (raw !== valueRef.current) {
-                onChangeRef.current(raw);
-              }
-              return;
-            }
-            if (input.value) {
-              const raw = input.value;
-              const floor = minRef.current;
-              const next = floor && raw < floor ? floor : raw;
+              const next = fromInputValue(raw);
               if (next !== valueRef.current) {
                 onChangeRef.current(next);
               }
               return;
             }
-            input.value = valueRef.current;
+            if (input.value) {
+              const nextRaw = fromInputValue(input.value);
+              const floor = minRef.current;
+              const next = floor && nextRaw < floor ? floor : nextRaw;
+              if (next !== valueRef.current) {
+                onChangeRef.current(next);
+              }
+              return;
+            }
+            input.value = toInputValue(valueRef.current);
           }}
           className="booking-datetime-native"
         />
@@ -341,13 +523,24 @@ function DesktopDateTimeField({
   variant = "field",
   editLabel,
   clearLabel,
-}: DateTimeFieldProps & { filled: boolean }) {
+  invalid = false,
+  dateOnly = false,
+  pickerRef,
+}: DateTimeFieldProps & {
+  filled: boolean;
+  pickerRef: RefObject<PickerHandle | null>;
+}) {
   const parts = splitLocal(value);
-  const minParts = splitLocal(min ?? "");
+  const effectiveMin = effectiveBookingMin(min);
+  const minParts = splitLocal(effectiveMin ?? "");
   const [open, setOpen] = useState(false);
   const [draftDate, setDraftDate] = useState("");
   const [draftHour, setDraftHour] = useState("");
   const [draftMinute, setDraftMinute] = useState("");
+  const [hourInteracted, setHourInteracted] = useState(false);
+  const [minuteInteracted, setMinuteInteracted] = useState(false);
+  const hourInteractedRef = useRef(false);
+  const minuteInteractedRef = useRef(false);
   const [menuBox, setMenuBox] = useState<DOMRect | null>(null);
   const [viewMonth, setViewMonth] = useState(
     monthKey(minParts.date || parts.date || todayDate || ""),
@@ -356,6 +549,42 @@ function DesktopDateTimeField({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+
+  function syncDraftFromValue() {
+    if (parts.date && parts.time) {
+      setDraftDate(parts.date);
+      setDraftHour(parts.time.slice(0, 2));
+      setDraftMinute(parts.time.slice(3, 5));
+      setViewMonth(monthKey(parts.date || todayDate || ""));
+      setHourInteracted(true);
+      setMinuteInteracted(true);
+      hourInteractedRef.current = true;
+      minuteInteractedRef.current = true;
+      return;
+    }
+    setDraftDate("");
+    setDraftHour("");
+    setDraftMinute("");
+    setViewMonth(monthKey(minParts.date || todayDate || ""));
+    setHourInteracted(false);
+    setMinuteInteracted(false);
+    hourInteractedRef.current = false;
+    minuteInteractedRef.current = false;
+  }
+
+  function openPanel() {
+    onPickerOpen();
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuBox(rect);
+    }
+    syncDraftFromValue();
+    setOpen(true);
+  }
+
+  useImperativeHandle(pickerRef, () => ({
+    openPicker: openPanel,
+  }));
 
   useEffect(() => {
     if (!open) {
@@ -408,23 +637,59 @@ function DesktopDateTimeField({
     };
   }, [open, menuId]);
 
+  useEffect(() => {
+    if (!open || !draftHour || !draftMinute) {
+      return;
+    }
+    const fixed = correctMinuteForHour(
+      draftHour,
+      draftMinute,
+      draftDate,
+      effectiveMin,
+      minuteInteracted,
+    );
+    if (fixed !== draftMinute) {
+      queueMicrotask(() => {
+        setDraftMinute(fixed);
+        setMinuteInteracted(true);
+      });
+      minuteInteractedRef.current = true;
+    }
+  }, [draftHour, draftDate, draftMinute, effectiveMin, minuteInteracted, open]);
+
   function apply() {
-    if (!draftDate || !draftHour || !draftMinute) {
+    if (dateOnly) {
+      if (!draftDate) {
+        return;
+      }
+      const local = bosphorusLocalDateTimeFromDate(draftDate);
+      if (effectiveMin && local < effectiveMin) {
+        return;
+      }
+      onChange(local);
+      setOpen(false);
+      return;
+    }
+    if (!isDraftDatetimeValid(draftDate, draftHour, draftMinute, effectiveMin)) {
       return;
     }
     const local = `${draftDate}T${draftHour}:${draftMinute}`;
-    if (min && local < min) {
-      return;
-    }
     onChange(local);
     setOpen(false);
   }
 
-  const draftLocal =
-    draftDate && draftHour && draftMinute
-      ? `${draftDate}T${draftHour}:${draftMinute}`
-      : "";
-  const canApply = Boolean(draftLocal && (!min || draftLocal >= min));
+  const canApply = dateOnly
+    ? Boolean(
+        draftDate &&
+          (!effectiveMin ||
+            bosphorusLocalDateTimeFromDate(draftDate) >= effectiveMin),
+      )
+    : isDraftDatetimeValid(
+        draftDate,
+        draftHour,
+        draftMinute,
+        effectiveMin,
+      );
   const style =
     variant === "icon"
       ? positionAnchoredPanel(menuBox, {
@@ -442,23 +707,69 @@ function DesktopDateTimeField({
     locale === "ru" ? "ru-RU" : locale === "tr" ? "tr-TR" : "en-GB";
 
   function toggleOpen() {
-    onPickerOpen();
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) {
-      setMenuBox(rect);
+    if (open) {
+      setOpen(false);
+      return;
     }
-    if (parts.date && parts.time) {
-      setDraftDate(parts.date);
-      setDraftHour(parts.time.slice(0, 2));
-      setDraftMinute(parts.time.slice(3, 5));
-      setViewMonth(monthKey(parts.date || todayDate || ""));
-    } else {
-      setDraftDate("");
+    openPanel();
+  }
+
+  function handleHourInteract() {
+    hourInteractedRef.current = true;
+    setHourInteracted(true);
+    if (dateHasBookingConstraint(draftDate, effectiveMin) && !draftHour) {
+      const first = firstValidHourItem(
+        hourWheelItems(),
+        draftDate,
+        effectiveMin,
+        true,
+      );
+      if (first) {
+        setDraftHour(wheelItemToValue(first));
+      }
+    }
+  }
+
+  function handleMinuteInteract() {
+    minuteInteractedRef.current = true;
+    setMinuteInteracted(true);
+    if (
+      draftHour &&
+      dateHasBookingConstraint(draftDate, effectiveMin) &&
+      !draftMinute
+    ) {
+      const first = firstValidMinuteItem(
+        minuteWheelItems(),
+        draftHour,
+        draftDate,
+        effectiveMin,
+        true,
+      );
+      if (first) {
+        setDraftMinute(wheelItemToValue(first));
+      }
+    }
+  }
+
+  function handleSelectDate(next: string) {
+    setDraftDate(next);
+    if (dateOnly) {
+      setDraftHour("19");
+      setDraftMinute("00");
+      setHourInteracted(true);
+      setMinuteInteracted(true);
+      hourInteractedRef.current = true;
+      minuteInteractedRef.current = true;
+      return;
+    }
+    setHourInteracted(false);
+    setMinuteInteracted(false);
+    hourInteractedRef.current = false;
+    minuteInteractedRef.current = false;
+    if (dateHasBookingConstraint(next, effectiveMin)) {
       setDraftHour("");
       setDraftMinute("");
-      setViewMonth(monthKey(minParts.date || todayDate || ""));
     }
-    setOpen((current) => !current);
   }
 
   return (
@@ -467,7 +778,7 @@ function DesktopDateTimeField({
       className={
         variant === "icon"
           ? "booking-edit-anchor"
-          : `booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`
+          : `booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}${invalid ? " is-invalid" : ""}`
       }
     >
       {variant === "icon" ? null : (
@@ -488,7 +799,7 @@ function DesktopDateTimeField({
           <EditGlyph />
         </button>
       ) : (
-        <div className="booking-input-wrap">
+        <div className={`booking-input-wrap${filled && clearLabel ? " is-clearable" : ""}`}>
           <button
             ref={buttonRef}
             type="button"
@@ -496,11 +807,14 @@ function DesktopDateTimeField({
             aria-labelledby={`${id}-label`}
             aria-expanded={open}
             aria-controls={menuId}
+            aria-invalid={invalid || undefined}
             onClick={toggleOpen}
           >
             {filled ? <CalendarGlyph /> : null}
             <span className="min-w-0 truncate">
-              {filled ? formatIstanbulLocalDisplay(value, locale) : placeholder}
+              {filled
+                ? formatIstanbulLocalDisplay(value, locale)
+                : placeholder}
             </span>
             {filled ? null : <Chevron />}
           </button>
@@ -535,11 +849,33 @@ function DesktopDateTimeField({
                   minDate={minParts.date}
                   todayDate={todayDate ?? ""}
                   onViewMonthChange={setViewMonth}
-                  onSelectDate={(next) => {
-                    setDraftDate(next);
-                  }}
+                  onSelectDate={handleSelectDate}
                 />
                 <div className="datetime-panel-side">
+                  {dateOnly ? (
+                    <>
+                      <div
+                        className="datetime-locked-time"
+                        aria-readonly="true"
+                      >
+                        <span className="datetime-locked-time-label">
+                          {hourLabel}
+                        </span>
+                        <span className="datetime-locked-time-value">
+                          {BOSPHORUS_SERVICE_PICKUP_WINDOW}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="booking-cta datetime-apply"
+                        disabled={!canApply}
+                        onClick={apply}
+                      >
+                        {applyLabel}
+                      </button>
+                    </>
+                  ) : (
+                  <>
                   <div
                     className={`datetime-wheels-wrap${draftDate ? "" : " is-locked"}`}
                   >
@@ -552,27 +888,63 @@ function DesktopDateTimeField({
                             : "Select a date first"}
                       </span>
                     )}
-                    <div className="datetime-wheels">
-                      <TimeWheel
+                    <div className="datetime-wheels-grid">
+                      <span className="datetime-wheel-label">{hourLabel}</span>
+                      <span className="datetime-wheel-label">{minuteLabel}</span>
+                      <div className="datetime-wheels">
+                        <TimeWheel
                         label={hourLabel}
-                        items={hoursList()}
+                        items={hourWheelItems()}
                         value={draftHour}
                         locked={!draftDate}
-                        isDisabled={(item) => isHourDisabled(draftDate, item, min)}
+                        isDisabled={(item) =>
+                          isHourWheelItemDisabled(
+                            item,
+                            draftDate,
+                            effectiveMin,
+                            hourInteracted,
+                          )
+                        }
+                        snapSelection={(centerItem) =>
+                          snapHourWheelItem(
+                            centerItem,
+                            hourWheelItems(),
+                            draftDate,
+                            effectiveMin,
+                            hourInteractedRef.current || hourInteracted,
+                          )
+                        }
+                        onInteract={handleHourInteract}
                         onChange={setDraftHour}
                       />
                       <TimeWheel
                         label={minuteLabel}
-                        items={minutesList()}
+                        items={minuteWheelItems()}
                         value={draftMinute}
-                        locked={!draftDate}
+                        locked={!draftDate || !draftHour}
                         isDisabled={(item) =>
-                          draftDate && draftHour
-                            ? isMinuteDisabled(draftDate, Number(draftHour), item, min)
-                            : false
+                          isMinuteWheelItemDisabled(
+                            item,
+                            draftHour,
+                            draftDate,
+                            effectiveMin,
+                            minuteInteracted,
+                          )
                         }
+                        snapSelection={(centerItem) =>
+                          snapMinuteWheelItem(
+                            centerItem,
+                            minuteWheelItems(),
+                            draftHour,
+                            draftDate,
+                            effectiveMin,
+                            minuteInteractedRef.current || minuteInteracted,
+                          )
+                        }
+                        onInteract={handleMinuteInteract}
                         onChange={setDraftMinute}
                       />
+                      </div>
                     </div>
                   </div>
                   <button
@@ -583,6 +955,8 @@ function DesktopDateTimeField({
                   >
                     {applyLabel}
                   </button>
+                  </>
+                  )}
                 </div>
               </div>
             </div>,
@@ -605,41 +979,14 @@ function monthKey(date: string) {
   return date.slice(0, 7);
 }
 
-function hoursList() {
-  return Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
-}
-
-function minutesList() {
-  return Array.from({ length: 12 }, (_, index) =>
-    String(index * 5).padStart(2, "0"),
-  );
-}
-
-function isHourDisabled(date: string, hour: string, min: string | null) {
-  if (!min || !date) {
-    return false;
-  }
-  return `${date}T${hour}:55` < min;
-}
-
-function isMinuteDisabled(
-  date: string,
-  hour: number,
-  minute: string,
-  min: string | null,
-) {
-  if (!min || !date) {
-    return false;
-  }
-  return `${date}T${String(hour).padStart(2, "0")}:${minute}` < min;
-}
-
 function TimeWheel({
   label,
   items,
   value,
   locked = false,
   isDisabled,
+  snapSelection,
+  onInteract,
   onChange,
 }: {
   label: string;
@@ -647,6 +994,8 @@ function TimeWheel({
   value: string;
   locked?: boolean;
   isDisabled: (item: string) => boolean;
+  snapSelection: (centerItem: string) => string;
+  onInteract?: () => void;
   onChange: (item: string) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -654,11 +1003,9 @@ function TimeWheel({
   const scrollTimerRef = useRef(0);
 
   const alignSelectedToBand = useCallback(() => {
-    if (!value) {
-      return;
-    }
     const list = listRef.current;
-    const selected = list?.querySelector("[data-selected='true']");
+    const wheelValue = valueToWheelItem(value);
+    const selected = list?.querySelector(`[data-wheel-value="${wheelValue}"]`);
     if (!(list instanceof HTMLElement) || !(selected instanceof HTMLElement)) {
       return;
     }
@@ -703,24 +1050,26 @@ function TimeWheel({
         ? bandHost.getBoundingClientRect()
         : list.getBoundingClientRect();
     const center = bandRect.top + bandRect.height / 2;
-    let nearestEnabled: HTMLButtonElement | null = null;
-    let nearestEnabledDistance = Infinity;
+    let nearest: HTMLButtonElement | null = null;
+    let nearestDistance = Infinity;
 
     for (const node of list.querySelectorAll("button")) {
-      if (!(node instanceof HTMLButtonElement) || node.disabled) {
+      if (!(node instanceof HTMLButtonElement)) {
         continue;
       }
       const rect = node.getBoundingClientRect();
       const distance = Math.abs(rect.top + rect.height / 2 - center);
-      if (distance < nearestEnabledDistance) {
-        nearestEnabledDistance = distance;
-        nearestEnabled = node;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = node;
       }
     }
 
-    const next = nearestEnabled?.textContent?.trim();
-    if (next && next !== value) {
-      onChange(next);
+    const centerItem = nearest?.dataset.wheelValue ?? WHEEL_UNSET_VALUE;
+    onInteract?.();
+    const normalized = snapSelection(centerItem);
+    if (normalized !== value) {
+      onChange(normalized);
       return;
     }
     alignSelectedToBand();
@@ -733,7 +1082,7 @@ function TimeWheel({
         className="datetime-wheel-list"
         role="listbox"
         aria-label={label}
-        aria-activedescendant={value ? `${label}-${value}` : undefined}
+        aria-activedescendant={`${label}-${value ? value : "unset"}`}
         onScroll={() => {
           if (locked) {
             return;
@@ -741,22 +1090,37 @@ function TimeWheel({
           window.clearTimeout(scrollTimerRef.current);
           scrollTimerRef.current = window.setTimeout(selectValueInBand, 70);
         }}
+        onWheel={() => {
+          if (!locked) {
+            onInteract?.();
+          }
+        }}
+        onPointerDown={() => {
+          if (!locked) {
+            onInteract?.();
+          }
+        }}
       >
         {items.map((item) => {
-          const selected = Boolean(value) && item === value;
+          const selected = item === valueToWheelItem(value);
+          const unsetItem = item === WHEEL_UNSET_VALUE;
           return (
             <button
-              key={item}
-              id={`${label}-${item}`}
+              key={item === WHEEL_UNSET_VALUE ? `${label}-unset` : `${label}-${item}`}
+              id={`${label}-${item === WHEEL_UNSET_VALUE ? "unset" : item}`}
               type="button"
               role="option"
+              data-wheel-value={item}
               data-selected={selected ? "true" : undefined}
               aria-selected={selected}
               disabled={locked || isDisabled(item)}
-              className={`datetime-wheel-item ${selected ? "is-selected" : ""}`}
+              className={`datetime-wheel-item ${selected ? "is-selected" : ""} ${
+                selected && unsetItem ? "is-unset-selected" : ""
+              }`}
               onClick={() => {
                 if (!locked) {
-                  onChange(item);
+                  onInteract?.();
+                  onChange(snapSelection(item));
                 }
               }}
             >

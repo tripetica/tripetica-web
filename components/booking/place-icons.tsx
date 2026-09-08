@@ -322,14 +322,57 @@ export function MeetAndGreetIcon({ className = "location-icon" }: { className?: 
   );
 }
 
+export function ClockIcon({ className = "location-icon" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.85"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5V12l3.2 1.9" />
+    </svg>
+  );
+}
+
+export function MapPinnedIcon({ className = "location-icon" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.85"
+    >
+      <path d="M18 8c0 3.6-3.87 7.43-5.39 8.8a1 1 0 0 1-1.22 0C9.87 15.43 6 11.6 6 8a6 6 0 0 1 12 0Z" />
+      <circle cx="12" cy="8" r="2" />
+      <path d="M8.6 18h6.8M9.5 21.2h5" />
+    </svg>
+  );
+}
+
 export function RoutePointBadge({
   point,
+  className = "",
 }: {
   point: "A" | "B";
+  className?: string;
 }) {
   return (
     <span
-      className={`booking-route-point-badge is-${point === "A" ? "a" : "b"}`}
+      className={`booking-route-point-badge is-${point === "A" ? "a" : "b"}${className ? ` ${className}` : ""}`}
       aria-hidden="true"
     >
       {point}

@@ -2,7 +2,10 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { accountLogoutAction, accountStartNewBookingAction } from "@/lib/account/actions";
 import { contactSectionId } from "@/lib/contact/links";
+import { type Locale } from "@/lib/i18n/config";
+import { localizedPath } from "@/lib/i18n/path";
 import { headerControlClassName } from "@/lib/ui/header";
 
 type MobileNavCopy = {
@@ -14,11 +17,32 @@ type MobileNavCopy = {
   mobileNav: string;
 };
 
+type MobileAccountProps = {
+  locale: Locale;
+  label: string;
+  ariaLabel: string;
+  /** When true (on /account/*), show Book reservation → home instead of My account. */
+  onAccountArea?: boolean;
+  myAccountLabel: string;
+  bookReservationLabel: string;
+  logoutLabel: string;
+};
+
 type MobileNavProps = {
   copy: MobileNavCopy;
   homeHref: string;
+  signInHref?: string;
+  signInLabel?: string;
+  onSignInClick?: () => void;
+  /** When false, omit the guest sign-in drawer row. */
+  showSignIn?: boolean;
+  /** Authenticated account accordion inside the drawer. */
+  account?: MobileAccountProps;
   firstItem?: { href: string; label: string };
 };
+
+const drawerItemClassName =
+  "drawer-nav-item liquid-lens-row flex min-h-12 cursor-pointer items-center border-b border-white/10 px-3 py-4 text-left text-[1.05rem] font-medium";
 
 function clearHamburgerVisualState(button: HTMLButtonElement | null) {
   if (!button) {
@@ -28,12 +52,23 @@ function clearHamburgerVisualState(button: HTMLButtonElement | null) {
   button.blur();
 }
 
-export function MobileNav({ copy, homeHref, firstItem }: MobileNavProps) {
+export function MobileNav({
+  copy,
+  homeHref,
+  signInHref,
+  signInLabel,
+  onSignInClick,
+  showSignIn = true,
+  account,
+  firstItem,
+}: MobileNavProps) {
   const [open, setOpen] = useState(false);
+  const [accountExpanded, setAccountExpanded] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const ignoreOverlayUntilRef = useRef(0);
   const panelId = useId();
+  const accountPanelId = useId();
 
   useEffect(() => {
     if (!open) {
@@ -58,6 +93,10 @@ export function MobileNav({ copy, homeHref, firstItem }: MobileNavProps) {
     };
   }, [open]);
 
+  if (!open && accountExpanded) {
+    setAccountExpanded(false);
+  }
+
   function toggleMenu() {
     setOpen((isOpen) => {
       if (isOpen) {
@@ -81,11 +120,11 @@ export function MobileNav({ copy, homeHref, firstItem }: MobileNavProps) {
     close();
   }
 
-  const items = [
+  const navItems = [
     firstItem ?? { href: `${homeHref}#services`, label: copy.services },
     { href: `#${contactSectionId}`, label: copy.contact },
-    { href: `${homeHref}#signin`, label: copy.signIn },
   ];
+  const signInLabelResolved = signInLabel ?? copy.signIn;
 
   const drawer =
     open && typeof document !== "undefined"
@@ -127,16 +166,116 @@ export function MobileNav({ copy, homeHref, firstItem }: MobileNavProps) {
               </div>
 
               <nav className="flex flex-col px-4 pb-8" aria-label={copy.mobileNav}>
-                {items.map((item) => (
+                {navItems.map((item) => (
                   <a
                     key={item.href}
                     href={item.href}
-                    className="liquid-lens-row flex min-h-12 cursor-pointer items-center border-b border-white/10 px-3 py-4 text-[1.05rem] font-medium text-white"
+                    className={drawerItemClassName}
                     onClick={close}
                   >
                     <span>{item.label}</span>
                   </a>
                 ))}
+                {showSignIn ? (
+                  onSignInClick ? (
+                    <button
+                      type="button"
+                      className={drawerItemClassName}
+                      onClick={() => {
+                        close();
+                        onSignInClick();
+                      }}
+                    >
+                      <span>{signInLabelResolved}</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={signInHref ?? `${homeHref}/account/login`}
+                      className={drawerItemClassName}
+                      onClick={close}
+                    >
+                      <span>{signInLabelResolved}</span>
+                    </a>
+                  )
+                ) : null}
+                {account ? (
+                  <div className="drawer-account-block">
+                    <button
+                      type="button"
+                      className={`${drawerItemClassName} is-account is-account-toggle`}
+                      aria-label={account.ariaLabel}
+                      aria-expanded={accountExpanded}
+                      aria-controls={accountPanelId}
+                      onClick={() => setAccountExpanded((value) => !value)}
+                    >
+                      <span>{account.label}</span>
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        className={`drawer-account-chevron${accountExpanded ? " is-open" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                    {accountExpanded ? (
+                      <div
+                        id={accountPanelId}
+                        className="drawer-account-submenu"
+                        role="group"
+                        aria-label={account.ariaLabel}
+                      >
+                        {account.onAccountArea ? (
+                          <form
+                            action={accountStartNewBookingAction}
+                            className="drawer-account-logout-form"
+                          >
+                            <input
+                              type="hidden"
+                              name="locale"
+                              value={account.locale}
+                            />
+                            <button
+                              type="submit"
+                              className="drawer-nav-item drawer-account-subitem liquid-lens-row"
+                              onClick={close}
+                            >
+                              <span>{account.bookReservationLabel}</span>
+                            </button>
+                          </form>
+                        ) : (
+                          <a
+                            href={localizedPath(account.locale, "/account")}
+                            className="drawer-nav-item drawer-account-subitem liquid-lens-row"
+                            onClick={close}
+                          >
+                            <span>{account.myAccountLabel}</span>
+                          </a>
+                        )}
+                        <form
+                          action={accountLogoutAction}
+                          className="drawer-account-logout-form"
+                        >
+                          <input
+                            type="hidden"
+                            name="locale"
+                            value={account.locale}
+                          />
+                          <button
+                            type="submit"
+                            className="drawer-nav-item drawer-account-subitem liquid-lens-row is-danger"
+                          >
+                            <span>{account.logoutLabel}</span>
+                          </button>
+                        </form>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </nav>
             </div>
           </>,

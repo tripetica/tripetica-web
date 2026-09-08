@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
-import { panelAboveField } from "@/lib/booking/panel-position";
+import { EditGlyph } from "@/components/booking/edit-glyph";
+import {
+  panelAboveField,
+  positionAnchoredPanel,
+} from "@/lib/booking/panel-position";
 import {
   BOOKING_DESKTOP_QUERY,
   useMediaQuery,
@@ -18,9 +29,16 @@ type BookingSelectProps = {
   title: string;
   placeholder: string;
   closeLabel: string;
+  icon?: ReactNode;
   value: string | null;
   options: BookingSelectOption[];
   onChange: (id: string) => void;
+  variant?: "field" | "icon";
+  editLabel?: string;
+  className?: string;
+  invalid?: boolean;
+  clearLabel?: string;
+  onClear?: () => void;
 };
 
 export function BookingSelect({
@@ -28,9 +46,16 @@ export function BookingSelect({
   title,
   placeholder,
   closeLabel,
+  icon,
   value,
   options,
   onChange,
+  variant = "field",
+  editLabel,
+  className = "",
+  invalid = false,
+  clearLabel,
+  onClear,
 }: BookingSelectProps) {
   const desktop = useMediaQuery(BOOKING_DESKTOP_QUERY);
   const [open, setOpen] = useState(false);
@@ -39,10 +64,20 @@ export function BookingSelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const selectedRef = useRef<HTMLButtonElement>(null);
+  const listBodyRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const selected = options.find((option) => option.id === value);
   const selectedLabel = selected?.label;
-  const menuStyle = desktop ? panelAboveField(menuBox) : undefined;
+  const menuStyle = desktop
+    ? variant === "icon"
+      ? positionAnchoredPanel(menuBox, {
+          minWidth: 280,
+          maxWidth: 320,
+          maxHeight: 420,
+          prefer: "below",
+        })
+      : panelAboveField(menuBox)
+    : undefined;
 
   useEffect(() => {
     if (!open) {
@@ -127,7 +162,12 @@ export function BookingSelect({
     }
 
     const frame = window.requestAnimationFrame(() => {
-      selectedRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+      if (variant === "icon") {
+        listBodyRef.current?.scrollTo({ top: 0 });
+        document.getElementById(menuId)?.scrollTo({ top: 0 });
+      } else {
+        selectedRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+      }
     });
     const timer = window.setTimeout(() => {
       document.addEventListener("pointerdown", onOutside);
@@ -144,7 +184,7 @@ export function BookingSelect({
         document.body.style.overflow = previousOverflow;
       }
     };
-  }, [open, menuId, options, value, desktop]);
+  }, [open, menuId, options, value, desktop, variant]);
 
   function openPanel() {
     const rect = buttonRef.current?.getBoundingClientRect();
@@ -209,47 +249,104 @@ export function BookingSelect({
           <h2 className="location-sheet-title">{title}</h2>
         </div>
       )}
-      <div className="location-sheet-body">{list}</div>
+      <div ref={listBodyRef} className="location-sheet-body">
+        {list}
+      </div>
     </div>
   ) : null;
 
+  function toggleOpen() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    openPanel();
+  }
+
+  function onTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (!open) {
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const option = options[activeIndex];
+      if (option) {
+        onChange(option.id);
+        setOpen(false);
+      }
+    }
+  }
+
+  if (variant === "icon") {
+    return (
+      <div ref={rootRef} className="booking-edit-anchor">
+        <button
+          ref={buttonRef}
+          type="button"
+          className="booking-edit-btn"
+          aria-label={editLabel ?? title}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={menuId}
+          onKeyDown={onTriggerKeyDown}
+          onClick={toggleOpen}
+        >
+          <EditGlyph />
+        </button>
+        {open && typeof document !== "undefined"
+          ? createPortal(panel, document.body)
+          : null}
+      </div>
+    );
+  }
+
   return (
-    <div ref={rootRef} className="booking-field min-w-0 flex-1">
+    <div
+      ref={rootRef}
+      className={`booking-field min-w-0${selectedLabel ? " is-filled" : ""}${invalid ? " is-invalid" : ""}${className ? ` ${className}` : " flex-1"}`}
+    >
       <span className="booking-field-label booking-field-label-out">{label}</span>
-      <button
-        ref={buttonRef}
-        type="button"
-        className={`booking-field-button ${selectedLabel ? "is-filled" : ""}`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={menuId}
-        onKeyDown={(event) => {
-          if (!open) {
-            return;
-          }
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            const option = options[activeIndex];
-            if (option) {
-              onChange(option.id);
-              setOpen(false);
-            }
-          }
-        }}
-        onClick={() => {
-          if (open) {
-            setOpen(false);
-            return;
-          }
-          openPanel();
-        }}
+      <div
+        className={`booking-input-wrap${selectedLabel && clearLabel ? " is-clearable" : ""}`}
       >
-        <span className="booking-field-label booking-field-label-in" aria-hidden="true">
-          {label}
-        </span>
-        <span className="min-w-0 truncate">{selectedLabel ?? placeholder}</span>
-        <Chevron open={open} />
-      </button>
+        <button
+          ref={buttonRef}
+          type="button"
+          className={`booking-field-button ${selectedLabel ? "is-filled" : ""}`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={menuId}
+          aria-invalid={invalid || undefined}
+          onKeyDown={onTriggerKeyDown}
+          onClick={toggleOpen}
+        >
+          <span className="booking-field-label booking-field-label-in" aria-hidden="true">
+            {label}
+          </span>
+          {selectedLabel ? icon : null}
+          <span className="min-w-0 truncate">{selectedLabel ?? placeholder}</span>
+          {selectedLabel ? null : <Chevron open={open} />}
+        </button>
+        {selectedLabel && clearLabel && onClear ? (
+          <button
+            type="button"
+            className="booking-clear"
+            aria-label={clearLabel}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setOpen(false);
+              onClear();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
       {open && typeof document !== "undefined"
         ? createPortal(panel, document.body)
         : null}

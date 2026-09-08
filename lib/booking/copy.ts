@@ -11,6 +11,8 @@ export type BookingCopy = {
   dropoffPlaceholder: string;
   datetimeLabel: string;
   datetimePlaceholder: string;
+  dateLabel: string;
+  datePlaceholder: string;
   durationLabel: string;
   durationPlaceholder: string;
   hoursSuffix: string;
@@ -34,8 +36,16 @@ export type BookingCopy = {
   datetimeHour: string;
   datetimeMinute: string;
   datetimeTooSoon: string;
+  datetimeStaleTitle: string;
+  datetimeStaleBody: string;
+  datetimeStaleNearestLabel: string;
+  datetimeStaleUseNearest: string;
+  datetimeStalePickOther: string;
   persistError: string;
   swapLocations: string;
+  hourlyDropoffFeeNote: string;
+  transferSameLocationError: string;
+  istanbulLocationRequired: string;
 };
 
 export const bookingCopy: Record<Locale, BookingCopy> = {
@@ -53,6 +63,8 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     dropoffPlaceholder: "Введите место назначения",
     datetimeLabel: "Дата и время",
     datetimePlaceholder: "Выберите дату и время",
+    dateLabel: "Дата",
+    datePlaceholder: "Выберите дату",
     durationLabel: "Продолжительность",
     durationPlaceholder: "Выберите продолжительность",
     hoursSuffix: "часов",
@@ -60,16 +72,13 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     tourPlaceholder: "Выберите тур",
     tours: {
       "istanbul-layover": "Тур при пересадке в Стамбуле",
-      "istanbul-half-day": "Полудневный тур по Стамбулу (6 часов)",
-      "istanbul-full-day": "Полный день в Стамбуле (10 часов)",
+      "istanbul-half-day": "Полудневный тур по Стамбулу",
+      "istanbul-full-day": "Полный день в Стамбуле",
       sapanca: "Тур в Сапанджу",
       bursa: "Тур в Бурсу",
       "bosphorus-dinner": "Круиз по Босфору с ужином и турецким шоу",
-      cappadocia: "Тур в Каппадокию",
-      pamukkale: "Тур в Памуккале",
-      ephesus: "Тур в Эфес",
-      gobeklitepe: "Тур в Гёбеклитепе",
-      custom: "Индивидуальный тур и маршрут",
+      "private-turkey-tours":
+        "Каппадокия, Памуккале, Эфес, Гёбеклитепе и индивидуальные маршруты",
     },
     ctaContinue: "Посмотреть варианты",
     ctaViewTour: "Подробнее о туре",
@@ -98,8 +107,20 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     datetimeHour: "Час",
     datetimeMinute: "Минута",
     datetimeTooSoon: "Выберите время не ранее чем через 1 час по Стамбулу",
+    datetimeStaleTitle: "Выбранные дата и время больше недоступны",
+    datetimeStaleBody:
+      "Из‑за операционного времени подготовки бронирование возможно минимум на 1 час позже текущего времени.",
+    datetimeStaleNearestLabel: "Ближайшие доступные дата и время:",
+    datetimeStaleUseNearest: "Использовать ближайшее время",
+    datetimeStalePickOther: "Выбрать другую дату и время",
     persistError: "Не удалось сохранить выбор. Попробуйте ещё раз.",
     swapLocations: "Поменять места подачи и назначения",
+    hourlyDropoffFeeNote:
+      "При выборе другого места окончания поездки может взиматься дополнительная плата в зависимости от местоположения и расстояния.",
+    transferSameLocationError:
+      "Место посадки и место назначения не могут совпадать. Пожалуйста, измените одно из мест.",
+    istanbulLocationRequired:
+      "Пожалуйста, выберите адрес в пределах Стамбула.",
   },
   en: {
     slogan: "Quality Service. Fair Price.",
@@ -115,6 +136,8 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     dropoffPlaceholder: "Enter drop-off location",
     datetimeLabel: "Date & time",
     datetimePlaceholder: "Select date and time",
+    dateLabel: "Date",
+    datePlaceholder: "Select date",
     durationLabel: "Duration",
     durationPlaceholder: "Select duration",
     hoursSuffix: "hours",
@@ -122,16 +145,13 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     tourPlaceholder: "Select tour",
     tours: {
       "istanbul-layover": "Istanbul Layover Tour",
-      "istanbul-half-day": "Istanbul Half-Day Tour (6 Hours)",
-      "istanbul-full-day": "Istanbul Full-Day Tour (10 Hours)",
+      "istanbul-half-day": "Istanbul Half-Day Tour",
+      "istanbul-full-day": "Istanbul Full-Day Tour",
       sapanca: "Sapanca Tour",
       bursa: "Bursa Tour",
       "bosphorus-dinner": "Bosphorus Dinner Cruise & Turkish Night Show",
-      cappadocia: "Cappadocia Tour",
-      pamukkale: "Pamukkale Tour",
-      ephesus: "Ephesus Tour",
-      gobeklitepe: "Göbeklitepe Tour",
-      custom: "Custom Tour & Route",
+      "private-turkey-tours":
+        "Cappadocia, Pamukkale, Ephesus, Göbeklitepe and Custom Routes",
     },
     ctaContinue: "View Options",
     ctaViewTour: "View Tour",
@@ -160,8 +180,19 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     datetimeHour: "Hour",
     datetimeMinute: "Minute",
     datetimeTooSoon: "Choose a time at least 1 hour from now in Istanbul",
+    datetimeStaleTitle: "Your selected date and time is no longer available",
+    datetimeStaleBody:
+      "Due to operational preparation time, bookings can only be made at least 1 hour from now.",
+    datetimeStaleNearestLabel: "Earliest available date and time:",
+    datetimeStaleUseNearest: "Use nearest time",
+    datetimeStalePickOther: "Choose a different date and time",
     persistError: "Could not save your selection. Please try again.",
     swapLocations: "Swap pickup and drop-off",
+    hourlyDropoffFeeNote:
+      "If a different drop-off location is selected, an additional charge may apply depending on the location and distance.",
+    transferSameLocationError:
+      "Pickup and drop-off locations cannot be the same. Please change one of the locations.",
+    istanbulLocationRequired: "Please choose an address within Istanbul.",
   },
   tr: {
     slogan: "Kaliteli hizmet. Adil fiyat.",
@@ -177,6 +208,8 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     dropoffPlaceholder: "Varış noktasını girin",
     datetimeLabel: "Tarih ve saat",
     datetimePlaceholder: "Tarih ve saat seçin",
+    dateLabel: "Tarih",
+    datePlaceholder: "Tarih seçin",
     durationLabel: "Süre",
     durationPlaceholder: "Süre seçin",
     hoursSuffix: "saat",
@@ -184,16 +217,13 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     tourPlaceholder: "Tur seçin",
     tours: {
       "istanbul-layover": "İstanbul Aktarma Turu",
-      "istanbul-half-day": "İstanbul Yarım Gün Turu (6 saat)",
-      "istanbul-full-day": "İstanbul Tam Gün Turu (10 saat)",
+      "istanbul-half-day": "İstanbul Yarım Gün Turu",
+      "istanbul-full-day": "İstanbul Tam Gün Tur",
       sapanca: "Sapanca Turu",
       bursa: "Bursa Turu",
       "bosphorus-dinner": "Boğaz’da Yemekli Gemi Turu & Türk Gecesi",
-      cappadocia: "Kapadokya Turu",
-      pamukkale: "Pamukkale Turu",
-      ephesus: "Efes Turu",
-      gobeklitepe: "Göbeklitepe Turu",
-      custom: "Özel Tur ve Rota",
+      "private-turkey-tours":
+        "Kapadokya, Pamukkale, Efes, Göbeklitepe ve Özel Rotalar",
     },
     ctaContinue: "Seçenekleri Gör",
     ctaViewTour: "Turu İncele",
@@ -223,7 +253,18 @@ export const bookingCopy: Record<Locale, BookingCopy> = {
     datetimeHour: "Saat",
     datetimeMinute: "Dakika",
     datetimeTooSoon: "Lütfen İstanbul saatine göre en az 1 saat sonrası için bir zaman seçin",
+    datetimeStaleTitle: "Seçtiğiniz tarih ve saat artık kullanılamıyor",
+    datetimeStaleBody:
+      "Operasyonel hazırlık süresi nedeniyle rezervasyonlar en az 1 saat sonrasına oluşturulabilir.",
+    datetimeStaleNearestLabel: "Seçilebilecek en yakın tarih ve saat:",
+    datetimeStaleUseNearest: "En yakın saati kullan",
+    datetimeStalePickOther: "Farklı tarih ve saat seç",
     persistError: "Seçiminiz kaydedilemedi. Lütfen tekrar deneyin.",
     swapLocations: "Alış ve varış noktalarını değiştir",
+    hourlyDropoffFeeNote:
+      "Farklı bir bırakma noktası seçilmesi halinde, konum ve mesafeye bağlı olarak ek ücret uygulanabilir.",
+    transferSameLocationError:
+      "Alış ve bırakma noktaları aynı olamaz. Lütfen konumlardan birini değiştirin.",
+    istanbulLocationRequired: "Lütfen İstanbul içinde bir adres seçin.",
   },
 };

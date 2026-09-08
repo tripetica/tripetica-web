@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AirportTransferPage } from "@/components/services/airport-transfer-page";
 import { isLocale } from "@/lib/i18n/config";
-import { localeAlternates } from "@/lib/seo/metadata";
+import { publicPageSeo } from "@/lib/seo/metadata";
 import { servicePath } from "@/lib/services/catalog";
 import { airportTransferCopy } from "@/lib/services/airport-transfer-copy";
 
@@ -26,7 +26,7 @@ export async function generateMetadata({
   return {
     title: copy.metaTitle,
     description: copy.metaDescription,
-    alternates: localeAlternates(locale, SERVICE_PATH),
+    ...publicPageSeo(locale, SERVICE_PATH),
   };
 }
 

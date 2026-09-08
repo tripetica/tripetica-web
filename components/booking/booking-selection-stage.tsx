@@ -42,7 +42,13 @@ export function BookingSelectionStage({
   }, []);
 
   return (
-    <div className="booking-selection">
+    <div
+      className={`booking-selection${
+        config.flowId === "bosphorus-dinner-cruise"
+          ? " booking-selection--bosphorus"
+          : ""
+      }`}
+    >
       <div className="booking-sidebar-column">
         <div className="booking-sidebar-sticky">
           <BookingSidebar

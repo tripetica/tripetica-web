@@ -10,8 +10,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { EditGlyph } from "@/components/booking/edit-glyph";
-import { LocationGlyph, locationIconKind } from "@/components/booking/place-icons";
+import {
+  LocationGlyph,
+  RoutePointBadge,
+  locationIconKind,
+} from "@/components/booking/place-icons";
 import { airportPresets, locationFromAirportPreset } from "@/lib/booking/catalog";
+import { isIstanbulLocationValue } from "@/lib/booking/istanbul-location";
 import { type BookingCopy } from "@/lib/booking/copy";
 import {
   panelAboveField,
@@ -53,11 +58,25 @@ type LocationFieldProps = {
     | "placesError"
     | "suggestionsLabel"
     | "closeSelector"
+    | "istanbulLocationRequired"
   >;
   value: LocationValue;
   onChange: (value: LocationValue) => void;
+  routePoint?: "A" | "B";
   variant?: "field" | "icon";
   editLabel?: string;
+  panelNotice?: string | null;
+  className?: string;
+  invalid?: boolean;
+  disabled?: boolean;
+  onDisabledActivate?: () => void;
+  /** When set, only these airport presets are selectable (no Places search). */
+  presetAirportCodes?: readonly AirportCode[];
+  airportPickerOnly?: boolean;
+  /** Reject selections outside Istanbul (package tours). */
+  requireIstanbul?: boolean;
+  /** When set, called instead of the inline Istanbul error (e.g. richer dialog). */
+  onOutsideIstanbul?: () => void;
 };
 
 export function LocationField({
@@ -70,10 +89,26 @@ export function LocationField({
   copy,
   value,
   onChange,
+  routePoint,
   variant = "field",
   editLabel,
+  panelNotice = null,
+  className = "",
+  invalid = false,
+  disabled = false,
+  onDisabledActivate,
+  presetAirportCodes,
+  airportPickerOnly = false,
+  requireIstanbul = false,
+  onOutsideIstanbul,
 }: LocationFieldProps) {
   const desktop = useMediaQuery(BOOKING_DESKTOP_QUERY);
+  const visiblePresets = presetAirportCodes
+    ? airportPresets.filter((preset) => presetAirportCodes.includes(preset.id))
+    : requireIstanbul
+      ? airportPresets.filter((preset) => preset.id !== "AYT")
+      : airportPresets;
+  const pickerOnly = airportPickerOnly && presetAirportCodes !== undefined;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [menuBox, setMenuBox] = useState<DOMRect | null>(null);
@@ -94,6 +129,10 @@ export function LocationField({
     role,
     value.type === "airport" || Boolean(value.airportCode),
   );
+
+  if (disabled && open) {
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (!open) {
@@ -166,7 +205,7 @@ export function LocationField({
   }, [open, menuId, desktop]);
 
   useEffect(() => {
-    if (!open) {
+    if (!open || pickerOnly) {
       return;
     }
 
@@ -194,25 +233,44 @@ export function LocationField({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, query, locale]);
+  }, [open, query, locale, pickerOnly]);
 
   function openSelector() {
+    if (disabled) {
+      onDisabledActivate?.();
+      return;
+    }
     const rect = rootRef.current?.getBoundingClientRect();
     if (rect) {
       setMenuBox(rect);
     }
-    const currentLabel = locationLabel(value, copy.airports);
-    setQuery(currentLabel);
+    if (!pickerOnly) {
+      const currentLabel = locationLabel(value, copy.airports);
+      setQuery(currentLabel);
+      skipSearchRef.current = currentLabel.trim().length > 0;
+    } else {
+      setQuery("");
+      skipSearchRef.current = true;
+    }
     setSuggestions([]);
     setPlacesError(null);
     setLoading(false);
-    skipSearchRef.current = currentLabel.trim().length > 0;
     sessionRef.current = createSessionToken();
     setOpen(true);
   }
 
   function selectPreset(preset: AirportPreset) {
-    onChange(locationFromAirportPreset(preset, copy.airports[preset.id]));
+    const next = locationFromAirportPreset(preset, copy.airports[preset.id]);
+    if (requireIstanbul && !isIstanbulLocationValue(next)) {
+      if (onOutsideIstanbul) {
+        setOpen(false);
+        onOutsideIstanbul();
+      } else {
+        setPlacesError(copy.istanbulLocationRequired);
+      }
+      return;
+    }
+    onChange(next);
     setOpen(false);
   }
 
@@ -234,8 +292,8 @@ export function LocationField({
       return;
     }
     const types = details?.types ?? suggestion.types;
-    onChange({
-      source: "google",
+    const next = {
+      source: "google" as const,
       name: details?.name ?? suggestion.primaryText,
       formattedAddress: details?.formattedAddress ?? suggestion.secondaryText,
       placeId: details?.placeId ?? suggestion.placeId,
@@ -247,9 +305,19 @@ export function LocationField({
       country: details?.country ?? null,
       countryCode: details?.countryCode ?? null,
       airportCode: null,
-      type: types.includes("airport") ? "airport" : "place",
+      type: types.includes("airport") ? ("airport" as const) : ("place" as const),
       placeTypes: types,
-    });
+    };
+    if (requireIstanbul && !isIstanbulLocationValue(next)) {
+      if (onOutsideIstanbul) {
+        setOpen(false);
+        onOutsideIstanbul();
+      } else {
+        setPlacesError(copy.istanbulLocationRequired);
+      }
+      return;
+    }
+    onChange(next);
     setOpen(false);
   }
 
@@ -297,6 +365,9 @@ export function LocationField({
       onSelectSuggestion={(suggestion) => {
         void selectSuggestion(suggestion);
       }}
+      panelNotice={panelNotice}
+      visiblePresets={visiblePresets}
+      airportPickerOnly={pickerOnly}
     />
   ) : null;
 
@@ -322,7 +393,10 @@ export function LocationField({
   }
 
   return (
-    <div ref={rootRef} className={`booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}`}>
+    <div
+      ref={rootRef}
+      className={`booking-field booking-entry-field min-w-0 flex-1 ${filled ? "is-filled" : ""}${invalid ? " is-invalid" : ""}${className ? ` ${className}` : ""}`}
+    >
       <span className="booking-field-label booking-field-label-out" id={`${id}-label`}>
         {label}
       </span>
@@ -330,23 +404,30 @@ export function LocationField({
         <button
           type="button"
           id={id}
-          className={`booking-field-button ${filled ? "is-filled" : ""}`}
+          className={`booking-field-button ${filled ? "is-filled" : ""}${disabled ? " is-disabled" : ""}`}
           aria-labelledby={`${id}-label`}
           aria-expanded={open}
           aria-controls={menuId}
+          aria-invalid={invalid || undefined}
+          aria-disabled={disabled || undefined}
+          disabled={disabled}
           onClick={openSelector}
         >
           <span className="booking-field-label booking-field-label-in" aria-hidden="true">
             {label}
           </span>
           {filled ? (
-            <LocationGlyph kind={fieldKind} className="location-icon location-icon-field" />
+            routePoint ? (
+              <RoutePointBadge point={routePoint} className="is-field" />
+            ) : (
+              <LocationGlyph kind={fieldKind} className="location-icon location-icon-field" />
+            )
           ) : null}
           <span className="min-w-0 truncate">
             {filled ? visibleName : placeholder}
           </span>
         </button>
-        {filled ? (
+        {filled && !disabled ? (
           <button
             type="button"
             className="booking-clear"
@@ -398,6 +479,9 @@ type PanelProps = {
   onClose: () => void;
   onSelectPreset: (preset: AirportPreset) => void;
   onSelectSuggestion: (suggestion: PlaceSuggestion) => void;
+  panelNotice?: string | null;
+  visiblePresets: AirportPreset[];
+  airportPickerOnly: boolean;
 };
 
 function LocationSelectorPanel({
@@ -419,6 +503,9 @@ function LocationSelectorPanel({
   onClose,
   onSelectPreset,
   onSelectSuggestion,
+  panelNotice = null,
+  visiblePresets,
+  airportPickerOnly,
 }: PanelProps) {
   const trimmed = query.trim();
 
@@ -475,44 +562,49 @@ function LocationSelectorPanel({
           <h2 className="location-sheet-title">{title}</h2>
         </div>
       )}
-      <div className="location-search">
-        <div className="location-search-wrap">
-          <input
-            ref={inputRef}
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            value={query}
-            placeholder={placeholder}
-            className={`booking-field-input ${trimmed ? "is-filled" : ""}`}
-            onChange={(event) => onQueryChange(event.target.value)}
-          />
-          {trimmed ? (
-            <button
-              type="button"
-              className="booking-clear"
-              aria-label={copy.clearLocation}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onQueryChange("");
-                inputRef.current?.focus();
-              }}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-            >
-              ×
-            </button>
-          ) : null}
+      {airportPickerOnly ? null : (
+        <div className="location-search">
+          <div className="location-search-wrap">
+            <input
+              ref={inputRef}
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              value={query}
+              placeholder={placeholder}
+              className={`booking-field-input ${trimmed ? "is-filled" : ""}`}
+              onChange={(event) => onQueryChange(event.target.value)}
+            />
+            {trimmed ? (
+              <button
+                type="button"
+                className="booking-clear"
+                aria-label={copy.clearLocation}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onQueryChange("");
+                  inputRef.current?.focus();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
+      {panelNotice ? (
+        <p className="location-panel-notice">{panelNotice}</p>
+      ) : null}
       <div className="location-sheet-body">
         <p className="location-panel-label">{copy.airportsLabel}</p>
         <ul className="location-panel-list">
-          {airportPresets.map((preset) => (
+          {visiblePresets.map((preset) => (
             <li key={preset.id}>
               <button
                 type="button"
@@ -529,7 +621,7 @@ function LocationSelectorPanel({
             </li>
           ))}
         </ul>
-        {trimmed ? (
+        {!airportPickerOnly && trimmed ? (
           <>
             <p className="location-panel-label">{copy.suggestionsLabel}</p>
             <ul className="location-panel-list location-panel-results">

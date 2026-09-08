@@ -7,6 +7,7 @@ export const headerCopy: Record<
     contact: string;
     language: string;
     account: string;
+    accountMenu: string;
     signIn: string;
     openMenu: string;
     closeMenu: string;
@@ -20,6 +21,7 @@ export const headerCopy: Record<
     contact: "Контакты",
     language: "Язык",
     account: "Аккаунт",
+    accountMenu: "Меню аккаунта",
     signIn: "Войти",
     openMenu: "Открыть меню",
     closeMenu: "Закрыть меню",
@@ -32,6 +34,7 @@ export const headerCopy: Record<
     contact: "Contact",
     language: "Language",
     account: "Account",
+    accountMenu: "Account menu",
     signIn: "Sign in",
     openMenu: "Open menu",
     closeMenu: "Close menu",
@@ -44,6 +47,7 @@ export const headerCopy: Record<
     contact: "İletişim",
     language: "Dil",
     account: "Hesap",
+    accountMenu: "Hesap menüsü",
     signIn: "Giriş yap",
     openMenu: "Menüyü aç",
     closeMenu: "Menüyü kapat",

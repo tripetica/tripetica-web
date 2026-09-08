@@ -92,6 +92,7 @@ function viewFromBreakdown(
     : currencyTotalsFromEur(breakdown.totalEur);
   return {
     vehicleCode: breakdown.vehicleCode,
+    multiplier: breakdown.multiplier,
     baseServiceFeeEur: breakdown.baseServiceFeeEur,
     extraPassengerFeeEur: breakdown.extraPassengerFeeEur,
     extraLuggageFeeEur: breakdown.extraLuggageFeeEur,

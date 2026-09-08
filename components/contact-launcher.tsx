@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { contactLauncherCopy } from "@/lib/contact/copy";
+import { CONTACT_LAUNCHER_OPEN_EVENT } from "@/lib/contact/events";
 import { contactLinks } from "@/lib/contact/links";
 import { type Locale } from "@/lib/i18n/config";
 import {
@@ -134,6 +135,16 @@ export function ContactLauncher({ locale }: ContactLauncherProps) {
       setActionsLive(true);
     }, 180);
   }
+
+  useEffect(() => {
+    function onOpenRequest() {
+      openLauncher();
+    }
+    window.addEventListener(CONTACT_LAUNCHER_OPEN_EVENT, onOpenRequest);
+    return () => {
+      window.removeEventListener(CONTACT_LAUNCHER_OPEN_EVENT, onOpenRequest);
+    };
+  }, []);
 
   function toggleOpen() {
     if (open) {

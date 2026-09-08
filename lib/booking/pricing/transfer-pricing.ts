@@ -69,6 +69,13 @@ export type TransferPricingBreakdown = {
   pickupDistrictCode: string | null;
   dropoffProvinceCode: TransferProvinceCode;
   dropoffDistrictCode: string | null;
+  /** Hourly chauffeur: pickup→dropoff route km (not package km). */
+  hourlyDropoffDistanceKm?: number;
+  hourlyDropoffDistanceFreeKm?: number;
+  hourlyDropoffDistanceBillableKm?: number;
+  hourlyDropoffDistanceRateEur?: number;
+  /** Flat EUR added to every vehicle total (not multiplied by class). */
+  flatVehicleSurchargeEur?: number;
 };
 
 export const TRANSFER_PRICING_V1: TransferPricingRules = {

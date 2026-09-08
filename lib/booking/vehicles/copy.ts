@@ -26,6 +26,8 @@ export type VehicleCardCopy = {
   maxCapacityLabel: string;
   maxCapacity: string;
   baseFee: string;
+  bursaBridgeRoute: string;
+  bursaUludagAscent: string;
   extraPassenger: string;
   extraLuggage: string;
   babySeat: string;
@@ -36,7 +38,9 @@ export type VehicleCardCopy = {
   currencyNames: Record<DisplayCurrency, string>;
   select: string;
   selected: string;
+  dropoffDistanceFee: string;
   selectBlockedDesktop: string;
+  selectUnappliedDesktop: string;
   gallery: Record<VehicleGalleryKey, string>;
   alt: Record<VehicleGalleryKey, string>;
   closeGallery: string;
@@ -54,6 +58,8 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
     maxCapacityLabel: "Maksimum kapasite",
     maxCapacity: "3 yolcu + 3 valiz",
     baseFee: "Temel hizmet ücreti",
+    bursaBridgeRoute: "Köprü + otoyol tercihi",
+    bursaUludagAscent: "Uludağ'a araçla çıkış",
     extraPassenger: "Ek yolcu ücreti",
     extraLuggage: "Ek bagaj ücreti",
     babySeat: "Bebek koltuğu ücreti",
@@ -68,9 +74,11 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
       RUB: "Rus rublesi",
       GBP: "İngiliz sterlini",
     },
-    select: "Seç",
+    select: "Seç ve Devam Et",
     selected: "Seçildi",
+    dropoffDistanceFee: "Bırakma noktası ek ücreti",
     selectBlockedDesktop: "Lütfen sol taraftaki panelden seçimlerinizi yapınız.",
+    selectUnappliedDesktop: "Lütfen sol taraftaki panelde yaptığınız değişiklikleri uygulayın.",
     gallery: {
       exterior: "Dış",
       interior: "İç",
@@ -93,6 +101,8 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
     maxCapacityLabel: "Maximum capacity",
     maxCapacity: "3 passengers + 3 bags",
     baseFee: "Base service fee",
+    bursaBridgeRoute: "Bridge + motorway option",
+    bursaUludagAscent: "Uludağ ascent by vehicle",
     extraPassenger: "Extra passenger fee",
     extraLuggage: "Extra luggage fee",
     babySeat: "Baby seat fee",
@@ -107,9 +117,11 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
       RUB: "Russian ruble",
       GBP: "British pound",
     },
-    select: "Select",
+    select: "Select and Continue",
     selected: "Selected",
+    dropoffDistanceFee: "Drop-off location surcharge",
     selectBlockedDesktop: "Please make your selections from the panel on the left.",
+    selectUnappliedDesktop: "Please apply the changes in the panel on the left.",
     gallery: {
       exterior: "Exterior",
       interior: "Interior",
@@ -132,6 +144,8 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
     maxCapacityLabel: "Максимальная вместимость",
     maxCapacity: "3 пассажира + 3 чемодана",
     baseFee: "Базовая стоимость услуги",
+    bursaBridgeRoute: "Вариант с мостом и автомагистралью",
+    bursaUludagAscent: "Подъём на Улудаг на автомобиле",
     extraPassenger: "Доплата за пассажира",
     extraLuggage: "Доплата за багаж",
     babySeat: "Доплата за детское кресло",
@@ -146,9 +160,11 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
       RUB: "Российский рубль",
       GBP: "Фунт стерлингов",
     },
-    select: "Выбрать",
+    select: "Выбрать и продолжить",
     selected: "Выбрано",
+    dropoffDistanceFee: "Доплата за место высадки",
     selectBlockedDesktop: "Пожалуйста, сделайте выбор в панели слева.",
+    selectUnappliedDesktop: "Пожалуйста, примените изменения в панели слева.",
     gallery: {
       exterior: "Снаружи",
       interior: "Салон",

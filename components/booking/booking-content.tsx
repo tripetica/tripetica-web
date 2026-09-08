@@ -1,6 +1,7 @@
 "use client";
 
 import { type Ref } from "react";
+import { BosphorusPackageCard } from "@/components/booking/bosphorus-package-card";
 import { VehicleCard } from "@/components/booking/vehicle-card";
 import { appliedTripFingerprint, type BookingDraftView } from "@/lib/booking/draft-view";
 import { type BookingPageConfig } from "@/lib/booking/page-config";
@@ -28,12 +29,15 @@ export function BookingContent({
   const applied = draft?.applied;
   const fingerprint = applied ? appliedTripFingerprint(applied) : "";
   const quotes = draft?.vehicleQuotes ?? [];
+  const bosphorusPackage =
+    config.contentKind === "tour-package-selection" &&
+    draft?.tourCode === "bosphorus-dinner";
 
   return (
     <section
       ref={vehicleCardsRef}
       id="booking-vehicle-cards"
-      className={`booking-content${quotes.length > 0 ? "" : " glass-surface"}`}
+      className={`booking-content${quotes.length > 0 || bosphorusPackage ? "" : " glass-surface"}`}
       aria-label={copy.contentLabel}
       data-content-kind={config.contentKind}
       data-applied-fingerprint={fingerprint}
@@ -49,19 +53,26 @@ export function BookingContent({
       data-pricing-version={draft?.transferQuote?.pricingVersion ?? ""}
     >
       <div className="booking-content-inner">
-        {quotes.length > 0 && draft
-          ? quotes.map((quote) => (
-              <VehicleCard
-                key={`${fingerprint}-${quote.vehicleCode}`}
-                locale={locale}
-                quote={quote}
-                currency={draft.currency}
-                draft={draft}
-                onDraftChange={onDraftChange}
-                onCheckout={onCheckout}
-              />
-            ))
-          : null}
+        {bosphorusPackage && draft ? (
+          <BosphorusPackageCard
+            locale={locale}
+            draft={draft}
+            onDraftChange={onDraftChange}
+            onCheckout={onCheckout}
+          />
+        ) : quotes.length > 0 && draft ? (
+          quotes.map((quote) => (
+            <VehicleCard
+              key={`${fingerprint}-${quote.vehicleCode}`}
+              locale={locale}
+              quote={quote}
+              currency={draft.currency}
+              draft={draft}
+              onDraftChange={onDraftChange}
+              onCheckout={onCheckout}
+            />
+          ))
+        ) : null}
       </div>
     </section>
   );

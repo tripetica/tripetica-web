@@ -85,10 +85,91 @@ export function formatIstanbulLocalDisplay(local: string, locale: Locale) {
   return `${day} ${month} ${year} ${time}`;
 }
 
+/** Date part only (no clock time) for date-only booking flows. */
+export function formatIstanbulLocalDateDisplay(local: string, locale: Locale) {
+  const match = local.match(LOCAL_PATTERN) ?? local.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return local.replace("T", " ").slice(0, 10);
+  }
+  const year = match[1];
+  const month = MONTH_LABELS[locale][Number(match[2]) - 1];
+  const day = String(Number(match[3]));
+  return `${day} ${month} ${year}`;
+}
+
+/** Full month name, date only — e.g. "31 Ağustos 2026". */
+export function formatIstanbulLocalDateDisplayLong(local: string, locale: Locale) {
+  const match = local.match(LOCAL_PATTERN) ?? local.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return local.replace("T", " ").slice(0, 10);
+  }
+  const year = match[1];
+  const month = MONTH_LABELS_LONG[locale][Number(match[2]) - 1];
+  const day = String(Number(match[3]));
+  return `${day} ${month} ${year}`;
+}
+
+export function formatIstanbulLocalDisplayLong(local: string, locale: Locale) {
+  const match = local.match(LOCAL_PATTERN);
+  if (!match) {
+    return local.replace("T", " ");
+  }
+  const year = match[1];
+  const month = MONTH_LABELS_LONG[locale][Number(match[2]) - 1];
+  const day = String(Number(match[3]));
+  const time = `${match[4]}:${match[5]}`;
+  return `${day} ${month} ${year}, ${time}`;
+}
+
 const MONTH_LABELS: Record<Locale, readonly string[]> = {
   tr: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"],
   en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
   ru: ["янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.", "нояб.", "дек."],
+};
+
+const MONTH_LABELS_LONG: Record<Locale, readonly string[]> = {
+  tr: [
+    "Ocak",
+    "Şubat",
+    "Mart",
+    "Nisan",
+    "Mayıs",
+    "Haziran",
+    "Temmuz",
+    "Ağustos",
+    "Eylül",
+    "Ekim",
+    "Kasım",
+    "Aralık",
+  ],
+  en: [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ],
+  ru: [
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+  ],
 };
 
 function zonedParts(utcMs: number, timeZone: string) {

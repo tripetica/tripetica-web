@@ -1,4 +1,6 @@
 import { pickupAirportCode } from "@/lib/booking/meet-and-greet";
+import { airportPresets } from "@/lib/booking/catalog";
+import { bookingCopy } from "@/lib/booking/copy";
 import {
   classifyTransferLocation,
   geoForAirportCode,
@@ -6,7 +8,11 @@ import {
   canonicalDistrictCode,
   type LocationGeo,
 } from "@/lib/booking/pricing/location-codes";
-import { loadPlaceGeoDetails } from "@/lib/booking/places-server";
+import {
+  loadPlaceDetails,
+  loadPlaceGeoDetails,
+  type PlaceGeoDetails,
+} from "@/lib/booking/places-server";
 import { type LocationValue } from "@/lib/booking/types";
 import { type Locale } from "@/lib/i18n/config";
 
@@ -45,6 +51,35 @@ export type GeoResolveInput = {
   country?: string | null;
   countryCode?: string | null;
 };
+
+type LocationCanonicalizationDependencies = {
+  loadPlaceGeoDetails(placeId: string): Promise<PlaceGeoDetails | null>;
+  loadPlaceDisplayDetails(
+    placeId: string,
+    locale: Locale,
+  ): Promise<{
+    name: string | null;
+    formattedAddress: string | null;
+  } | null>;
+};
+
+const defaultCanonicalizationDependencies: LocationCanonicalizationDependencies = {
+  loadPlaceGeoDetails,
+  async loadPlaceDisplayDetails(placeId, locale) {
+    return loadPlaceDetails({
+      placeId,
+      locale,
+      sessionToken: "server-canonical-display",
+    });
+  },
+};
+
+export class UntrustedLocationError extends Error {
+  constructor() {
+    super("Location could not be verified by the server");
+    this.name = "UntrustedLocationError";
+  }
+}
 
 const KNOWN_AIRPORT_CODES = new Set(["IST", "SAW", "AYT"]);
 
@@ -175,23 +210,116 @@ export async function resolveLocationGeo(
 export async function toPersistedLocation(
   location: LocationValue,
   locale: Locale,
+  dependencies: Partial<LocationCanonicalizationDependencies> =
+    defaultCanonicalizationDependencies,
 ): Promise<PersistedLocation> {
-  const nameCustomer = textOrNull(location.name);
-  const addressCustomer = textOrNull(location.formattedAddress);
-  const turkishAvailable = locale === "tr";
-  const geo = await resolveLocationGeo(location);
+  const airportCode = persistedAirportCode(location);
+  const airport = airportPresets.find((preset) => preset.id === airportCode);
+  if (airport) {
+    const geo = geoForAirportCode(airport.id);
+    return {
+      nameCustomer: bookingCopy[locale].airports[airport.id],
+      addressCustomer: airport.formattedAddress,
+      nameTr: bookingCopy.tr.airports[airport.id],
+      addressTr: airport.formattedAddress,
+      placeId: airport.placeId,
+      latitude: airport.lat,
+      longitude: airport.lng,
+      locationType: "airport",
+      airportCode: airport.id,
+      provinceCode: geo?.provinceCode ?? null,
+      districtCode: geo?.districtCode ?? null,
+    };
+  }
 
-  return {
-    nameCustomer,
-    addressCustomer,
-    nameTr: turkishAvailable ? nameCustomer : null,
-    addressTr: turkishAvailable ? addressCustomer : null,
-    placeId: textOrNull(location.placeId),
-    latitude: location.lat,
-    longitude: location.lng,
-    locationType: canonicalLocationType(location),
-    airportCode: persistedAirportCode(location),
-    provinceCode: geo.provinceCode,
-    districtCode: geo.districtCode,
-  };
+  const placeId = textOrNull(location.placeId);
+  if (placeId) {
+    const details = await (
+      dependencies.loadPlaceGeoDetails ??
+      defaultCanonicalizationDependencies.loadPlaceGeoDetails
+    )(placeId);
+    if (!details) {
+      throw new UntrustedLocationError();
+    }
+    const displayDetails =
+      locale === "tr"
+        ? details
+        : dependencies.loadPlaceDisplayDetails
+          ? await dependencies.loadPlaceDisplayDetails(placeId, locale)
+          : details;
+    const latitude =
+      details.lat != null &&
+      Number.isFinite(details.lat) &&
+      details.lat >= -90 &&
+      details.lat <= 90
+        ? details.lat
+        : null;
+    const longitude =
+      details.lng != null &&
+      Number.isFinite(details.lng) &&
+      details.lng >= -180 &&
+      details.lng <= 180
+        ? details.lng
+        : null;
+    if (latitude === null || longitude === null) {
+      throw new UntrustedLocationError();
+    }
+    const canonicalName =
+      textOrNull(displayDetails?.name) ??
+      textOrNull(displayDetails?.formattedAddress);
+    const canonicalAddress = textOrNull(displayDetails?.formattedAddress);
+    if (!canonicalName || !canonicalAddress) {
+      throw new UntrustedLocationError();
+    }
+    const canonicalInput: LocationValue = {
+      ...location,
+      name: canonicalName ?? "",
+      formattedAddress: canonicalAddress,
+      placeId: details.placeId,
+      lat: latitude,
+      lng: longitude,
+      city: details.city,
+      district: details.district,
+      region: details.region,
+      country: details.country,
+      countryCode: details.countryCode,
+      airportCode: null,
+      type: details.types.includes("airport") ? "airport" : "place",
+      placeTypes: details.types,
+    };
+    const geo = classifyFromComponents(canonicalInput);
+    return {
+      nameCustomer: canonicalName,
+      addressCustomer: canonicalAddress,
+      nameTr: textOrNull(details.name) ?? textOrNull(details.formattedAddress),
+      addressTr: textOrNull(details.formattedAddress),
+      placeId: details.placeId,
+      latitude,
+      longitude,
+      locationType: canonicalLocationType(canonicalInput),
+      airportCode: null,
+      provinceCode: geo.provinceCode,
+      districtCode: geo.districtCode,
+    };
+  }
+
+  if (!textOrNull(location.name)) {
+    return {
+      nameCustomer: null,
+      addressCustomer: null,
+      nameTr: null,
+      addressTr: null,
+      placeId: null,
+      latitude: null,
+      longitude: null,
+      locationType: null,
+      airportCode: null,
+      provinceCode: null,
+      districtCode: null,
+    };
+  }
+
+  // A non-empty client location without a provider identity cannot safely
+  // contribute coordinates or geo components to pricing.
+  throw new UntrustedLocationError();
 }

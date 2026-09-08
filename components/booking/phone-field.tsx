@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { CountryPicker } from "@/components/booking/country-picker";
 import { checkoutCopy, phoneCopyFor } from "@/lib/booking/checkout-copy";
 import { formatNationalInput } from "@/lib/booking/phone";
@@ -11,6 +11,8 @@ type PhoneFieldProps = {
   countryCode: string | null;
   nationalNumber: string;
   error?: string | null;
+  /** Prefer anchored dropdown under the phone control (e.g. inside auth modal). */
+  pickerLayout?: "auto" | "anchored";
   onCountryChange: (iso2: string) => void;
   onNationalChange: (value: string) => void;
   onNationalBlur?: () => void;
@@ -21,6 +23,7 @@ export function PhoneField({
   countryCode,
   nationalNumber,
   error = null,
+  pickerLayout = "auto",
   onCountryChange,
   onNationalChange,
   onNationalBlur,
@@ -32,6 +35,7 @@ export function PhoneField({
   const errorId = useId();
   const locked = !countryCode;
   const [hint, setHint] = useState(false);
+  const controlRef = useRef<HTMLDivElement>(null);
 
   function showHint() {
     if (locked) {
@@ -45,6 +49,7 @@ export function PhoneField({
         {labels.phoneLabel} *
       </span>
       <div
+        ref={controlRef}
         className={`checkout-phone-control${locked ? " is-locked" : ""}${error ? " is-invalid" : ""}`}
       >
         <CountryPicker
@@ -53,6 +58,8 @@ export function PhoneField({
           value={countryCode}
           labelledBy={labelId}
           ariaLabel={copy.selectCode}
+          anchorRef={controlRef}
+          layout={pickerLayout}
           onChange={(iso2) => {
             setHint(false);
             onCountryChange(iso2);

@@ -1,0 +1,24 @@
+export const PARTNER_SESSION_COOKIE = "tripetica_partner_session";
+export const PARTNER_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
+export const PARTNER_MIN_PASSWORD_LENGTH = 8;
+
+export const PARTNER_CODE_PREFIX = "PTR";
+export const PARTNER_CODE_MAX_SEQ = 9999;
+
+export const DEV_PRIMARY_PARTNER_NAME = "Tripetica";
+export const DEV_PRIMARY_PARTNER_USER_EMAIL = "info@tripetica.com";
+
+export type PartnerStatus = "pending" | "active" | "inactive";
+export type PartnerUserRole = "admin";
+export type PartnerBusinessType = "individual" | "company";
+export type PartnerPriorityLevel = 1 | 2 | 3;
+
+export const PARTNER_STATUSES = ["pending", "active", "inactive"] as const;
+export const PARTNER_BUSINESS_TYPES = ["individual", "company"] as const;
+export const PARTNER_PRIORITY_LEVELS = [1, 2, 3] as const;
+export const PARTNER_DEFAULT_COUNTRY_CODE = "TR";
+export const PARTNER_NAME_MAX_LENGTH = 240;
+export const PARTNER_ADDRESS_MAX_LENGTH = 500;
+export const PARTNER_TAX_OFFICE_MAX_LENGTH = 120;
+export const PARTNER_TAX_NUMBER_MAX_LENGTH = 32;
+export const PARTNER_CONTACT_NAME_MAX_LENGTH = 80;

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LegalDocumentPage } from "@/components/legal/legal-document-page";
 import { isLocale } from "@/lib/i18n/config";
-import { localeAlternates } from "@/lib/seo/metadata";
+import { publicPageSeo } from "@/lib/seo/metadata";
 import {
   isLegalSlug,
   legalPath,
@@ -32,7 +32,7 @@ export async function generateMetadata({
   return {
     title: copy.metaTitle,
     description: copy.metaDescription,
-    alternates: localeAlternates(locale, legalPath(slug)),
+    ...publicPageSeo(locale, legalPath(slug)),
   };
 }
 

@@ -1,4 +1,5 @@
 import { getImageProps } from "next/image";
+import { EditModeBanner } from "@/components/booking/edit-mode-banner";
 import { HeroBooking } from "@/components/booking/hero-booking";
 import { HomeMobileFloatGate } from "@/components/home-mobile-float-gate";
 import { ReviewLabWidget } from "@/components/review-lab-widget";
@@ -11,18 +12,16 @@ const DESKTOP_BREAKPOINT = "(min-width: 768px)";
 
 type HomeHeroProps = {
   locale: Locale;
-  imageAlt: string;
   booking: BookingCopy;
   transferDraft?: TransferFormHydration | null;
 };
 
 export function HomeHero({
   locale,
-  imageAlt,
   booking,
   transferDraft = null,
 }: HomeHeroProps) {
-  const common = { alt: imageAlt, sizes: "100vw", quality: 90 };
+  const common = { alt: "", sizes: "100vw", quality: 90 };
   const {
     props: { srcSet: desktopSrcSet },
   } = getImageProps({
@@ -47,7 +46,7 @@ export function HomeHero({
         <source media={DESKTOP_BREAKPOINT} srcSet={desktopSrcSet} />
         <img
           {...mobileProps}
-          alt={imageAlt}
+          alt=""
           srcSet={mobileSrcSet}
           fetchPriority="high"
           loading="eager"
@@ -72,6 +71,17 @@ export function HomeHero({
       <div aria-hidden="true" className="home-hero-fade" />
       <HomeMobileFloatGate />
       <SiteHeader locale={locale} pathWithoutLocale="/" />
+      {transferDraft?.editMode && transferDraft.editReservationCode ? (
+        <div className="absolute inset-x-0 top-[4.25rem] z-[4] px-3 sm:top-[4.75rem] md:top-[5.25rem]">
+          <EditModeBanner
+            locale={locale}
+            reservationCode={transferDraft.editReservationCode}
+            reservationId={transferDraft.editReservationId}
+            opsEditMode={Boolean(transferDraft.opsEditMode)}
+            opsEditWithinSixHours={Boolean(transferDraft.opsEditWithinSixHours)}
+          />
+        </div>
+      ) : null}
       <HeroBooking locale={locale} copy={booking} transferDraft={transferDraft} />
     </section>
     <div className="light-theme">

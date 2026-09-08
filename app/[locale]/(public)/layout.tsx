@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Viewport } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
+import { ContactLauncher } from "@/components/contact-launcher";
 import { isLocale } from "@/lib/i18n/config";
 import { lightBrowserThemeColor } from "@/lib/theme";
 
@@ -29,6 +30,7 @@ export default async function PublicLayout({
     <>
       {children}
       <SiteFooter locale={locale} />
+      <ContactLauncher locale={locale} />
     </>
   );
 }

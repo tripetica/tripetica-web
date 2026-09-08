@@ -33,6 +33,7 @@ export const homeServicesCopy: Record<Locale, HomeServicesCopy> = {
           "Частный трансфер и такси из аэропорта Стамбула (IST), аэропорта Сабиха Гёкчен (SAW), аэропорта Антальи (AYT) и других аэропортов по всей Турции. Профессиональные водители, фиксированная цена, отслеживание рейса и поддержка 24/7 для трансферов в отель, по городу и между городами.",
         bookCta: "Забронировать трансфер",
         viewDetails: "Подробнее",
+        imageAlt: "Частный трансфер из аэропорта на автомобиле Tripetica",
       },
       "hourly-chauffeur": {
         title: "Почасовой автомобиль с водителем",
@@ -40,6 +41,7 @@ export const homeServicesCopy: Record<Locale, HomeServicesCopy> = {
           "Профессиональный почасовой автомобиль с водителем в Стамбуле, Анталье и по всей Турции — для деловых встреч, шопинга и поездок по гибкому графику.",
         bookCta: "Забронировать",
         viewDetails: "Подробнее",
+        imageAlt: "Почасовой автомобиль с водителем Tripetica",
       },
       "istanbul-city-tour": {
         title: "Обзорная экскурсия по Стамбулу",
@@ -106,6 +108,7 @@ export const homeServicesCopy: Record<Locale, HomeServicesCopy> = {
           "Private airport transfer and taxi services from Istanbul Airport (IST), Sabiha Gokcen Airport (SAW), Antalya Airport (AYT) and airports across Turkey. Professional drivers, fixed prices, flight tracking and 24/7 support for airport-to-hotel, city and intercity transfers.",
         bookCta: "Book Transfer",
         viewDetails: "View Details",
+        imageAlt: "Tripetica private airport transfer vehicle",
       },
       "hourly-chauffeur": {
         title: "Hourly Chauffeur Service",
@@ -113,6 +116,7 @@ export const homeServicesCopy: Record<Locale, HomeServicesCopy> = {
           "Professional hourly chauffeur service in Istanbul, Antalya and across Turkey for business, meetings, shopping or flexible travel schedules.",
         bookCta: "Book Now",
         viewDetails: "View Details",
+        imageAlt: "Tripetica hourly chauffeur-driven vehicle",
       },
       "istanbul-city-tour": {
         title: "Istanbul City Tour",
@@ -179,6 +183,7 @@ export const homeServicesCopy: Record<Locale, HomeServicesCopy> = {
           "İstanbul Havalimanı (IST), Sabiha Gökçen Havalimanı (SAW), Antalya Havalimanı (AYT) ve Türkiye genelindeki havalimanlarından özel transfer hizmeti. Havalimanı-otel, şehir içi ve şehirler arası transferlerde profesyonel şoförler, sabit fiyat, uçuş takibi ve 7/24 destek ile güvenli ve konforlu ulaşım.",
         bookCta: "Rezervasyon Yap",
         viewDetails: "Detayları Gör",
+        imageAlt: "Tripetica özel havalimanı transfer aracı",
       },
       "hourly-chauffeur": {
         title: "Saatlik Şoförlü Araç",
@@ -186,6 +191,7 @@ export const homeServicesCopy: Record<Locale, HomeServicesCopy> = {
           "İstanbul, Antalya ve Türkiye genelinde; iş, toplantı, alışveriş veya esnek programlarınız için profesyonel saatlik şoförlü özel araç hizmeti.",
         bookCta: "Rezervasyon Yap",
         viewDetails: "Detayları Gör",
+        imageAlt: "Tripetica saatlik şoförlü özel araç hizmeti",
       },
       "istanbul-city-tour": {
         title: "İstanbul Şehir Turu",

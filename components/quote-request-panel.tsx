@@ -17,12 +17,11 @@ import {
   ViberIcon,
   WhatsAppIcon,
 } from "@/components/contact-channel-icons";
-import { quotePanelCopy } from "@/lib/contact/quote-copy";
 import {
-  contactDisplayNumbers,
-  contactLinks,
-  whatsappQuoteHref,
-} from "@/lib/contact/links";
+  contactChannelsForLocale,
+  type ContactChannelId,
+} from "@/lib/contact/channels";
+import { quotePanelCopy } from "@/lib/contact/quote-copy";
 import { type Locale } from "@/lib/i18n/config";
 
 type QuoteRequestPanelProps = {
@@ -32,57 +31,12 @@ type QuoteRequestPanelProps = {
   placement?: "overlay" | "popover";
 };
 
-type QuoteChannel = {
-  id: string;
-  href: string;
-  name: string;
-  number: string;
-  aria: string;
-  icon: ReactNode;
-  external: boolean;
+const channelIcons: Record<ContactChannelId, ReactNode> = {
+  whatsapp: <WhatsAppIcon />,
+  telegram: <TelegramIcon />,
+  viber: <ViberIcon />,
+  phone: <PhoneIcon />,
 };
-
-function quoteChannels(locale: Locale): QuoteChannel[] {
-  const copy = quotePanelCopy[locale];
-  return [
-    {
-      id: "whatsapp",
-      href: whatsappQuoteHref(copy.whatsappMessage),
-      name: copy.whatsapp,
-      number: contactDisplayNumbers.messaging,
-      aria: copy.whatsappAria,
-      icon: <WhatsAppIcon />,
-      external: true,
-    },
-    {
-      id: "telegram",
-      href: contactLinks.telegram,
-      name: copy.telegram,
-      number: contactDisplayNumbers.messaging,
-      aria: copy.telegramAria,
-      icon: <TelegramIcon />,
-      external: true,
-    },
-    {
-      id: "viber",
-      href: contactLinks.viber,
-      name: copy.viber,
-      number: contactDisplayNumbers.messaging,
-      aria: copy.viberAria,
-      icon: <ViberIcon />,
-      external: false,
-    },
-    {
-      id: "phone",
-      href: contactLinks.phone,
-      name: copy.call,
-      number: contactDisplayNumbers.phone,
-      aria: copy.callAria,
-      icon: <PhoneIcon />,
-      external: false,
-    },
-  ];
-}
 
 function QuotePanelFields({
   locale,
@@ -96,7 +50,7 @@ function QuotePanelFields({
   onClose: () => void;
 }) {
   const copy = quotePanelCopy[locale];
-  const channels = quoteChannels(locale);
+  const channels = contactChannelsForLocale(locale, { whatsappPrefillQuote: true });
 
   return (
     <>
@@ -128,7 +82,7 @@ function QuotePanelFields({
                 ? { target: "_blank", rel: "noopener noreferrer" }
                 : {})}
             >
-              <span className="quote-panel-icon">{channel.icon}</span>
+              <span className="quote-panel-icon">{channelIcons[channel.id]}</span>
               <span className="quote-panel-copy">
                 <span className="quote-panel-name">{channel.name}</span>
                 <span className="quote-panel-number">{channel.number}</span>

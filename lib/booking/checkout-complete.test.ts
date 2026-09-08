@@ -18,7 +18,7 @@ test("complete CTA stays off until required checkout fields are valid", () => {
     mainPassengerComplete: true,
     payment: "sbp" as const,
     legalAccepted: true,
-    captchaVerified: false,
+    captchaVerified: true,
   };
   assert.equal(checkoutCanComplete(ready), true);
   assert.equal(checkoutCanComplete({ ...ready, emailValid: false }), false);
@@ -28,7 +28,7 @@ test("complete CTA stays off until required checkout fields are valid", () => {
   assert.equal(checkoutCanComplete({ ...ready, legalAccepted: false }), false);
 });
 
-test("cash requires captcha; QR/SBP does not", () => {
+test("cash and QR/SBP both require captcha", () => {
   const base = {
     emailValid: true,
     phoneValid: true,
@@ -50,7 +50,7 @@ test("cash requires captcha; QR/SBP does not", () => {
     }),
     false,
   );
-  assert.equal(checkoutCanComplete({ ...base, payment: "sbp" }), true);
+  assert.equal(checkoutCanComplete({ ...base, payment: "sbp" }), false);
   assert.equal(
     checkoutCanComplete({
       ...base,

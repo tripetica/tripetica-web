@@ -23,7 +23,7 @@ export type FooterCopy = {
 export const footerCopy: Record<Locale, FooterCopy> = {
   tr: {
     brandLead:
-      "İstanbul’da havalimanı transferi, özel transfer, şoförlü araç ve şehir içi ulaşım. Türkiye’nin farklı şehirlerinde de seçili özel ulaşım çözümleri sunuyoruz.",
+      "İstanbul, Antalya ve Türkiye genelinde havalimanı transferi, özel transfer, şoförlü araç ve kişiye özel tur hizmetleri.",
     assurance: "Search Travel güvencesiyle",
     contactTitle: "İletişim",
     legalTitle: "Yasal Bilgilendirme",
@@ -43,7 +43,7 @@ export const footerCopy: Record<Locale, FooterCopy> = {
   },
   en: {
     brandLead:
-      "Airport transfers, private cars with chauffeur and in-city travel in Istanbul — plus selected private transport across other cities in Türkiye.",
+      "Airport transfers, private transfers, chauffeur service and personalised private tours in Istanbul, Antalya and across Türkiye.",
     assurance: "Backed by Search Travel",
     contactTitle: "Contact",
     legalTitle: "Legal Information",
@@ -63,7 +63,7 @@ export const footerCopy: Record<Locale, FooterCopy> = {
   },
   ru: {
     brandLead:
-      "Трансферы из аэропорта, частный автомобиль с водителем и поездки по Стамбулу — а также отдельные решения по перевозке в других городах Турции.",
+      "Трансферы из аэропорта, частные трансферы, автомобиль с водителем и индивидуальные туры в Стамбуле, Анталье и по всей Турции.",
     assurance: "При поддержке Search Travel",
     contactTitle: "Контакты",
     legalTitle: "Правовая информация",

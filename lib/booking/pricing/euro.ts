@@ -38,6 +38,18 @@ export function multiplyMicroEurByKm(ratePerKm: MicroEur, km: MicroEur): MicroEu
   return (ratePerKm * km) / MICRO_EUR_SCALE;
 }
 
+export function vehicleAdjustedOverageRateEur(
+  baseRateEur: string | number,
+  vehicleMultiplier: string | number,
+): number {
+  return microEurToNumber(
+    multiplyMicroEurByKm(
+      microEurFromDecimal(baseRateEur),
+      microEurFromDecimal(vehicleMultiplier),
+    ),
+  );
+}
+
 export function minMicroEur(a: MicroEur, b: MicroEur): MicroEur {
   return a <= b ? a : b;
 }

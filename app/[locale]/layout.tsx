@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { notFound } from "next/navigation";
-import { ContactLauncher } from "@/components/contact-launcher";
 import { isLocale, locales } from "@/lib/i18n/config";
 import { getSiteUrl } from "@/lib/seo/metadata";
 import "../globals.css";
@@ -61,7 +60,6 @@ export default async function LocaleLayout({
       <body className="min-h-full">
         <div className="min-h-full overflow-x-hidden">{children}</div>
         <div id="portal-root" />
-        <ContactLauncher locale={locale} />
       </body>
     </html>
   );

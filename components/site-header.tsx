@@ -1,11 +1,12 @@
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { MobileNav } from "@/components/mobile-nav";
 import { SiteHeaderLogoLink } from "@/components/site-header-logo";
+import { AccountHeaderControl } from "@/components/account/account-header-control";
 import { type Locale } from "@/lib/i18n/config";
 import { contactSectionId } from "@/lib/contact/links";
 import { headerCopy } from "@/lib/i18n/header";
 import { localizedPath } from "@/lib/i18n/path";
 import { headerControlClassName } from "@/lib/ui/header";
+import { getAccountActor } from "@/lib/account/session";
 
 type SiteHeaderProps = {
   locale: Locale;
@@ -14,7 +15,7 @@ type SiteHeaderProps = {
   showLanguageSwitcher?: boolean;
 };
 
-export function SiteHeader({
+export async function SiteHeader({
   locale,
   pathWithoutLocale = "/",
   variant = "home",
@@ -24,17 +25,12 @@ export function SiteHeader({
   const homeHref = localizedPath(locale);
   const isHomePage = !pathWithoutLocale || pathWithoutLocale === "/";
   const isServicePage = variant === "service";
+  const actor = await getAccountActor();
   const logoClassName =
     "header-foreground shrink min-w-0 px-2 py-1 text-[clamp(0.98rem,4.2vw,1.35rem)] font-semibold tracking-[0.08em] sm:tracking-[0.14em]";
-  const mobileNav = (
-    <MobileNav
-      copy={copy}
-      homeHref={homeHref}
-      firstItem={
-        isServicePage ? { href: homeHref, label: copy.home } : undefined
-      }
-    />
-  );
+
+  const firstItem = isServicePage ? { href: homeHref, label: copy.home } : undefined;
+  const mobileOnlyWrapper = isServicePage;
 
   return (
     <header className="absolute inset-x-0 top-0 z-[100] bg-transparent">
@@ -83,27 +79,32 @@ export function SiteHeader({
             />
           ) : null}
 
-          <button
-            type="button"
-            className={`${headerControlClassName} liquid-lens hidden h-11 w-11 shrink-0 items-center justify-center md:inline-flex`}
-            aria-label={copy.account}
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              className="h-[1.35rem] w-[1.35rem]"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.6"
-            >
-              <circle cx="12" cy="8" r="3.25" />
-              <path d="M5.4 19.2a6.8 6.8 0 0 1 13.2 0" />
-            </svg>
-          </button>
-
-          {isServicePage ? <div className="md:hidden">{mobileNav}</div> : mobileNav}
+          {actor ? (
+            <AccountHeaderControl
+              locale={locale}
+              pathWithoutLocale={pathWithoutLocale}
+              accountAriaLabel={copy.accountMenu}
+              authenticatedMobile={{
+                homeHref,
+                mobileCopy: copy,
+                firstItem,
+                mobileOnlyWrapper,
+              }}
+            />
+          ) : (
+            <AccountHeaderControl
+              locale={locale}
+              pathWithoutLocale={pathWithoutLocale}
+              accountAriaLabel={copy.account}
+              guestMobile={{
+                homeHref,
+                signInLabel: copy.signIn,
+                mobileCopy: copy,
+                firstItem,
+                mobileOnlyWrapper,
+              }}
+            />
+          )}
         </div>
       </div>
     </header>

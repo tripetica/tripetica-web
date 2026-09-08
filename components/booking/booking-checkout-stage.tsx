@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckoutCompleteCta } from "@/components/booking/checkout-complete-cta";
+import { CheckoutPickupPrepDialog } from "@/components/booking/checkout-pickup-prep-dialog";
 import { CheckoutContact } from "@/components/booking/checkout-contact";
 import { CheckoutLegal } from "@/components/booking/checkout-legal";
 import {
@@ -11,73 +13,208 @@ import {
   CheckoutPassengerForm,
   emptyPassengerForm,
   firstIncompleteExtraSequence,
-  isPassengerFormComplete,
   type PassengerFieldErrors,
   type PassengerFormValue,
 } from "@/components/booking/checkout-passenger-form";
 import { CheckoutPayment } from "@/components/booking/checkout-payment";
 import { CheckoutSummary } from "@/components/booking/checkout-summary";
-import {
-  checkoutCanComplete,
-  type CheckoutPaymentMethod,
-} from "@/lib/booking/checkout-complete";
+import { EditFinalizePanel } from "@/components/booking/edit-finalize-panel";
+import { type CheckoutPaymentMethod } from "@/lib/booking/checkout-complete";
 import { checkoutCopy } from "@/lib/booking/checkout-copy";
+import { bosphorusDinnerCopy } from "@/lib/booking/bosphorus-dinner-copy";
+import {
+  scrollToCheckoutField,
+  validateCheckoutForm,
+  type CheckoutValidationErrors,
+} from "@/lib/booking/checkout-validation";
 import { type BookingDraftView, type BookingPassengerView } from "@/lib/booking/draft-view";
-import { emailValidity, formatNationalInput, fromStoredPhone, phoneValidity } from "@/lib/booking/phone";
+import { formatNationalInput, emailValidity, phoneValidity } from "@/lib/booking/phone";
 import { formatCurrencyPill } from "@/lib/booking/pricing/format-eur";
+import { displayAmountFromEur } from "@/lib/booking/fx/convert";
+import { isBosphorusDinnerTour, BOSPHORUS_OPEN_DATE_EVENT } from "@/lib/booking/pricing/bosphorus-dinner-pricing";
+import {
+  formatIstanbulLocalDateDisplayLong,
+  formatIstanbulLocalDisplay,
+} from "@/lib/booking/istanbul-time";
+import { bookingPaymentPath, bookingSuccessPath } from "@/lib/booking/page-config";
+import {
+  SBP_UNSUPPORTED_CURRENCY,
+  type SbpAllowedCurrency,
+} from "@/lib/payments/online-payment";
+import {
+  resolveCheckoutContactInitial,
+  resolveCheckoutMainPassengerInitial,
+  type CheckoutAccountPrefill,
+} from "@/lib/booking/checkout-account-prefill";
+import { resolveCountryIso2WithLocaleDefault } from "@/lib/geo/locale-defaults";
 import { type Locale } from "@/lib/i18n/config";
 
-type ExtraMode = "now" | "later";
-type CheckoutScrollField =
-  | "email"
-  | "phone"
-  | "nationality"
-  | "firstName"
-  | "lastName"
-  | "legal";
+function checkoutFxRates(draft: BookingDraftView) {
+  if (Object.keys(draft.fxRates).length > 0) {
+    return draft.fxRates;
+  }
+  const appliedQuote = draft.vehicleQuotes.find(
+    (quote) => quote.vehicleCode === draft.appliedVehicleCode,
+  );
+  return appliedQuote?.fxRates ?? draft.vehicleQuotes[0]?.fxRates ?? {};
+}
 
-const CHECKOUT_FIELD_IDS: Record<CheckoutScrollField, string> = {
-  email: "checkout-email",
-  phone: "checkout-phone",
-  nationality: "main-nationality-field",
-  firstName: "main-first",
-  lastName: "main-last",
-  legal: "checkout-legal",
+function bosphorusCutoffConfirmLabel(
+  locale: Locale,
+  local: string,
+  mode: "confirm" | "confirming",
+) {
+  const copy = checkoutCopy[locale];
+  const date = formatIstanbulLocalDateDisplayLong(local, locale);
+  const template =
+    mode === "confirming" ? copy.bosphorusCutoffConfirming : copy.bosphorusCutoffConfirm;
+  return template.replace("{date}", date);
+}
+
+type ExtraMode = "now" | "later";
+
+function validationMessages(locale: Locale) {
+  const copy = checkoutCopy[locale];
+  return {
+    required: copy.required,
+    emailInvalid: copy.emailInvalid,
+    phoneInvalid: copy.phoneInvalid,
+    legalRequired: copy.legalRequired,
+    paymentRequired: copy.paymentRequired,
+    captchaRequired: copy.captchaRequired,
+  };
+}
+
+function resolveCompleteError(
+  locale: Locale,
+  status: number,
+  payload: { reason?: string },
+) {
+  const copy = checkoutCopy[locale];
+  if (status >= 500) {
+    return copy.completeServerError;
+  }
+  if (status === 400) {
+    if (payload.reason === "legal") {
+      return copy.legalRequired;
+    }
+    if (payload.reason === "captcha") {
+      return copy.captchaRequired;
+    }
+    return copy.completeError;
+  }
+  if (status === 404 || status === 403) {
+    return copy.completeServerError;
+  }
+  return copy.completeServerError;
+}
+
+function pickupPrepTimeLabel(locale: Locale, local: string) {
+  return formatIstanbulLocalDisplay(local, locale);
+}
+
+function pickupPrepCopy(
+  locale: Locale,
+  local: string,
+  mode: "body" | "confirm" | "confirming",
+) {
+  const time = pickupPrepTimeLabel(locale, local);
+  const copy = checkoutCopy[locale];
+  if (mode === "body") {
+    return copy.pickupPrepBody.replace("{time}", time);
+  }
+  if (mode === "confirming") {
+    return copy.pickupPrepConfirming.replace("{time}", time);
+  }
+  return copy.pickupPrepConfirm.replace("{time}", time);
+}
+
+type CompleteApiPayload = {
+  ok?: boolean;
+  error?: string;
+  reason?: string;
+  next?: "success" | "payment";
+  suggestedPickupAtLocal?: string;
 };
+
+async function postCompleteReservation(body: Record<string, unknown>) {
+  const response = await fetch("/api/booking/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = (await response.json()) as CompleteApiPayload;
+  return { response, payload };
+}
+
+async function persistCheckoutCurrency(locale: Locale, currency: SbpAllowedCurrency) {
+  const response = await fetch("/api/booking/draft/selected", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale, currency }),
+  });
+  if (!response.ok) {
+    return null;
+  }
+  const payload = (await response.json()) as { draft?: BookingDraftView };
+  return payload.draft ?? null;
+}
 
 type BookingCheckoutStageProps = {
   locale: Locale;
   draft: BookingDraftView;
+  accountPrefill?: CheckoutAccountPrefill | null;
   onDraftChange: (draft: BookingDraftView) => void;
   onBack: () => void;
+  onChooseAnotherDate?: () => void;
 };
 
 function passengerFromDraft(
   passengers: BookingPassengerView[],
   sequence: number,
+  locale: Locale,
 ) {
   return emptyPassengerForm(
     passengers.find((item) => item.sequenceNo === sequence) ?? null,
+    locale,
   );
 }
 
 function extrasFromDraft(
   sequences: number[],
   passengers: BookingPassengerView[],
+  locale: Locale,
 ) {
   return Object.fromEntries(
-    sequences.map((sequence) => [sequence, passengerFromDraft(passengers, sequence)]),
+    sequences.map((sequence) => [
+      sequence,
+      passengerFromDraft(passengers, sequence, locale),
+    ]),
   );
 }
 
 export function BookingCheckoutStage({
   locale,
   draft,
+  accountPrefill = null,
   onDraftChange,
   onBack,
+  onChooseAnotherDate,
 }: BookingCheckoutStageProps) {
+  const router = useRouter();
   const copy = checkoutCopy[locale];
-  const storedPhone = fromStoredPhone(draft.customerCountryCode, draft.customerPhone);
+  const contactInitial = resolveCheckoutContactInitial({
+    locale,
+    draftEmail: draft.customerEmail,
+    draftPhone: draft.customerPhone,
+    draftPhoneCountryCode: draft.customerCountryCode,
+    account: accountPrefill,
+  });
+  const mainInitial = resolveCheckoutMainPassengerInitial({
+    locale,
+    passenger: draft.passengers.find((item) => item.sequenceNo === 1) ?? null,
+    account: accountPrefill,
+  });
   const extraCount = Math.max(0, (draft.applied.passengerCount ?? 1) - 1);
   const extraSequences = useMemo(
     () => Array.from({ length: extraCount }, (_, index) => index + 2),
@@ -85,71 +222,110 @@ export function BookingCheckoutStage({
   );
   const hasSavedExtras = draft.passengers.some((item) => item.sequenceNo > 1);
 
-  const [email, setEmail] = useState(draft.customerEmail ?? "");
+  const [email, setEmail] = useState(contactInitial.email);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailDirty, setEmailDirty] = useState(false);
-  const [phoneCountry, setPhoneCountry] = useState<string | null>(storedPhone.iso2);
-  const [phoneNational, setPhoneNational] = useState(storedPhone.national);
+  const [phoneCountry, setPhoneCountry] = useState<string | null>(() =>
+    resolveCountryIso2WithLocaleDefault(contactInitial.phoneCountryIso2, locale),
+  );
+  const [phoneNational, setPhoneNational] = useState(contactInitial.phoneNational);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [phoneDirty, setPhoneDirty] = useState(false);
   const [notes, setNotes] = useState(draft.notes ?? "");
-  const [main, setMain] = useState(() => passengerFromDraft(draft.passengers, 1));
+  const [main, setMain] = useState<PassengerFormValue>(() => ({
+    countryCode: mainInitial.countryCode,
+    identityNumber: mainInitial.identityNumber,
+    firstName: mainInitial.firstName,
+    lastName: mainInitial.lastName,
+    gender: mainInitial.gender,
+  }));
   const [extras, setExtras] = useState<Record<number, PassengerFormValue>>(() =>
-    extrasFromDraft(extraSequences, draft.passengers),
+    extrasFromDraft(extraSequences, draft.passengers, locale),
   );
   const [mode, setMode] = useState<ExtraMode | null>(hasSavedExtras ? "now" : null);
   const [openSequence, setOpenSequence] = useState<number | null>(() =>
     hasSavedExtras
       ? firstIncompleteExtraSequence(
           extraSequences,
-          extrasFromDraft(extraSequences, draft.passengers),
+          extrasFromDraft(extraSequences, draft.passengers, locale),
         )
       : null,
   );
   const [payment, setPayment] = useState<CheckoutPaymentMethod | null>(null);
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [cashCaptchaInstance, setCashCaptchaInstance] = useState(0);
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [legalError, setLegalError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [captchaError, setCaptchaError] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [pickupPrepLocal, setPickupPrepLocal] = useState<string | null>(null);
+  const [pickupPrepKind, setPickupPrepKind] = useState<"transfer" | "bosphorus" | null>(
+    null,
+  );
+  const [confirmingPickupPrep, setConfirmingPickupPrep] = useState(false);
+  const [currencyBusy, setCurrencyBusy] = useState(false);
   const [mainErrors, setMainErrors] = useState<PassengerFieldErrors>({});
   const persistSeq = useRef(0);
+  const currencySeq = useRef(0);
   const emailTimer = useRef<number>(0);
   const phoneTimer = useRef<number>(0);
   const notesTimer = useRef<number>(0);
   const passengerTimers = useRef<Record<number, number>>({});
   const emailRef = useRef({ value: email, dirty: emailDirty });
-  emailRef.current.value = email;
-  emailRef.current.dirty = emailDirty;
   const phoneRef = useRef({
     country: phoneCountry,
     national: phoneNational,
     dirty: phoneDirty,
   });
-  phoneRef.current.country = phoneCountry;
-  phoneRef.current.national = phoneNational;
-  phoneRef.current.dirty = phoneDirty;
   const mainRef = useRef(main);
-  mainRef.current = main;
   const legalRef = useRef(legalAccepted);
-  legalRef.current = legalAccepted;
+  const paymentRef = useRef(payment);
+  const captchaTokenRef = useRef(captchaToken);
+
+  useEffect(() => {
+    emailRef.current = { value: email, dirty: emailDirty };
+    phoneRef.current = {
+      country: phoneCountry,
+      national: phoneNational,
+      dirty: phoneDirty,
+    };
+    mainRef.current = main;
+    legalRef.current = legalAccepted;
+    paymentRef.current = payment;
+    captchaTokenRef.current = captchaToken;
+  }, [
+    captchaToken,
+    email,
+    emailDirty,
+    legalAccepted,
+    main,
+    payment,
+    phoneCountry,
+    phoneDirty,
+    phoneNational,
+  ]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
 
   useEffect(() => {
-    setExtras((current) => {
-      let changed = false;
-      const next = { ...current };
-      for (const sequence of extraSequences) {
-        if (next[sequence] == null) {
-          next[sequence] = passengerFromDraft(draft.passengers, sequence);
-          changed = true;
+    queueMicrotask(() => {
+      setExtras((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const sequence of extraSequences) {
+          if (next[sequence] == null) {
+            next[sequence] = passengerFromDraft(draft.passengers, sequence, locale);
+            changed = true;
+          }
         }
-      }
-      return changed ? next : current;
+        return changed ? next : current;
+      });
     });
-  }, [draft.passengers, extraSequences]);
+  }, [draft.passengers, extraSequences, locale]);
 
   function applyDraft(next: BookingDraftView | null) {
     if (next) {
@@ -220,118 +396,336 @@ export function BookingCheckoutStage({
     }, 700);
   }
 
-  function emailErrorMessage(value: string) {
-    const status = emailValidity(value);
-    if (status === "empty") {
-      return copy.required;
-    }
-    if (status === "invalid") {
-      return copy.emailInvalid;
-    }
-    return null;
-  }
-
-  function phoneErrorMessage(country: string | null, national: string) {
-    const status = phoneValidity(country, national);
-    if (status === "valid") {
-      return null;
-    }
-    if (!country || status === "empty") {
-      return copy.required;
-    }
-    return copy.phoneInvalid;
-  }
-
   function syncEmailError(value: string, force: boolean) {
-    const message = emailErrorMessage(value);
+    const status = emailValidity(value);
+    const message =
+      status === "valid"
+        ? null
+        : status === "empty"
+          ? copy.required
+          : copy.emailInvalid;
     setEmailError((current) => (force || current ? message : current));
   }
 
   function syncPhoneError(country: string | null, national: string, force: boolean) {
-    const message = phoneErrorMessage(country, national);
+    const status = phoneValidity(country, national);
+    const message =
+      status === "valid"
+        ? null
+        : !country || status === "empty"
+          ? copy.required
+          : copy.phoneInvalid;
     setPhoneError((current) => (force || current ? message : current));
   }
 
-  function phoneIsValid(country: string | null, national: string) {
-    return phoneValidity(country, national) === "valid";
+  function runCheckoutValidation(options: { requirePayment: boolean; requireCaptcha: boolean }) {
+    return validateCheckoutForm(
+      {
+        email: emailRef.current.value,
+        phoneCountry: phoneRef.current.country,
+        phoneNational: phoneRef.current.national,
+        mainPassenger: mainRef.current,
+        legalAccepted: legalRef.current,
+        payment: paymentRef.current,
+        captchaToken: captchaTokenRef.current,
+        requirePayment: options.requirePayment,
+        requireCaptcha: options.requireCaptcha,
+      },
+      validationMessages(locale),
+    );
   }
 
-  function revealCheckoutErrors(): CheckoutScrollField | null {
-    const emailMessage = emailErrorMessage(emailRef.current.value);
-    const phoneMessage = phoneErrorMessage(phoneRef.current.country, phoneRef.current.national);
-    const passenger = mainRef.current;
-    const countryMessage = passenger.countryCode ? null : copy.required;
-    const firstMessage = passenger.firstName.trim() ? null : copy.required;
-    const lastMessage = passenger.lastName.trim() ? null : copy.required;
-    const consentMessage = legalRef.current ? null : copy.legalRequired;
-    setEmailError(emailMessage);
-    setPhoneError(phoneMessage);
-    setMainErrors({
-      countryCode: countryMessage,
-      firstName: firstMessage,
-      lastName: lastMessage,
-    });
-    setLegalError(consentMessage);
-    if (emailMessage) {
-      return "email";
+  function applyCheckoutValidation(result: CheckoutValidationErrors, scroll: boolean) {
+    setEmailError(result.emailError);
+    setPhoneError(result.phoneError);
+    setMainErrors(result.mainErrors);
+    setLegalError(result.legalError);
+    setPaymentError(result.paymentError);
+    setCaptchaError(result.captchaError);
+    if (scroll && result.firstInvalid) {
+      scrollToCheckoutField(result.firstInvalid);
     }
-    if (phoneMessage) {
-      return "phone";
-    }
-    if (countryMessage) {
-      return "nationality";
-    }
-    if (firstMessage) {
-      return "firstName";
-    }
-    if (lastMessage) {
-      return "lastName";
-    }
-    if (consentMessage) {
-      return "legal";
-    }
-    return null;
+    return result.isValid;
   }
 
   function changePayment(next: CheckoutPaymentMethod) {
-    const firstInvalid = revealCheckoutErrors();
-    if (firstInvalid) {
-      document
-        .getElementById(CHECKOUT_FIELD_IDS[firstInvalid])
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const valid = applyCheckoutValidation(
+      runCheckoutValidation({ requirePayment: false, requireCaptcha: false }),
+      true,
+    );
+    if (!valid) {
       return;
     }
     if (next === payment) {
       return;
     }
-    if (next === "cash") {
-      setCashCaptchaInstance((value) => value + 1);
-    }
+    setCashCaptchaInstance((value) => value + 1);
     setPayment(next);
-    setCaptchaVerified(false);
+    setPaymentError(null);
+    setCaptchaToken(null);
+    setCaptchaError(null);
+  }
+
+  async function changeSbpCurrency(next: SbpAllowedCurrency) {
+    if (next === draft.currency || currencyBusy) {
+      return;
+    }
+    const previous = draft.currency;
+    const previousTotal = draft.appliedVehicleTotal;
+    const seq = ++currencySeq.current;
+    setCurrencyBusy(true);
+    const nextTotal = (() => {
+      // Package / Bosphorus: use frozen snapshot totals — no new FX conversion.
+      if (!draft.appliedVehicleCode) {
+        const prepared = draft.fxTotals[next];
+        if (prepared != null) {
+          return prepared;
+        }
+      }
+      if (draft.appliedVehicleTotalEur == null) {
+        return draft.appliedVehicleTotal;
+      }
+      return displayAmountFromEur(
+        draft.appliedVehicleTotalEur,
+        next,
+        checkoutFxRates(draft),
+      );
+    })();
+    onDraftChange({
+      ...draft,
+      currency: next,
+      appliedVehicleTotal: nextTotal ?? draft.appliedVehicleTotal,
+    });
+    try {
+      const serverDraft = await persistCheckoutCurrency(locale, next);
+      if (seq !== currencySeq.current) {
+        return;
+      }
+      if (serverDraft) {
+        onDraftChange(serverDraft);
+        return;
+      }
+      onDraftChange({
+        ...draft,
+        currency: previous,
+        appliedVehicleTotal: previousTotal,
+      });
+    } catch {
+      if (seq !== currencySeq.current) {
+        return;
+      }
+      onDraftChange({
+        ...draft,
+        currency: previous,
+        appliedVehicleTotal: previousTotal,
+      });
+    } finally {
+      if (seq === currencySeq.current) {
+        setCurrencyBusy(false);
+      }
+    }
+  }
+
+  async function flushCheckoutDraft() {
+    window.clearTimeout(emailTimer.current);
+    window.clearTimeout(phoneTimer.current);
+    window.clearTimeout(notesTimer.current);
+    await saveContact({
+      email: emailRef.current.value,
+      phoneCountryCode: phoneRef.current.country,
+      phoneNational: phoneRef.current.national,
+      notes,
+    });
+    await savePassenger(1, mainRef.current);
+  }
+
+  async function handleComplete() {
+    if (completing || confirmingPickupPrep) {
+      return;
+    }
+    const currentPayment = paymentRef.current;
+    const valid = applyCheckoutValidation(
+      runCheckoutValidation({
+        requirePayment: true,
+        requireCaptcha: true,
+      }),
+      true,
+    );
+    if (!valid) {
+      return;
+    }
+    if (currentPayment !== "cash" && currentPayment !== "sbp") {
+      return;
+    }
+    if (currentPayment === "sbp" && draft.currency === SBP_UNSUPPORTED_CURRENCY) {
+      return;
+    }
+    setCompleteError(null);
+    setCompleting(true);
+    try {
+      await flushCheckoutDraft();
+      const { response, payload } = await postCompleteReservation({
+        locale,
+        payment: currentPayment,
+        legalAccepted: legalRef.current,
+        captchaToken,
+      });
+      if (response.status === 409 && payload.suggestedPickupAtLocal) {
+        setPickupPrepLocal(payload.suggestedPickupAtLocal);
+        setPickupPrepKind(
+          payload.reason === "bosphorus-day-cutoff" ? "bosphorus" : "transfer",
+        );
+        return;
+      }
+      if (!response.ok || payload.ok !== true) {
+        if (payload.reason === "captcha" || response.status === 429) {
+          setCaptchaToken(null);
+          setCaptchaError(checkoutCopy[locale].captchaRequired);
+          setCashCaptchaInstance((value) => value + 1);
+        }
+        setCompleteError(resolveCompleteError(locale, response.status, payload));
+        return;
+      }
+      if (payload.next === "payment" || currentPayment === "sbp") {
+        router.push(`/${locale}${bookingPaymentPath}`);
+        return;
+      }
+      router.push(`/${locale}${bookingSuccessPath}`);
+    } catch {
+      setCompleteError(checkoutCopy[locale].completeServerError);
+    } finally {
+      setCompleting(false);
+    }
+  }
+
+  async function handleConfirmPickupPrep() {
+    if (!pickupPrepLocal || completing || confirmingPickupPrep) {
+      return;
+    }
+    if (pickupPrepKind === "bosphorus") {
+      setCompleteError(null);
+      setConfirmingPickupPrep(true);
+      try {
+        const response = await fetch("/api/booking/draft/selected", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locale, localDateTime: pickupPrepLocal }),
+        });
+        if (!response.ok) {
+          setCompleteError(checkoutCopy[locale].completeServerError);
+          return;
+        }
+        const payload = (await response.json()) as { draft?: BookingDraftView };
+        if (payload.draft) {
+          onDraftChange(payload.draft);
+        }
+        setPickupPrepLocal(null);
+        setPickupPrepKind(null);
+      } catch {
+        setCompleteError(checkoutCopy[locale].completeServerError);
+      } finally {
+        setConfirmingPickupPrep(false);
+      }
+      return;
+    }
+
+    const currentPayment = paymentRef.current;
+    if (currentPayment !== "cash" && currentPayment !== "sbp") {
+      return;
+    }
+    if (currentPayment === "sbp" && draft.currency === SBP_UNSUPPORTED_CURRENCY) {
+      return;
+    }
+    setCompleteError(null);
+    setConfirmingPickupPrep(true);
+    try {
+      const { response, payload } = await postCompleteReservation({
+        locale,
+        payment: currentPayment,
+        legalAccepted: legalRef.current,
+        captchaToken: captchaTokenRef.current,
+        acceptAdjustedPickup: true,
+        expectedPickupAtLocal: pickupPrepLocal,
+      });
+      if (
+        response.status === 409 &&
+        payload.reason === "pickup-prep-stale" &&
+        payload.suggestedPickupAtLocal
+      ) {
+        setPickupPrepLocal(payload.suggestedPickupAtLocal);
+        setPickupPrepKind("transfer");
+        return;
+      }
+      if (!response.ok || payload.ok !== true) {
+        if (payload.reason === "captcha" || response.status === 429) {
+          setCaptchaToken(null);
+          setCaptchaError(checkoutCopy[locale].captchaRequired);
+          setCashCaptchaInstance((value) => value + 1);
+        }
+        setCompleteError(resolveCompleteError(locale, response.status, payload));
+        setPickupPrepLocal(null);
+        setPickupPrepKind(null);
+        return;
+      }
+      setPickupPrepLocal(null);
+      setPickupPrepKind(null);
+      if (payload.next === "payment" || currentPayment === "sbp") {
+        router.push(`/${locale}${bookingPaymentPath}`);
+        return;
+      }
+      router.push(`/${locale}${bookingSuccessPath}`);
+    } catch {
+      setCompleteError(checkoutCopy[locale].completeServerError);
+      setPickupPrepLocal(null);
+      setPickupPrepKind(null);
+    } finally {
+      setConfirmingPickupPrep(false);
+    }
+  }
+
+  function dismissPickupPrepDialog() {
+    if (confirmingPickupPrep) {
+      return;
+    }
+    setPickupPrepLocal(null);
+    setPickupPrepKind(null);
+  }
+
+  function handleBosphorusChooseAnotherDate() {
+    if (confirmingPickupPrep) {
+      return;
+    }
+    setPickupPrepLocal(null);
+    setPickupPrepKind(null);
+    if (onChooseAnotherDate) {
+      onChooseAnotherDate();
+      return;
+    }
+    onBack();
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(BOSPHORUS_OPEN_DATE_EVENT));
+    }, 50);
   }
 
   const totalLabel =
     draft.appliedVehicleTotal !== null
       ? formatCurrencyPill(draft.currency, draft.appliedVehicleTotal, locale)
       : "—";
-  const canComplete = checkoutCanComplete({
-    emailValid: emailValidity(email) === "valid",
-    phoneValid: phoneIsValid(phoneCountry, phoneNational),
-    mainPassengerComplete: isPassengerFormComplete(main),
-    payment,
-    legalAccepted,
-    captchaVerified,
-  });
+  const sbpFxRates = checkoutFxRates(draft);
+  const isBosphorus = isBosphorusDinnerTour(draft.serviceType, draft.tourCode);
+  const backLabel = isBosphorus
+    ? bosphorusDinnerCopy[locale].backToSelection
+    : copy.backToVehicles;
 
   return (
     <div className="booking-checkout">
       <button type="button" className="booking-back checkout-back" onClick={onBack}>
-        {copy.backToVehicles}
+        {backLabel}
       </button>
       <div className="checkout-layout">
         <CheckoutSummary locale={locale} draft={draft} />
         <div className="checkout-main">
+            <>
           <CheckoutContact
             locale={locale}
             email={email}
@@ -494,16 +888,94 @@ export function BookingCheckoutStage({
               }
             }}
           />
-          <CheckoutPayment
-            locale={locale}
-            method={payment}
-            captchaInstance={cashCaptchaInstance}
-            onMethodChange={changePayment}
-            onCaptchaChange={setCaptchaVerified}
-          />
-          <CheckoutCompleteCta locale={locale} total={totalLabel} enabled={canComplete} />
+          {draft.editMode ? (
+            <EditFinalizePanel
+              locale={locale}
+              draft={draft}
+              homeHref={`/${locale}`}
+              onValidateBeforeCommit={async () => {
+                const valid = applyCheckoutValidation(
+                  runCheckoutValidation({
+                    requirePayment: false,
+                    requireCaptcha: false,
+                  }),
+                  true,
+                );
+                if (!valid) {
+                  return false;
+                }
+                await flushCheckoutDraft();
+                return true;
+              }}
+            />
+          ) : (
+            <>
+              <CheckoutPayment
+                locale={locale}
+                method={payment}
+                currency={draft.currency}
+                totalEur={draft.appliedVehicleTotalEur}
+                fxRates={sbpFxRates}
+                captchaInstance={cashCaptchaInstance}
+                paymentError={paymentError}
+                captchaError={captchaError}
+                currencyBusy={currencyBusy}
+                onMethodChange={changePayment}
+                onCurrencyChange={(code) => void changeSbpCurrency(code)}
+                onCaptchaTokenChange={(token) => {
+                  setCaptchaToken(token);
+                  if (token) {
+                    setCaptchaError(null);
+                  }
+                }}
+              />
+              <CheckoutCompleteCta
+                locale={locale}
+                total={totalLabel}
+                loading={completing || confirmingPickupPrep}
+                disabled={
+                  payment === "sbp" && draft.currency === SBP_UNSUPPORTED_CURRENCY
+                }
+                paymentMethod={payment}
+                completedCode={null}
+                error={completeError}
+                onComplete={() => void handleComplete()}
+              />
+            </>
+          )}
+            </>
         </div>
       </div>
+      {pickupPrepLocal && pickupPrepKind === "bosphorus" ? (
+        <CheckoutPickupPrepDialog
+          title={copy.bosphorusCutoffTitle}
+          body={copy.bosphorusCutoffBody}
+          backLabel={copy.bosphorusCutoffChooseDate}
+          confirmLabel={
+            confirmingPickupPrep
+              ? bosphorusCutoffConfirmLabel(locale, pickupPrepLocal, "confirming")
+              : bosphorusCutoffConfirmLabel(locale, pickupPrepLocal, "confirm")
+          }
+          confirming={confirmingPickupPrep}
+          onBack={handleBosphorusChooseAnotherDate}
+          onConfirm={() => void handleConfirmPickupPrep()}
+        />
+      ) : null}
+      {pickupPrepLocal && pickupPrepKind === "transfer" ? (
+        <CheckoutPickupPrepDialog
+          title={copy.pickupPrepTitle}
+          body={pickupPrepCopy(locale, pickupPrepLocal, "body")}
+          backLabel={copy.pickupPrepBack}
+          confirmLabel={
+            confirmingPickupPrep
+              ? pickupPrepCopy(locale, pickupPrepLocal, "confirming")
+              : pickupPrepCopy(locale, pickupPrepLocal, "confirm")
+          }
+          confirming={confirmingPickupPrep}
+          onBack={dismissPickupPrepDialog}
+          onConfirm={() => void handleConfirmPickupPrep()}
+        />
+      ) : null}
     </div>
   );
 }

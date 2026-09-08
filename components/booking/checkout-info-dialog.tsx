@@ -10,6 +10,13 @@ type CheckoutInfoDialogProps = {
   onClose: () => void;
 };
 
+function bodyParagraphs(body: string) {
+  return body
+    .split(/\n\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export function CheckoutInfoDialog({
   title,
   body,
@@ -19,6 +26,7 @@ export function CheckoutInfoDialog({
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const paragraphs = bodyParagraphs(body);
 
   useEffect(() => {
     const trigger = document.activeElement as HTMLElement | null;
@@ -102,7 +110,14 @@ export function CheckoutInfoDialog({
         <h2 id={titleId} className="checkout-info-title">
           {title}
         </h2>
-        <p className="checkout-info-body">{body}</p>
+        {paragraphs.map((paragraph, index) => (
+          <p
+            key={index}
+            className={`checkout-info-body${index > 0 ? " checkout-info-body--follow" : ""}`}
+          >
+            {paragraph}
+          </p>
+        ))}
       </div>
     </div>,
     document.getElementById("portal-root") ?? document.body,

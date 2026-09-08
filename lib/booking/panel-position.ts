@@ -14,6 +14,7 @@ export function panelBelowField(
     gutter?: number;
     minWidth?: number;
     maxWidth?: number;
+    zIndex?: number;
   },
 ): CSSProperties | undefined {
   if (!fieldBox || typeof window === "undefined") {
@@ -41,15 +42,23 @@ export function panelBelowField(
     Math.min(fieldBox.left, viewWidth - gutter - width),
   );
   const spaceBelow = Math.max(0, viewBottom - fieldBox.bottom - gutter);
-  const maxHeight = Math.min(capHeight, spaceBelow || capHeight);
+  const spaceAbove = Math.max(0, fieldBox.top - viewTop - gutter);
+  const maxHeight = Math.min(
+    capHeight,
+    spaceBelow >= 160 ? spaceBelow : Math.max(spaceBelow, spaceAbove, 160),
+  );
+  const placeBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
+  const top = placeBelow
+    ? fieldBox.bottom + gutter
+    : Math.max(viewTop + gutter, fieldBox.top - gutter - maxHeight);
 
   return {
     position: "fixed",
-    top: fieldBox.bottom + gutter,
+    top,
     left,
     width,
     maxHeight,
-    zIndex: 110,
+    zIndex: options?.zIndex ?? 110,
   };
 }
 

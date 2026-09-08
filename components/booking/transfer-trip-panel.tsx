@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BookingSelect } from "@/components/booking/booking-select";
 import { DateTimeField } from "@/components/booking/date-time-field";
 import { LocationField } from "@/components/booking/location-field";
 import { OccupancySelect } from "@/components/booking/occupancy-select";
@@ -8,16 +9,25 @@ import {
   AirplaneIcon,
   BabySeatIcon,
   CalendarIcon,
+  ClockIcon,
   LuggageIcon,
+  MapPinnedIcon,
   MeetAndGreetIcon,
   PersonIcon,
   RoutePointBadge,
 } from "@/components/booking/place-icons";
 import { bookingCopy } from "@/lib/booking/copy";
 import {
+  durationOptions,
+  formatDurationOption,
+  tourOptions,
+} from "@/lib/booking/catalog";
+import {
   formatDistanceKm,
   isTripSelectionDirty,
   appliedTripFingerprint,
+  cloneLocation,
+  locationsEqual,
   type BookingDraftView,
 } from "@/lib/booking/draft-view";
 import {
@@ -47,12 +57,34 @@ import {
 import { type DraftClearField } from "@/lib/booking/clear-draft-field";
 import { occupancyOptionLabel } from "@/lib/booking/occupancy-label";
 import { bookingPageCopy } from "@/lib/booking/page-copy";
+import { isLayoverTour } from "@/lib/booking/pricing/layover-pricing";
+import { isIstanbulAddressPackageTour } from "@/lib/booking/pricing/istanbul-address-package-tour";
+import { isNoKmPackageTour } from "@/lib/booking/pricing/no-km-package-tour";
+import { isBosphorusDinnerTour } from "@/lib/booking/pricing/bosphorus-dinner-pricing";
+import { isIstanbulLocationValue } from "@/lib/booking/istanbul-location";
+import {
+  bursaPaidOptionLabels,
+  hasBursaUludagAscent,
+  isBursaBridgeRoute,
+  isBursaTour,
+  type BursaRouteOption,
+  withBursaBridgeRoute,
+  withBursaUludagAscent,
+} from "@/lib/booking/pricing/bursa-pricing";
+import {
+  LAYOVER_AIRPORT_CODES,
+  layoverAirportCodeFromLocation,
+} from "@/lib/booking/layover-airports";
+import {
+  bookingServiceDisplayLabel,
+  localizedTourName,
+} from "@/lib/booking/tour-display";
 import {
   meetAndGreetMode,
   normalizeMeetAndGreet,
 } from "@/lib/booking/meet-and-greet";
 import { includesFirstClassAmenities } from "@/lib/booking/pricing/vehicle-quote";
-import { type LocationValue, type ServiceType, isLocationFilled } from "@/lib/booking/types";
+import { type LocationValue, isLocationFilled } from "@/lib/booking/types";
 import { type Locale } from "@/lib/i18n/config";
 import { BOOKING_WIDE_QUERY } from "@/lib/ui/use-media-query";
 
@@ -85,18 +117,28 @@ export function TransferTripPanel({
   const saveQueueRef = useRef(Promise.resolve());
   const locationRevisionRef = useRef(0);
   const flightTimerRef = useRef<number | null>(null);
+  const lastFlightPersistRef = useRef<string | null>(draft.selected.flightCode);
+  const flightInputFocusedRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef(draft);
   const appliedFingerprintRef = useRef(appliedTripFingerprint(draft.applied));
   const selectedFlightCode = draft.selected.flightCode ?? "";
 
-  if (selectedFlightCode !== seenFlightCode) {
-    setSeenFlightCode(selectedFlightCode);
-    const typed = normalizeFlightCode(flightInput);
-    if (typed === selectedFlightCode || typed === seenFlightCode) {
-      setFlightInput(selectedFlightCode);
+  useEffect(() => {
+    if (selectedFlightCode === seenFlightCode) {
+      return;
     }
-  }
+    const typed = normalizeFlightCode(flightInput);
+    const shouldSync =
+      typed === selectedFlightCode ||
+      (!flightInputFocusedRef.current && typed === seenFlightCode);
+    queueMicrotask(() => {
+      setSeenFlightCode(selectedFlightCode);
+      if (shouldSync) {
+        setFlightInput(selectedFlightCode);
+      }
+    });
+  }, [flightInput, seenFlightCode, selectedFlightCode]);
 
   const locationCopy = {
     clearLocation: booking.clearLocation,
@@ -106,6 +148,7 @@ export function TransferTripPanel({
     placesError: booking.placesError,
     suggestionsLabel: booking.suggestionsLabel,
     closeSelector: booking.closeSelector,
+    istanbulLocationRequired: booking.istanbulLocationRequired,
   };
 
   const refreshClock = useCallback(async () => {
@@ -175,12 +218,22 @@ export function TransferTripPanel({
     };
   }, []);
 
-  const serviceType = (
-    draft.serviceType === "hourly" || draft.serviceType === "tour"
-      ? draft.serviceType
-      : "transfer"
-  ) as ServiceType;
-  const serviceLabel = booking.services[serviceType];
+  const selectedTourCode = draft.selected.tourCode ?? draft.tourCode;
+  const appliedTourCode = draft.tourCode;
+  const layover = isLayoverTour(draft.serviceType, selectedTourCode);
+  const noKmPackage = isNoKmPackageTour(
+    draft.serviceType,
+    selectedTourCode,
+  );
+  const selectedBosphorus = isBosphorusDinnerTour(
+    draft.serviceType,
+    selectedTourCode,
+  );
+  const bursaTour = isBursaTour(draft.serviceType, appliedTourCode);
+  const serviceLabel =
+    draft.serviceType === "tour"
+      ? booking.services.tour
+      : bookingServiceDisplayLabel(draft.serviceType, draft.tourCode, locale);
   const pendingFlight = normalizeFlightCode(flightInput);
   const selectedForDirty = {
     ...draft.selected,
@@ -188,27 +241,26 @@ export function TransferTripPanel({
   };
   const dirty = isTripSelectionDirty(selectedForDirty, draft.applied);
   const busy = applying || clearing;
-  const occupancySelected = occupancyCountsAreSet(
-    draft.selected.passengerCount,
-    draft.selected.luggageCount,
-    draft.selected.babySeatCount,
-  );
-  const occupancyApplied = occupancyCountsAreSet(
-    draft.applied.passengerCount,
-    draft.applied.luggageCount,
-    draft.applied.babySeatCount,
-  );
-  const canClearMeetAndGreet =
-    meetAndGreetMode(draft.selected.pickup) !== "required" &&
-    (draft.selected.meetAndGreet === true || draft.applied.meetAndGreet === true);
+  const hasClearableSelection =
+    displayPassengerCount(draft.selected.passengerCount) > 0 ||
+    displayLuggageCount(draft.selected.luggageCount) > 0 ||
+    displayBabySeatCount(draft.selected.babySeatCount) > 0 ||
+    draft.selected.meetAndGreet === true;
   const canApply =
     dirty &&
-    !draft.distanceError &&
-    draft.selected.distanceKm !== null &&
-    !kmLoading &&
-    !busy;
-  const canClear =
-    (occupancySelected || occupancyApplied || canClearMeetAndGreet) && !busy;
+    !busy &&
+    (draft.serviceType === "hourly"
+      ? draft.selected.durationHours !== null
+      : selectedBosphorus
+        ? isIstanbulLocationValue(draft.selected.pickup) && !kmLoading
+        : noKmPackage
+          ? isLocationFilled(draft.selected.pickup) && !kmLoading
+          : layover
+            ? !draft.distanceError && !kmLoading
+            : !draft.distanceError &&
+              draft.selected.distanceKm !== null &&
+              !kmLoading);
+  const canClear = hasClearableSelection && !busy;
 
   async function persistSelectedNow(
     body: Record<string, unknown>,
@@ -216,7 +268,8 @@ export function TransferTripPanel({
   ) {
     setApplyError(null);
     const locationPatch = body.pickup !== undefined || body.dropoff !== undefined;
-    if (locationPatch) {
+    const needsKm = locationPatch;
+    if (needsKm) {
       setKmLoading(true);
     }
     const stillCurrent = () =>
@@ -236,7 +289,7 @@ export function TransferTripPanel({
         return false;
       }
       if (!response.ok || !payload.draft) {
-        if (locationPatch) {
+        if (needsKm) {
           onDraftChange({
             ...draftRef.current,
             selected: { ...draftRef.current.selected, distanceKm: null },
@@ -252,7 +305,7 @@ export function TransferTripPanel({
       if (!stillCurrent()) {
         return false;
       }
-      if (locationPatch) {
+      if (needsKm) {
         onDraftChange({
           ...draftRef.current,
           selected: { ...draftRef.current.selected, distanceKm: null },
@@ -399,9 +452,12 @@ export function TransferTripPanel({
     if (next === (selected.meetAndGreet === true)) {
       return;
     }
-    // Pickup identity changes can hide M&G. Do not auto-enable on mount,
-    // desktop breakpoint, or a user turning the switch off.
-    if (next === true) {
+    // Pickup identity changes can hide M&G. Auto-enable only where the
+    // airport rule marks the service as required (currently AYT).
+    if (
+      next === true &&
+      meetAndGreetMode(selected.pickup) !== "required"
+    ) {
       return;
     }
     const updated = {
@@ -441,15 +497,37 @@ export function TransferTripPanel({
 
   async function changePickup(value: LocationValue) {
     locationRevisionRef.current += 1;
+    const isHourly = draftRef.current.serviceType === "hourly";
+    const currentTourCode =
+      draftRef.current.selected.tourCode ?? draftRef.current.tourCode;
+    const layoverDraft = isLayoverTour(
+      draftRef.current.serviceType,
+      currentTourCode,
+    );
+    const noKmPackageDraft = isNoKmPackageTour(
+      draftRef.current.serviceType,
+      currentTourCode,
+    );
     const meetAndGreet = normalizeMeetAndGreet(
       value,
       draftRef.current.selected.meetAndGreet,
     );
+    const previousPickup = draftRef.current.selected.pickup;
+    const previousDropoff = draftRef.current.selected.dropoff;
+    const shouldSyncDropoff =
+      (isHourly || layoverDraft || noKmPackageDraft) &&
+      isLocationFilled(value) &&
+      (!isLocationFilled(previousDropoff) ||
+        locationsEqual(previousDropoff, previousPickup));
+    const nextDropoff = shouldSyncDropoff
+      ? cloneLocation(value)
+      : previousDropoff;
     const next = {
       ...draftRef.current,
       selected: {
         ...draftRef.current.selected,
         pickup: value,
+        dropoff: nextDropoff,
         distanceKm: null,
         meetAndGreet,
       },
@@ -462,14 +540,22 @@ export function TransferTripPanel({
       return;
     }
     setKmLoading(true);
-    await persistSelected({ pickup: value, meetAndGreet });
+    await persistSelected({
+      pickup: value,
+      meetAndGreet,
+      ...(shouldSyncDropoff ? { dropoff: nextDropoff } : {}),
+    });
   }
 
   async function changeDropoff(value: LocationValue) {
     locationRevisionRef.current += 1;
     const next = {
       ...draftRef.current,
-      selected: { ...draftRef.current.selected, dropoff: value, distanceKm: null },
+      selected: {
+        ...draftRef.current.selected,
+        dropoff: value,
+        distanceKm: null,
+      },
       distanceError: false,
     };
     draftRef.current = next;
@@ -480,6 +566,16 @@ export function TransferTripPanel({
     }
     setKmLoading(true);
     await persistSelected({ dropoff: value });
+  }
+
+  async function changeDuration(hours: number) {
+    const next = {
+      ...draftRef.current,
+      selected: { ...draftRef.current.selected, durationHours: hours },
+    };
+    draftRef.current = next;
+    onDraftChange(next);
+    await persistSelected({ durationHours: hours });
   }
 
   function changeCount(
@@ -514,20 +610,67 @@ export function TransferTripPanel({
     void persistSelected({ meetAndGreet: normalized });
   }
 
+  function changeBursaRoute(next: BursaRouteOption) {
+    const current = draftRef.current;
+    const updated = {
+      ...current,
+      selected: { ...current.selected, bursaRoute: next },
+    };
+    draftRef.current = updated;
+    onDraftChange(updated);
+    void persistSelected({ bursaRoute: next });
+  }
+
+  function changeBursaBridgeRoute(enabled: boolean) {
+    changeBursaRoute(
+      withBursaBridgeRoute(draftRef.current.selected.bursaRoute, enabled),
+    );
+  }
+
+  function changeBursaUludagAscent(enabled: boolean) {
+    changeBursaRoute(
+      withBursaUludagAscent(draftRef.current.selected.bursaRoute, enabled),
+    );
+  }
+
+  function changeTour(next: string) {
+    const current = draftRef.current;
+    const updated = {
+      ...current,
+      selected: { ...current.selected, tourCode: next },
+    };
+    draftRef.current = updated;
+    onDraftChange(updated);
+    void persistSelected({ tourCode: next });
+  }
+
+  function previewSelectedFlight(raw: string) {
+    const next = normalizeFlightCode(raw);
+    const current = draftRef.current;
+    const flightCode = next.length > 0 ? next : null;
+    if ((current.selected.flightCode ?? null) === flightCode) {
+      return;
+    }
+    const updated = {
+      ...current,
+      selected: { ...current.selected, flightCode },
+    };
+    draftRef.current = updated;
+    onDraftChange(updated);
+  }
+
   function persistFlight(raw: string, syncInput = false) {
     const next = normalizeFlightCode(raw);
     if (syncInput) {
       setFlightInput(next);
     }
-    const current = draftRef.current.selected.flightCode ?? "";
-    if (next === current) {
+    previewSelectedFlight(raw);
+    const flightCode = next.length > 0 ? next : null;
+    if ((lastFlightPersistRef.current ?? null) === flightCode) {
       return;
     }
-    onDraftChange({
-      ...draftRef.current,
-      selected: { ...draftRef.current.selected, flightCode: next.length ? next : null },
-    });
-    void persistSelected({ flightCode: next.length ? next : null });
+    lastFlightPersistRef.current = flightCode;
+    void persistSelected({ flightCode });
   }
 
   async function applySelections() {
@@ -542,10 +685,34 @@ export function TransferTripPanel({
     await saveQueueRef.current;
     const latest = draftRef.current;
     const latestDirty = isTripSelectionDirty(latest.selected, latest.applied);
+    const latestSelectedTourCode =
+      latest.selected.tourCode ?? latest.tourCode;
+    const layoverReady =
+      isLayoverTour(latest.serviceType, latestSelectedTourCode) &&
+      !latest.distanceError &&
+      Boolean(layoverAirportCodeFromLocation(latest.selected.pickup));
+    const noKmPackageReady =
+      isNoKmPackageTour(latest.serviceType, latestSelectedTourCode) &&
+      isLocationFilled(latest.selected.pickup);
+    const bosphorusReady =
+      isBosphorusDinnerTour(latest.serviceType, latestSelectedTourCode) &&
+      isIstanbulLocationValue(latest.selected.pickup);
+    const hourlyReady =
+      latest.serviceType === "hourly" && latest.selected.durationHours !== null;
+    const transferReady =
+      latest.serviceType !== "hourly" &&
+      !layoverReady &&
+      !noKmPackageReady &&
+      !bosphorusReady &&
+      !latest.distanceError &&
+      latest.selected.distanceKm !== null;
     if (
       !latestDirty ||
-      latest.distanceError ||
-      latest.selected.distanceKm === null
+      (!hourlyReady &&
+        !layoverReady &&
+        !noKmPackageReady &&
+        !bosphorusReady &&
+        !transferReady)
     ) {
       return;
     }
@@ -651,7 +818,35 @@ export function TransferTripPanel({
       if (!appliedOccupancySet && !appliedMeetAndGreetNeedsSync) {
         return;
       }
-      if (latest.distanceError || latest.selected.distanceKm === null) {
+      if (latest.serviceType === "hourly") {
+        if (latest.selected.durationHours === null) {
+          setApplyError(copy.applyError);
+          return;
+        }
+      } else if (
+        isNoKmPackageTour(
+          latest.serviceType,
+          latest.selected.tourCode ?? latest.tourCode,
+        )
+      ) {
+        if (!isLocationFilled(latest.selected.pickup)) {
+          setApplyError(copy.applyError);
+          return;
+        }
+      } else if (
+        isLayoverTour(
+          latest.serviceType,
+          latest.selected.tourCode ?? latest.tourCode,
+        )
+      ) {
+        if (
+          latest.distanceError ||
+          !layoverAirportCodeFromLocation(latest.selected.pickup)
+        ) {
+          setApplyError(copy.applyError);
+          return;
+        }
+      } else if (latest.distanceError || latest.selected.distanceKm === null) {
         setApplyError(copy.applyError);
         return;
       }
@@ -679,10 +874,68 @@ export function TransferTripPanel({
 
   const pickup = draft.selected.pickup;
   const dropoff = draft.selected.dropoff;
+  const isHourly = draft.serviceType === "hourly";
+  const isTour = draft.serviceType === "tour";
+  const layoverPanel = isLayoverTour(draft.serviceType, appliedTourCode);
+  const istanbulAddressPackagePanel = isIstanbulAddressPackageTour(
+    draft.serviceType,
+    appliedTourCode,
+  );
+  const appliedNoKmPackage = isNoKmPackageTour(
+    draft.serviceType,
+    appliedTourCode,
+  );
+  const packageTourPanel = layoverPanel || appliedNoKmPackage;
+  const layoverAirportFieldProps = {
+    presetAirportCodes: LAYOVER_AIRPORT_CODES,
+    airportPickerOnly: true,
+  } as const;
+  const tourAirportPresetProps =
+    draft.serviceType === "tour"
+      ? { presetAirportCodes: ["IST", "SAW"] as const }
+      : {};
+  const istanbulFieldProps = istanbulAddressPackagePanel
+    ? { requireIstanbul: true }
+    : {};
+  const selectedTourName =
+    localizedTourName(selectedTourCode, locale) ?? booking.tourPlaceholder;
+  const tourChoices = useMemo(
+    () =>
+      tourOptions
+        .filter(
+          (tour) =>
+            tour.behaviorType === "vehicleBooking" ||
+            tour.behaviorType === "perPersonBooking",
+        )
+        .map((tour) => ({
+          id: tour.id,
+          label: booking.tours[tour.id],
+        })),
+    [booking.tours],
+  );
+  const bursaOptionLabels = bursaPaidOptionLabels(locale);
+  const displayedBursaRoute = isBursaTour(
+    draft.serviceType,
+    selectedTourCode,
+  )
+    ? draft.selected.bursaRoute
+    : draft.applied.bursaRoute;
+  const bursaBridgeSelected = isBursaBridgeRoute(displayedBursaRoute);
+  const bursaUludagSelected = hasBursaUludagAscent(
+    displayedBursaRoute,
+  );
+  const durationOption =
+    draft.selected.durationHours === null
+      ? null
+      : durationOptions.find((option) => option.hours === draft.selected.durationHours) ??
+        null;
+  const durationDisplay = durationOption
+    ? formatDurationOption(durationOption, locale)
+    : booking.durationPlaceholder;
   const showAirportExtras = isAirportPickup(pickup);
   const meetMode = meetAndGreetMode(pickup);
   const meetLocked = meetMode === "required";
-  const meetAndGreetOn = draft.selected.meetAndGreet === true;
+  const meetAndGreetOn = meetLocked || draft.selected.meetAndGreet === true;
   const passengerCount = displayPassengerCount(draft.selected.passengerCount);
   const passengerRequired =
     passengerValidationVisible && passengerCount <= PASSENGER_COUNT_UNSET;
@@ -718,15 +971,16 @@ export function TransferTripPanel({
       const count = displayPassengerCount(
         draftRef.current.selected.passengerCount,
       );
-      if (count > PASSENGER_COUNT_UNSET) {
-        return;
+      const passengerMissing = count <= PASSENGER_COUNT_UNSET;
+      if (passengerMissing) {
+        setPassengerValidationVisible(true);
       }
-      setPassengerValidationVisible(true);
       if (window.matchMedia(BOOKING_WIDE_QUERY).matches) {
         return;
       }
-      const node =
-        document.getElementById("booking-passenger-count") ?? panelRef.current;
+      const node = passengerMissing
+        ? document.getElementById("booking-passenger-count") ?? panelRef.current
+        : panelRef.current;
       if (!node) {
         return;
       }
@@ -744,7 +998,7 @@ export function TransferTripPanel({
 
   useEffect(() => {
     if (displayPassengerCount(draft.selected.passengerCount) >= PASSENGER_COUNT_MIN) {
-      setPassengerValidationVisible(false);
+      queueMicrotask(() => setPassengerValidationVisible(false));
     }
   }, [draft.selected.passengerCount]);
 
@@ -791,7 +1045,16 @@ export function TransferTripPanel({
           <span className="booking-field-error">{datetimeError}</span>
         ) : null}
 
-        <div className="booking-trip-route" aria-label={`${booking.pickupLabel}, ${booking.dropoffLabel}`}>
+        <div
+          className="booking-trip-route"
+          aria-label={`${booking.pickupLabel}, ${
+            isHourly
+              ? booking.durationLabel
+              : isTour
+                ? copy.tourLabel
+                : booking.dropoffLabel
+          }`}
+        >
           <div className="booking-trip-stop">
             <span className="booking-info-icon">
               <RoutePointBadge point="A" />
@@ -816,46 +1079,157 @@ export function TransferTripPanel({
               onChange={(value) => {
                 void changePickup(value);
               }}
+              {...tourAirportPresetProps}
+              {...(layoverPanel ? layoverAirportFieldProps : {})}
+              {...istanbulFieldProps}
             />
           </div>
           <div className="booking-trip-rail" aria-hidden="true" />
-          <div className="booking-trip-stop">
-            <span className="booking-info-icon">
-              <RoutePointBadge point="B" />
-            </span>
-            <div className="booking-trip-stop-copy">
-              <span className="booking-trip-kicker">{booking.dropoffLabel}</span>
-              <span className="booking-trip-value">
-                {locationDisplayName(dropoff, booking.airports) || booking.dropoffPlaceholder}
+          {isHourly ? (
+            <div className="booking-trip-stop">
+              <span className="booking-info-icon">
+                <ClockIcon className="booking-trip-stop-icon" />
               </span>
+              <div className="booking-trip-stop-copy">
+                <span className="booking-trip-kicker">{booking.durationLabel}</span>
+                <span className="booking-trip-value">{durationDisplay}</span>
+              </div>
+              <BookingSelect
+                label={booking.durationLabel}
+                title={booking.selectDuration}
+                placeholder={booking.durationPlaceholder}
+                closeLabel={booking.closeSelector}
+                value={
+                  draft.selected.durationHours
+                    ? String(draft.selected.durationHours)
+                    : null
+                }
+                options={durationOptions.map((option) => ({
+                  id: String(option.hours),
+                  label: formatDurationOption(option, locale),
+                }))}
+                variant="icon"
+                editLabel={copy.editDuration}
+                onChange={(id) => {
+                  void changeDuration(Number(id));
+                }}
+              />
             </div>
-            <LocationField
-              id="booking-panel-dropoff"
-              role="dropoff"
-              locale={locale}
-              label={booking.dropoffLabel}
-              title={booking.selectDropoff}
-              placeholder={booking.dropoffPlaceholder}
-              copy={locationCopy}
-              value={dropoff}
-              variant="icon"
-              editLabel={copy.editDropoff}
-              onChange={(value) => {
-                void changeDropoff(value);
-              }}
-            />
-          </div>
+          ) : isTour ? (
+            <div className="booking-trip-stop">
+              <span className="booking-info-icon">
+                <MapPinnedIcon className="booking-trip-stop-icon" />
+              </span>
+              <div className="booking-trip-stop-copy">
+                <span className="booking-trip-kicker">{copy.tourLabel}</span>
+                <span className="booking-trip-value">{selectedTourName}</span>
+              </div>
+              <BookingSelect
+                label={copy.tourLabel}
+                title={booking.tourLabel}
+                placeholder={booking.tourPlaceholder}
+                closeLabel={booking.closeSelector}
+                value={selectedTourCode}
+                options={tourChoices}
+                variant="icon"
+                editLabel={copy.editTour}
+                onChange={changeTour}
+              />
+            </div>
+          ) : (
+            <div className="booking-trip-stop">
+              <span className="booking-info-icon">
+                <RoutePointBadge point="B" />
+              </span>
+              <div className="booking-trip-stop-copy">
+                <span className="booking-trip-kicker">{booking.dropoffLabel}</span>
+                <span className="booking-trip-value">
+                  {locationDisplayName(dropoff, booking.airports) ||
+                    booking.dropoffPlaceholder}
+                </span>
+              </div>
+              <LocationField
+                id="booking-panel-dropoff"
+                role="dropoff"
+                locale={locale}
+                label={booking.dropoffLabel}
+                title={booking.selectDropoff}
+                placeholder={booking.dropoffPlaceholder}
+                copy={locationCopy}
+                value={dropoff}
+                variant="icon"
+                editLabel={copy.editDropoff}
+                onChange={(value) => {
+                  void changeDropoff(value);
+                }}
+              />
+            </div>
+          )}
         </div>
 
-        <p className="booking-trip-distance" aria-live="polite">
-          {kmLoading ? (
-            copy.distanceLoading
-          ) : draft.distanceError || draft.selected.distanceKm === null ? (
-            copy.distanceError
-          ) : (
-            `${copy.estimatedDistance}: ${formatDistanceKm(draft.selected.distanceKm, locale)} km`
-          )}
-        </p>
+        {bursaTour ? (
+          <fieldset className="booking-bursa-route">
+            <legend className="booking-trip-kicker">{copy.routeTitle}</legend>
+            <div className="booking-bursa-route-options">
+              <label className="booking-bursa-route-option booking-switch">
+                <span className="booking-bursa-route-toggle">
+                  <input
+                    type="checkbox"
+                    className="booking-switch-input"
+                    checked={bursaBridgeSelected}
+                    onChange={(event) =>
+                      changeBursaBridgeRoute(event.target.checked)
+                    }
+                  />
+                  <span className="booking-switch-track" aria-hidden="true" />
+                </span>
+                <span className="booking-bursa-route-copy">
+                  <span className="booking-bursa-route-name">
+                    {bursaOptionLabels.bridge}
+                  </span>
+                  <span className="booking-bursa-route-price">
+                    {" — "}
+                    {bursaOptionLabels.bridgePrice}
+                  </span>
+                </span>
+              </label>
+              <label className="booking-bursa-route-option booking-switch">
+                <span className="booking-bursa-route-toggle">
+                  <input
+                    type="checkbox"
+                    className="booking-switch-input"
+                    checked={bursaUludagSelected}
+                    onChange={(event) =>
+                      changeBursaUludagAscent(event.target.checked)
+                    }
+                  />
+                  <span className="booking-switch-track" aria-hidden="true" />
+                </span>
+                <span className="booking-bursa-route-copy">
+                  <span className="booking-bursa-route-name">
+                    {bursaOptionLabels.uludag}
+                  </span>
+                  <span className="booking-bursa-route-price">
+                    {" — "}
+                    {bursaOptionLabels.uludagPrice}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+        ) : null}
+
+        {isHourly || packageTourPanel ? null : (
+          <p className="booking-trip-distance" aria-live="polite">
+            {kmLoading ? (
+              copy.distanceLoading
+            ) : draft.distanceError || draft.selected.distanceKm === null ? (
+              copy.distanceError
+            ) : (
+              `${copy.estimatedDistance}: ${formatDistanceKm(draft.selected.distanceKm, locale)} km`
+            )}
+          </p>
+        )}
       </div>
 
       <div className="booking-trip-extras">
@@ -899,9 +1273,13 @@ export function TransferTripPanel({
                 className="booking-flight-input"
                 placeholder={copy.flightCodePlaceholder}
                 value={flightInput}
+                onFocus={() => {
+                  flightInputFocusedRef.current = true;
+                }}
                 onChange={(event) => {
                   const next = event.target.value.toUpperCase();
                   setFlightInput(next);
+                  previewSelectedFlight(next);
                   if (flightTimerRef.current !== null) {
                     window.clearTimeout(flightTimerRef.current);
                   }
@@ -909,7 +1287,10 @@ export function TransferTripPanel({
                     persistFlight(next);
                   }, 400);
                 }}
-                onBlur={() => persistFlight(flightInput, true)}
+                onBlur={() => {
+                  flightInputFocusedRef.current = false;
+                  persistFlight(flightInput, true);
+                }}
               />
             </span>
           </label>
