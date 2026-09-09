@@ -11,6 +11,7 @@ import {
   accountRegisterAction,
   type AccountFormState,
 } from "@/lib/account/actions";
+import { ACCOUNT_MIN_PASSWORD_LENGTH } from "@/lib/account/constants";
 import { accountCopy, accountErrorMessage } from "@/lib/account/copy";
 import { defaultCountryIso2ForLocale } from "@/lib/geo/locale-defaults";
 import { type Locale } from "@/lib/i18n/config";
@@ -282,7 +283,7 @@ function ModalRegisterForm({
           type="password"
           name="password"
           autoComplete="new-password"
-          minLength={8}
+          minLength={ACCOUNT_MIN_PASSWORD_LENGTH}
           required
         />
       </label>
@@ -292,7 +293,7 @@ function ModalRegisterForm({
           type="password"
           name="passwordConfirm"
           autoComplete="new-password"
-          minLength={8}
+          minLength={ACCOUNT_MIN_PASSWORD_LENGTH}
           required
         />
       </label>

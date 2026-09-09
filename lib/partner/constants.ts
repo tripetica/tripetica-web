@@ -1,6 +1,7 @@
+export { MIN_PASSWORD_LENGTH as PARTNER_MIN_PASSWORD_LENGTH } from "@/lib/security/password-policy";
+
 export const PARTNER_SESSION_COOKIE = "tripetica_partner_session";
 export const PARTNER_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
-export const PARTNER_MIN_PASSWORD_LENGTH = 8;
 
 export const PARTNER_CODE_PREFIX = "PTR";
 export const PARTNER_CODE_MAX_SEQ = 9999;

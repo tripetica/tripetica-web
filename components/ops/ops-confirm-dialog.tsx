@@ -6,7 +6,8 @@ type OpsConfirmDialogProps = {
   pending: boolean;
   cancelLabel: string;
   confirmLabel: string;
-  confirmFormId: string;
+  confirmFormId?: string;
+  onConfirm?: () => void;
   confirmTone?: "danger" | "positive";
   onClose: () => void;
 };
@@ -18,6 +19,7 @@ export function OpsConfirmDialog({
   cancelLabel,
   confirmLabel,
   confirmFormId,
+  onConfirm,
   confirmTone = "danger",
   onClose,
 }: OpsConfirmDialogProps) {
@@ -50,10 +52,11 @@ export function OpsConfirmDialog({
             {cancelLabel}
           </button>
           <button
-            type="submit"
-            form={confirmFormId}
+            type={onConfirm ? "button" : "submit"}
+            form={onConfirm ? undefined : confirmFormId}
             className={confirmTone === "positive" ? "ops-btn-positive" : "ops-btn-danger"}
             disabled={pending}
+            onClick={onConfirm}
           >
             {confirmLabel}
           </button>

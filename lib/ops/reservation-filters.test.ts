@@ -156,7 +156,7 @@ test("order by keeps default created_at desc without explicit sort", () => {
       sort: "",
       dir: "",
     }),
-    "created_at DESC",
+    "created_at DESC, id DESC",
   );
   assert.equal(
     reservationOrderBy({
@@ -169,7 +169,7 @@ test("order by keeps default created_at desc without explicit sort", () => {
       sort: "",
       dir: "",
     }),
-    "pickup_at ASC NULLS LAST, created_at DESC",
+    "pickup_at ASC NULLS LAST, created_at ASC, id ASC",
   );
   assert.equal(
     reservationOrderBy({
@@ -182,7 +182,7 @@ test("order by keeps default created_at desc without explicit sort", () => {
       sort: "created_at",
       dir: "desc",
     }),
-    "created_at DESC",
+    "created_at DESC, id DESC",
   );
   assert.equal(
     reservationOrderBy({
@@ -195,8 +195,72 @@ test("order by keeps default created_at desc without explicit sort", () => {
       sort: "pickup_at",
       dir: "asc",
     }),
-    "pickup_at ASC NULLS LAST, created_at DESC",
+    "pickup_at ASC NULLS LAST, created_at ASC, id ASC",
   );
+  assert.equal(
+    reservationOrderBy({
+      query: "",
+      status: "",
+      payment: "",
+      date: "",
+      from: "",
+      to: "",
+      sort: "pickup_at",
+      dir: "desc",
+    }),
+    "pickup_at DESC NULLS LAST, created_at DESC, id DESC",
+  );
+  assert.equal(
+    reservationOrderBy({
+      query: "",
+      status: "",
+      payment: "",
+      date: "",
+      from: "",
+      to: "",
+      sort: "created_at",
+      dir: "asc",
+    }),
+    "created_at ASC, id ASC",
+  );
+  assert.equal(
+    reservationOrderBy(
+      {
+        query: "",
+        status: "",
+        payment: "",
+        date: "",
+        from: "",
+        to: "",
+        sort: "pickup_at",
+        dir: "asc",
+      },
+      "jobs",
+    ),
+    "jobs.pickup_at ASC NULLS LAST, jobs.created_at ASC, jobs.id ASC",
+  );
+  assert.doesNotMatch(reservationOrderBy({
+    query: "",
+    status: "",
+    payment: "",
+    date: "",
+    from: "",
+    to: "",
+    sort: "pickup_at",
+    dir: "asc",
+  }), /updated_at|assignment_updated_at/);
+});
+
+test("reservation list applies the same deterministic order after partner joins", () => {
+  const list = readFileSync(
+    new URL("../../lib/ops/reservations.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(list, /reservationOrderBy\(input\.filters\)/);
+  assert.match(list, /reservationOrderBy\(input\.filters, "jobs"\)/);
+  assert.match(list, /ORDER BY \$\{outerOrderBy\}/);
+  assert.doesNotMatch(list, /ORDER BY[^\n]*updated_at/);
+  assert.doesNotMatch(list, /ORDER BY[^\n]*assignment_updated_at/);
 });
 
 test("reservation filters keep search, filter and refresh on one toolbar", () => {

@@ -22,7 +22,7 @@ import {
 } from "@/lib/partner/application-fields";
 import { partnerContactNamesFromForm } from "@/lib/partner/contact-name";
 import { type PartnerCopy } from "@/lib/partner/copy";
-import { type PartnerBusinessType, PARTNER_DEFAULT_COUNTRY_CODE } from "@/lib/partner/constants";
+import { type PartnerBusinessType, PARTNER_DEFAULT_COUNTRY_CODE, PARTNER_MIN_PASSWORD_LENGTH } from "@/lib/partner/constants";
 import { countryFlagEmoji, countryName } from "@/lib/geo/countries";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
@@ -532,7 +532,7 @@ export function PartnerRegisterForm({ locale, copy }: PartnerRegisterFormProps) 
             name="password"
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={PARTNER_MIN_PASSWORD_LENGTH}
             value={password}
             error={fieldErrors.password ?? null}
             showPasswordLabel={copy.showPassword}
@@ -547,7 +547,7 @@ export function PartnerRegisterForm({ locale, copy }: PartnerRegisterFormProps) 
             name="confirmPassword"
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={PARTNER_MIN_PASSWORD_LENGTH}
             value={confirmPassword}
             error={fieldErrors.confirmPassword ?? null}
             showPasswordLabel={copy.showPassword}

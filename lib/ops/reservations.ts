@@ -255,18 +255,22 @@ function liveVehicleFromRow(row: ListRow): PartnerVehicleRecord | null {
 }
 
 function mapAssignment(row: ListRow): {
+  acceptedPartnerId: string | null;
   acceptedPartnerName: string | null;
   acceptedPartnerCode: string | null;
   acceptedPartnerIsPrimary: boolean;
   acceptedPartnerPriorityLevel: number | null;
+  assignmentLocked: boolean;
   driverAssignment: JobDriverAssignmentView;
   vehicleAssignment: JobVehicleAssignmentView;
 } {
   return {
+    acceptedPartnerId: row.accepted_partner_id,
     acceptedPartnerName: row.accepted_partner_name?.trim() || null,
     acceptedPartnerCode: row.accepted_partner_code?.trim() || null,
     acceptedPartnerIsPrimary: Boolean(row.accepted_partner_is_primary),
     acceptedPartnerPriorityLevel: row.accepted_partner_priority_level,
+    assignmentLocked: row.status === "cancelled",
     driverAssignment: resolveDriverAssignment({
       kind: row.assigned_driver_kind,
       driverId: row.assigned_driver_id,
@@ -314,7 +318,9 @@ function mapList(row: ListRow): ReservationListItem {
     meetAndGreet: row.meet_and_greet,
     status: row.status,
     createdAt: row.created_at.toISOString(),
+    acceptedPartnerId: assignment.acceptedPartnerId,
     acceptedPartnerName: assignment.acceptedPartnerName,
+    assignmentLocked: assignment.assignmentLocked,
     acceptedPartnerCode: assignment.acceptedPartnerCode,
     acceptedPartnerIsPrimary: assignment.acceptedPartnerIsPrimary,
     acceptedPartnerPriorityLevel: assignment.acceptedPartnerPriorityLevel,
@@ -383,6 +389,7 @@ export async function listReservations(input: {
   const offset = (input.page - 1) * pageSize;
   values.push(pageSize, offset);
   const orderBy = reservationOrderBy(input.filters);
+  const outerOrderBy = reservationOrderBy(input.filters, "jobs");
   const result = await query<ListRow>(
     `SELECT
         jobs.id, jobs.reservation_code, jobs.pickup_at, jobs.service_type, jobs.tour_code,
@@ -443,7 +450,8 @@ export async function listReservations(input: {
      ) AS jobs
      LEFT JOIN partners accepted_partner ON accepted_partner.id = jobs.accepted_partner_id
      LEFT JOIN partner_drivers assigned_driver ON assigned_driver.id = jobs.assigned_driver_id
-     LEFT JOIN partner_vehicles assigned_vehicle ON assigned_vehicle.id = jobs.assigned_vehicle_id`,
+     LEFT JOIN partner_vehicles assigned_vehicle ON assigned_vehicle.id = jobs.assigned_vehicle_id
+     ORDER BY ${outerOrderBy}`,
     values,
   );
   const items = result.rows.map(mapList);

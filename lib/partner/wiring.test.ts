@@ -39,7 +39,8 @@ test("partner password minimum is 8 characters everywhere", () => {
   assert.equal(PARTNER_MIN_PASSWORD_LENGTH, 8);
   assert.match(partnerCopy.tr.passwordTooShort, /8/);
   assert.doesNotMatch(partnerCopy.tr.passwordTooShort, /12/);
-  assert.match(source("lib/partner/constants.ts"), /PARTNER_MIN_PASSWORD_LENGTH = 8/);
+  assert.match(source("lib/security/password-policy.ts"), /MIN_PASSWORD_LENGTH = 8/);
+  assert.match(source("lib/partner/constants.ts"), /PARTNER_MIN_PASSWORD_LENGTH/);
   assert.doesNotMatch(source("lib/partner/constants.ts"), /PARTNER_MIN_PASSWORD_LENGTH = 12/);
   assert.doesNotMatch(source("lib/partner/bootstrap.ts"), /12 karakter|12 characters/);
   assert.doesNotMatch(source("scripts/partner-dev-guard.ts"), /12 karakter|12 characters/);

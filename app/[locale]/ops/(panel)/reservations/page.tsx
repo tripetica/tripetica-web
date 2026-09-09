@@ -8,6 +8,11 @@ import {
   reservationQueryRecord,
 } from "@/lib/ops/reservation-filters";
 import { listReservations, OPS_PAGE_SIZE } from "@/lib/ops/reservations";
+import {
+  listActiveOpsAssignmentPartners,
+  loadOpsAssignmentFleets,
+} from "@/lib/ops/reservation-assignment";
+import { actorCan } from "@/lib/ops/session";
 import { OpsPagination } from "@/components/ops/pagination";
 import { ReservationFilters } from "@/components/ops/reservation-filters";
 import { ReservationTable } from "@/components/ops/reservation-table";
@@ -22,11 +27,14 @@ export default async function OpsReservationsPage({
   if (!isLocale(locale)) {
     notFound();
   }
-  await requireOpsPage(locale, "reservations.view");
+  const actor = await requireOpsPage(locale, "reservations.view");
   const query = await searchParams;
   const filters = parseReservationListFilters(query);
   const page = parsePage(query.page);
   const copy = opsCopy[locale];
+  const canAssign = actorCan(actor, "reservations.manage");
+  const partners = await listActiveOpsAssignmentPartners();
+  const fleets = await loadOpsAssignmentFleets(partners.map((partner) => partner.id));
   const { items, total, pageSize } = await listReservations({
     filters,
     page,
@@ -45,6 +53,9 @@ export default async function OpsReservationsPage({
           copy={copy}
           items={items}
           filters={filters}
+          partners={partners}
+          fleets={fleets}
+          canAssign={canAssign}
         />
       )}
       <OpsPagination

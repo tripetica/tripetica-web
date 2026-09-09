@@ -1,11 +1,14 @@
 import {
   PARTNER_BUSINESS_TYPES,
-  PARTNER_MIN_PASSWORD_LENGTH,
   PARTNER_PRIORITY_LEVELS,
   type PartnerBusinessType,
   type PartnerPriorityLevel,
   type PartnerStatus,
 } from "@/lib/partner/constants";
+import {
+  isPasswordLengthValid,
+  passwordsMatch,
+} from "@/lib/security/password-policy";
 
 export function isPartnerStatus(value: string): value is PartnerStatus {
   return value === "pending" || value === "active" || value === "inactive";
@@ -75,9 +78,9 @@ export function canDeactivateExternalPartner(input: {
 }
 
 export function isPartnerPasswordLengthValid(password: string) {
-  return password.length >= PARTNER_MIN_PASSWORD_LENGTH;
+  return isPasswordLengthValid(password);
 }
 
 export function partnerPasswordsMatch(password: string, confirmation: string) {
-  return password.length > 0 && password === confirmation;
+  return passwordsMatch(password, confirmation);
 }

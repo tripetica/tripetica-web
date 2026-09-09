@@ -14,19 +14,20 @@ import {
   type ReservationSortField,
 } from "@/lib/ops/reservation-filters";
 import { type ReservationListItem } from "@/lib/ops/reservation-types";
-import {
-  formatDriverAssignmentLines,
-  formatVehicleAssignmentLines,
-} from "@/lib/partner/job-assignment-view";
 import { reservationStatusLabel, reservationStatusBadgeClass, serviceLabel, paymentLabel, paymentProviderLabel, paymentStatusLabel, paymentStatusBadgeClass, refundStatusBadgeClass, refundStatusLabel } from "@/lib/ops/record-detail";
 import { compactPaymentMovementLines } from "@/lib/ops/payment-history";
+import { OpsReservationAssignmentCells } from "@/components/ops/reservation-assignment-cells";
 import { RecordDetailModal } from "@/components/ops/record-detail-modal";
+import { type OpsAssignmentFleet, type OpsAssignmentPartnerOption } from "@/lib/ops/reservation-assignment-view";
 
 type ReservationTableProps = {
   locale: Locale;
   copy: OpsCopy;
   items: ReservationListItem[];
   filters: ReservationListFilters;
+  partners: OpsAssignmentPartnerOption[];
+  fleets: Record<string, OpsAssignmentFleet>;
+  canAssign: boolean;
 };
 
 function SortHeader({
@@ -69,7 +70,15 @@ function SortHeader({
   );
 }
 
-export function ReservationTable({ locale, copy, items, filters }: ReservationTableProps) {
+export function ReservationTable({
+  locale,
+  copy,
+  items,
+  filters,
+  partners,
+  fleets,
+  canAssign,
+}: ReservationTableProps) {
   const router = useRouter();
   const headerRef = useRef<HTMLInputElement>(null);
   const [ids, setIds] = useState<Set<string>>(new Set());
@@ -130,7 +139,7 @@ export function ReservationTable({ locale, copy, items, filters }: ReservationTa
 
   function onRowClick(event: MouseEvent<HTMLTableRowElement>, id: string) {
     const target = event.target as HTMLElement;
-    if (target.closest("a, button, input, label")) {
+    if (target.closest("a, button, input, label, .partner-job-assign-cell")) {
       return;
     }
     toggleId(id);
@@ -260,40 +269,15 @@ export function ReservationTable({ locale, copy, items, filters }: ReservationTa
                   <td>{item.customerEmail ?? "—"}</td>
                   <td>{item.passengerCount ?? "—"}</td>
                   <td>{item.vehicleLabel ?? "—"}</td>
-                  <td className="ops-col-assignment">
-                    <span className="ops-cell-stack">
-                      <span className="ops-assignment-line" title={item.acceptedPartnerName ?? copy.assignmentUnassigned}>
-                        {item.acceptedPartnerName || copy.assignmentUnassigned}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="ops-col-assignment">
-                    <span className="ops-cell-stack">
-                      {formatDriverAssignmentLines({
-                        driver: item.driverAssignment,
-                        unassignedLabel: copy.assignmentUnassigned,
-                        nonTrpLabel: copy.assignmentNonTrp,
-                      }).map((line) => (
-                        <span key={line} className="ops-assignment-line" title={line}>
-                          {line}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
-                  <td className="ops-col-assignment">
-                    <span className="ops-cell-stack">
-                      {formatVehicleAssignmentLines({
-                        vehicle: item.vehicleAssignment,
-                        locale,
-                        unassignedLabel: copy.assignmentUnassigned,
-                        nonTrpLabel: copy.assignmentNonTrp,
-                      }).map((line) => (
-                        <span key={line} className="ops-assignment-line" title={line}>
-                          {line}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
+                  <OpsReservationAssignmentCells
+                    locale={locale}
+                    copy={copy}
+                    item={item}
+                    partners={partners}
+                    drivers={item.acceptedPartnerId ? fleets[item.acceptedPartnerId]?.drivers ?? [] : []}
+                    vehicles={item.acceptedPartnerId ? fleets[item.acceptedPartnerId]?.vehicles ?? [] : []}
+                    canAssign={canAssign}
+                  />
                   <td className="ops-amount-cell">
                     {formatOpsAmountOrDash(item.totalPrice, locale)}
                   </td>

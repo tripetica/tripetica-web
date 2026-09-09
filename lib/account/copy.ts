@@ -1,3 +1,4 @@
+import { ACCOUNT_MIN_PASSWORD_LENGTH } from "@/lib/account/constants";
 import { type Locale } from "@/lib/i18n/config";
 
 const tr = {
@@ -75,7 +76,7 @@ const tr = {
     "Çok fazla deneme. Lütfen bir dakika sonra tekrar deneyin.",
   error_invalid_name: "Ad ve soyad gerekli.",
   error_invalid_email: "Geçerli bir e-posta girin.",
-  error_invalid_password: "Şifre en az 8 karakter olmalı ve eşleşmeli.",
+  error_invalid_password: `Şifre en az ${ACCOUNT_MIN_PASSWORD_LENGTH} karakter olmalı ve eşleşmeli.`,
   error_email_taken: "Bu e-posta ile zaten bir hesap var.",
   error_invalid_phone: "Telefon numarası geçersiz.",
   error_unauthenticated: "Oturum gerekli.",
@@ -243,7 +244,7 @@ const en: typeof tr = {
   error_throttled: "Too many attempts. Please try again in a minute.",
   error_invalid_name: "First and last name are required.",
   error_invalid_email: "Enter a valid email.",
-  error_invalid_password: "Password must be at least 8 characters and match.",
+  error_invalid_password: `Password must be at least ${ACCOUNT_MIN_PASSWORD_LENGTH} characters and match.`,
   error_email_taken: "An account with this email already exists.",
   error_invalid_phone: "Invalid phone number.",
   error_unauthenticated: "Sign in required.",
@@ -410,7 +411,7 @@ const ru: typeof tr = {
   error_throttled: "Слишком много попыток. Подождите минуту и попробуйте снова.",
   error_invalid_name: "Укажите имя и фамилию.",
   error_invalid_email: "Введите корректный email.",
-  error_invalid_password: "Пароль не менее 8 символов и должен совпадать.",
+  error_invalid_password: `Пароль не менее ${ACCOUNT_MIN_PASSWORD_LENGTH} символов и должен совпадать.`,
   error_email_taken: "Аккаунт с таким email уже существует.",
   error_invalid_phone: "Некорректный телефон.",
   error_unauthenticated: "Требуется вход.",

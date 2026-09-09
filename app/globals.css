@@ -8010,6 +8010,17 @@ body:has(.checkout-info-overlay) .contact-launcher {
   gap: 0.85rem;
 }
 
+.ops-account-name-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .ops-account-name-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .ops-field {
   display: grid;
   gap: 0.3rem;
@@ -12310,6 +12321,10 @@ body:has(.checkout-info-overlay) .contact-launcher {
 
 .partner-job-assign-cell.is-busy {
   opacity: 0.72;
+}
+
+.partner-job-assign-cell.is-locked .partner-job-assign-empty {
+  opacity: 0.6;
 }
 
 .partner-job-assign-trigger,

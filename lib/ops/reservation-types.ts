@@ -23,7 +23,9 @@ export type ReservationListItem = {
   meetAndGreet: boolean | null;
   status: string;
   createdAt: string;
+  acceptedPartnerId: string | null;
   acceptedPartnerName: string | null;
+  assignmentLocked: boolean;
   acceptedPartnerCode: string | null;
   acceptedPartnerIsPrimary: boolean;
   acceptedPartnerPriorityLevel: number | null;

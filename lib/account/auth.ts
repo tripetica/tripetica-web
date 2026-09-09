@@ -8,7 +8,6 @@ import { normalizeIso2 } from "@/lib/geo/countries";
 import { buildAccountActionEmail } from "@/lib/account/action-email";
 import {
   ACCOUNT_EMAIL_CHANGE_TTL_MS,
-  ACCOUNT_MIN_PASSWORD_LENGTH,
   ACCOUNT_PASSWORD_RESET_TTL_MS,
   ACCOUNT_SESSION_COOKIE,
   ACCOUNT_VERIFY_TTL_MS,
@@ -32,6 +31,7 @@ import {
   writeAccountSessionCookie,
 } from "@/lib/account/session";
 import { hashPassword, verifyPassword } from "@/lib/security/password";
+import { isPasswordLengthValid } from "@/lib/security/password-policy";
 import { requestClientIp } from "@/lib/security/request-client-ip";
 import {
   createAuthTokenRecord,
@@ -92,10 +92,7 @@ export async function registerCustomer(input: {
   if (!nationalityCode) {
     return { ok: false as const, reason: "invalid_country" as const };
   }
-  if (
-    input.password.length < ACCOUNT_MIN_PASSWORD_LENGTH ||
-    input.password !== input.passwordConfirm
-  ) {
+  if (!isPasswordLengthValid(input.password) || input.password !== input.passwordConfirm) {
     return { ok: false as const, reason: "invalid_password" as const };
   }
   if (!accountMailConfigured()) {
@@ -302,10 +299,7 @@ export async function resetCustomerPassword(input: {
   password: string;
   passwordConfirm: string;
 }) {
-  if (
-    input.password.length < ACCOUNT_MIN_PASSWORD_LENGTH ||
-    input.password !== input.passwordConfirm
-  ) {
+  if (!isPasswordLengthValid(input.password) || input.password !== input.passwordConfirm) {
     return { ok: false as const, reason: "invalid_password" as const };
   }
   const row = await findAuthToken(input.token, "password_reset");

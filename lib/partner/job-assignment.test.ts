@@ -481,10 +481,12 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.doesNotMatch(select, /onChange\(\s*""/);
 
   const opsTable = source("components/ops/reservation-table.tsx");
+  assert.match(opsTable, /OpsReservationAssignmentCells/);
   assert.match(opsTable, /assignmentPartner/);
   assert.match(opsTable, /assignmentDriver/);
   assert.match(opsTable, /assignmentVehicle/);
   assert.match(opsTable, /ops-col-assignment/);
+  assert.match(opsTable, /partner-job-assign-cell/);
 
   const fleet = source("lib/partner/fleet.ts");
   assert.match(fleet, /assigned_driver_id/);
@@ -502,6 +504,8 @@ test("assignment schema and server path stay partner-scoped", () => {
   const opsCopy = source("lib/ops/copy.ts");
   assert.match(opsCopy, /assignmentSection: "Partner \/ Operasyon Ataması"/);
   assert.match(opsCopy, /assignmentNonTrp: "NON TRP"/);
+  assert.match(opsCopy, /assignmentRemovePartnerConfirm/);
+  assert.match(opsCopy, /assignmentSelectPartner/);
 });
 
 test("floating assignment layers flip above when there is no room below", () => {

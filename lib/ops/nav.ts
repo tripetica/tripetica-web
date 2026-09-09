@@ -8,9 +8,18 @@ export type OpsNavItem = {
     | "/ops/partners"
     | "/ops/drivers"
     | "/ops/vehicles"
-    | "/ops/users";
-  permission: OpsPermission;
-  labelKey: "reservations" | "processes" | "customers" | "partners" | "drivers" | "vehicles" | "users";
+    | "/ops/users"
+    | "/ops/account";
+  permission: OpsPermission | null;
+  labelKey:
+    | "reservations"
+    | "processes"
+    | "customers"
+    | "partners"
+    | "drivers"
+    | "vehicles"
+    | "users"
+    | "myAccount";
 };
 
 export const OPS_NAV: OpsNavItem[] = [
@@ -48,5 +57,10 @@ export const OPS_NAV: OpsNavItem[] = [
     href: "/ops/users",
     permission: "users.view",
     labelKey: "users",
+  },
+  {
+    href: "/ops/account",
+    permission: null,
+    labelKey: "myAccount",
   },
 ];

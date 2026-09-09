@@ -10,6 +10,7 @@ import {
   accountResetPasswordAction,
   type AccountFormState,
 } from "@/lib/account/actions";
+import { ACCOUNT_MIN_PASSWORD_LENGTH } from "@/lib/account/constants";
 import { accountCopy, accountErrorMessage } from "@/lib/account/copy";
 import { defaultCountryIso2ForLocale } from "@/lib/geo/locale-defaults";
 import { type Locale } from "@/lib/i18n/config";
@@ -113,7 +114,7 @@ export function AccountRegisterForm({ locale }: { locale: Locale }) {
           type="password"
           name="password"
           autoComplete="new-password"
-          minLength={8}
+          minLength={ACCOUNT_MIN_PASSWORD_LENGTH}
           required
         />
       </label>
@@ -123,7 +124,7 @@ export function AccountRegisterForm({ locale }: { locale: Locale }) {
           type="password"
           name="passwordConfirm"
           autoComplete="new-password"
-          minLength={8}
+          minLength={ACCOUNT_MIN_PASSWORD_LENGTH}
           required
         />
       </label>
@@ -189,7 +190,7 @@ export function AccountResetPasswordForm({
           type="password"
           name="password"
           autoComplete="new-password"
-          minLength={8}
+          minLength={ACCOUNT_MIN_PASSWORD_LENGTH}
           required
         />
       </label>
@@ -199,7 +200,7 @@ export function AccountResetPasswordForm({
           type="password"
           name="passwordConfirm"
           autoComplete="new-password"
-          minLength={8}
+          minLength={ACCOUNT_MIN_PASSWORD_LENGTH}
           required
         />
       </label>

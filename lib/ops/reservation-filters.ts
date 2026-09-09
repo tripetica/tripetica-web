@@ -182,19 +182,23 @@ export function nextReservationSortDir(
   return "asc";
 }
 
-export function reservationOrderBy(filters: ReservationListFilters): string {
+export function reservationOrderBy(
+  filters: ReservationListFilters,
+  alias = "",
+): string {
+  const col = (name: "pickup_at" | "created_at" | "id") =>
+    alias ? `${alias}.${name}` : name;
+  const dir = filters.dir === "desc" ? "DESC" : "ASC";
   if (filters.sort === "pickup_at") {
-    return filters.dir === "desc"
-      ? "pickup_at DESC NULLS LAST, created_at DESC"
-      : "pickup_at ASC NULLS LAST, created_at DESC";
+    return `${col("pickup_at")} ${dir} NULLS LAST, ${col("created_at")} ${dir}, ${col("id")} ${dir}`;
   }
   if (filters.sort === "created_at") {
-    return filters.dir === "desc" ? "created_at DESC" : "created_at ASC";
+    return `${col("created_at")} ${dir}, ${col("id")} ${dir}`;
   }
   if (filters.date === "upcoming") {
-    return "pickup_at ASC NULLS LAST, created_at DESC";
+    return `${col("pickup_at")} ASC NULLS LAST, ${col("created_at")} ASC, ${col("id")} ASC`;
   }
-  return "created_at DESC";
+  return `${col("created_at")} DESC, ${col("id")} DESC`;
 }
 
 export function reservationQueryRecord(

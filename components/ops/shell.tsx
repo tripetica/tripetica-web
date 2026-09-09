@@ -27,7 +27,9 @@ export function OpsShell({
   fxSummary,
   children,
 }: OpsShellProps) {
-  const items = OPS_NAV.filter((item) => actorCan(actor, item.permission));
+  const items = OPS_NAV.filter(
+    (item) => item.permission === null || actorCan(actor, item.permission),
+  );
 
   return (
     <div className="ops-shell">
