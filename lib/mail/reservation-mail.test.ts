@@ -76,6 +76,28 @@ test("payment terminology stays Online / Bekleniyor (and locale equivalents)", (
   assert.equal(accountPaymentStatusLabel("pending", accountCopy.ru), "Ожидается");
 });
 
+test("Arabic reservation mail uses dedicated copy instead of English fallback", () => {
+  const ar = reservationMailCopy.ar;
+  const en = reservationMailCopy.en;
+  assert.match(ar.confirmationSubject("TRP-20260913-0003"), /TRP-20260913-0003/);
+  assert.match(ar.confirmationSubject("TRP-20260913-0003"), /تأكيد الحجز/);
+  assert.notEqual(ar.confirmationSubject("X"), en.confirmationSubject("X"));
+  assert.notEqual(ar.confirmationThanks, en.confirmationThanks);
+  assert.notEqual(ar.confirmationIntro, en.confirmationIntro);
+  assert.notEqual(ar.greeting("Ahmed"), en.greeting("Ahmed"));
+  assert.notEqual(ar.pickup, en.pickup);
+  assert.notEqual(ar.closing, en.closing);
+  assert.notEqual(ar.paymentConfirmationSubject("X"), en.paymentConfirmationSubject("X"));
+  assert.equal(accountCopy.ar.paymentStatusPending, "قيد الانتظار");
+  assert.notEqual(accountCopy.ar.paymentMethodOnline, accountCopy.en.paymentMethodOnline);
+  for (const [key, value] of Object.entries(ar)) {
+    assert.notEqual(value, undefined, key);
+    if (typeof value === "string") {
+      assert.doesNotMatch(value, /undefined|\[missing|TODO/i);
+    }
+  }
+});
+
 test("reservation mail copy covers TR EN RU confirmation and payment subjects", () => {
   assert.match(reservationMailCopy.tr.confirmationSubject("TRP-1"), /TRP-1/);
   assert.match(reservationMailCopy.en.paymentConfirmationSubject("TRP-1"), /TRP-1/);

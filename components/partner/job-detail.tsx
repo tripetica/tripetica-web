@@ -30,6 +30,8 @@ type PartnerJobDetailProps = {
   assignment?: JobAssignmentView | null;
   drivers?: PartnerDriverRecord[];
   vehicles?: PartnerVehicleRecord[];
+  driverTask?: import("@/lib/ops/driver-task-fields").DriverTaskOpsView | null;
+  driverTaskCopy?: import("@/lib/ops/copy").OpsCopy;
 };
 
 function present(value: string | null | undefined) {
@@ -76,6 +78,8 @@ export function PartnerJobDetail({
   assignment = null,
   drivers = [],
   vehicles = [],
+  driverTask = null,
+  driverTaskCopy,
 }: PartnerJobDetailProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [state, action, pending] = useActionState<PartnerJobFormState, FormData>(
@@ -192,6 +196,8 @@ export function PartnerJobDetail({
           assignment={assignment}
           drivers={drivers}
           vehicles={vehicles}
+          driverTask={driverTask}
+          driverTaskCopy={driverTaskCopy}
         />
       ) : null}
 

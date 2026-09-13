@@ -6,6 +6,7 @@ export const LOCALE_DEFAULT_COUNTRY_ISO2: Record<Locale, string> = {
   ru: "RU",
   tr: "TR",
   en: "GB",
+  ar: "SA",
 };
 
 export function defaultCountryIso2ForLocale(locale: Locale): string {

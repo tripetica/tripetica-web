@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerDriverList } from "@/components/partner/driver-list";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
@@ -20,7 +20,7 @@ export default async function PartnerDriversPage({
   const query = await searchParams;
   const added = query.added;
   const justAdded = (Array.isArray(added) ? added[0] : added) === "1";
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
   const drivers = await listPartnerDrivers(actor.partnerId);
   const addHref = localizedPath(locale, "/partner/drivers/new");
 

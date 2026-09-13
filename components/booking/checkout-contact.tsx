@@ -42,8 +42,9 @@ export function CheckoutContact({
           <span className="checkout-label">{copy.emailLabel} *</span>
           <input
             id="checkout-email"
-            className={`checkout-input${emailError ? " is-invalid" : ""}`}
+            className={`checkout-input ltr-isolate${emailError ? " is-invalid" : ""}`}
             type="email"
+            dir="ltr"
             inputMode="email"
             autoComplete="email"
             value={email}

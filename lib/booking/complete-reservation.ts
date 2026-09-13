@@ -707,6 +707,9 @@ async function completeReservation(
       [reservationId, draft.id],
     );
 
+    const { ensureDriverTaskForReservation } = await import("@/lib/ops/driver-task");
+    await ensureDriverTaskForReservation(client, reservationId);
+
     if (mode === "sbp" && paymentAmount != null && paymentCurrency) {
       try {
         const { insertPaymentTransaction } = await import(
@@ -758,6 +761,8 @@ async function completeReservation(
     ) {
       const existing = await findExistingReservationBySession(input.browserSessionId);
       if (existing) {
+        const { ensureDriverTaskForReservation } = await import("@/lib/ops/driver-task");
+        await ensureDriverTaskForReservation(client, existing.id);
         await attachExistingReservationToCustomer(
           client,
           existing.id,

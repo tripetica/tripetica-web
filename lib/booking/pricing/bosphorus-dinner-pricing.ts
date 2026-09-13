@@ -252,6 +252,12 @@ export function bosphorusPaxLabel(
       child5to9: "Ребёнок (5–9 лет)",
       child0to4: "Ребёнок (0–4 лет)",
     },
+    ar: {
+      adultSoft: "بالغ – مشروبات غير كحولية (10+ سنوات)",
+      adultAlcohol: "بالغ – مشروبات كحولية (18+ سنوات)",
+      child5to9: "طفل (5–9 سنوات)",
+      child0to4: "طفل (0–4 سنوات)",
+    },
   };
   return labels[locale][category];
 }

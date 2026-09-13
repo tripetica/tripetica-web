@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerEmployerBillingCard } from "@/components/partner/employer-billing-card";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { partnerCopy } from "@/lib/partner/copy";
 import { getEmployerBillingProfile } from "@/lib/partner/employer-billing";
 
@@ -13,7 +13,7 @@ export default async function PartnerEmployerBillingPage({
   if (!isLocale(locale)) {
     notFound();
   }
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
   const profile = await getEmployerBillingProfile();
 
   return (

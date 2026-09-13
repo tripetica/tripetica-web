@@ -1,6 +1,9 @@
 import "server-only";
 
 import nodemailer from "nodemailer";
+import { isTransientSmtpError } from "@/lib/mail/smtp-errors";
+
+export { isTransientSmtpError } from "@/lib/mail/smtp-errors";
 
 const globalForMail = globalThis as typeof globalThis & {
   tripeticaSmtpTransports?: Map<string, nodemailer.Transporter>;
@@ -37,7 +40,7 @@ export type OutboundMailMessage = {
 
 export type OutboundMailResult =
   | { ok: true; delivered: true }
-  | { ok: false; error: string };
+  | { ok: false; error: string; transient?: boolean };
 
 export type SmtpConfig = {
   host: string;
@@ -131,7 +134,45 @@ function isSmtpProviderEnabled(providerEnvName: string) {
   return provider === "smtp";
 }
 
-async function deliverSmtpMail(
+function smtpTransportKey(smtp: SmtpConfig) {
+  return JSON.stringify([smtp.host, smtp.port, smtp.secure, smtp.user]);
+}
+
+function createSmtpTransport(smtp: SmtpConfig) {
+  return nodemailer.createTransport({
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 60_000,
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    },
+  });
+}
+
+function evictSmtpTransport(key: string) {
+  const transporter = smtpTransports().get(key);
+  if (!transporter) {
+    return;
+  }
+  transporter.close();
+  smtpTransports().delete(key);
+}
+
+function getSmtpTransport(smtp: SmtpConfig) {
+  const key = smtpTransportKey(smtp);
+  let transporter = smtpTransports().get(key);
+  if (!transporter) {
+    transporter = createSmtpTransport(smtp);
+    smtpTransports().set(key, transporter);
+  }
+  return { key, transporter };
+}
+
+async function sendWithTransport(
   message: OutboundMailMessage,
   smtp: SmtpConfig,
   options: {
@@ -139,28 +180,8 @@ async function deliverSmtpMail(
     defaultFrom: string;
   },
 ): Promise<OutboundMailResult> {
+  const { key, transporter } = getSmtpTransport(smtp);
   try {
-    const key = JSON.stringify([smtp.host, smtp.port, smtp.secure, smtp.user]);
-    let transporter = smtpTransports().get(key);
-    if (!transporter) {
-      transporter = nodemailer.createTransport({
-        pool: true,
-        maxConnections: 2,
-        maxMessages: 50,
-        connectionTimeout: 15_000,
-        greetingTimeout: 15_000,
-        socketTimeout: 60_000,
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure,
-        auth: {
-          user: smtp.user,
-          pass: smtp.pass,
-        },
-      });
-      smtpTransports().set(key, transporter);
-    }
-
     await transporter.sendMail({
       from: message.from || options.defaultFrom,
       to: message.to,
@@ -174,13 +195,30 @@ async function deliverSmtpMail(
         contentType: item.contentType,
       })),
     });
-
     return { ok: true, delivered: true };
   } catch (error) {
+    evictSmtpTransport(key);
     const detail = error instanceof Error ? error.message : String(error);
     console.error(`${options.logPrefix} SMTP send failed`, detail);
-    return { ok: false, error: "smtp_send_failed" };
+    return { ok: false, error: "smtp_send_failed", transient: isTransientSmtpError(error) };
   }
+}
+
+async function deliverSmtpMail(
+  message: OutboundMailMessage,
+  smtp: SmtpConfig,
+  options: {
+    logPrefix: string;
+    defaultFrom: string;
+  },
+): Promise<OutboundMailResult> {
+  const first = await sendWithTransport(message, smtp, options);
+  if (first.ok || !first.transient) {
+    return first.ok ? first : { ok: false, error: first.error };
+  }
+  console.error(`${options.logPrefix} SMTP retry after transient failure`);
+  const retry = await sendWithTransport(message, smtp, options);
+  return retry.ok ? retry : { ok: false, error: retry.error };
 }
 
 export function closeSmtpTransports() {

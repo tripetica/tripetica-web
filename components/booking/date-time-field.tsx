@@ -704,7 +704,13 @@ function DesktopDateTimeField({
           maxHeight: 420,
         });
   const intlLocale =
-    locale === "ru" ? "ru-RU" : locale === "tr" ? "tr-TR" : "en-GB";
+    locale === "ru"
+      ? "ru-RU"
+      : locale === "tr"
+        ? "tr-TR"
+        : locale === "ar"
+          ? "ar-SA"
+          : "en-GB";
 
   function toggleOpen() {
     if (open) {
@@ -885,7 +891,9 @@ function DesktopDateTimeField({
                           ? "«Сначала выберите дату»"
                           : locale === "tr"
                             ? "Önce tarihi seçin"
-                            : "Select a date first"}
+                            : locale === "ar"
+                              ? "اختر التاريخ أولاً"
+                              : "Select a date first"}
                       </span>
                     )}
                     <div className="datetime-wheels-grid">

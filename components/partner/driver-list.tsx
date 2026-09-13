@@ -97,6 +97,7 @@ export function PartnerDriverList({
                   </button>
                 </th>
                 <th>{copy.phoneNumber}</th>
+                <th>{copy.driverEmail}</th>
                 <th>{copy.driverLanguages}</th>
                 <th>{copy.driverStatus}</th>
                 <th>{copy.driverDetail}</th>
@@ -108,6 +109,7 @@ export function PartnerDriverList({
                   <td>{index + 1}</td>
                   <td>{driver.fullName}</td>
                   <td>{formatPartnerFleetPhone(driver.phone)}</td>
+                  <td>{driver.email?.trim() || "—"}</td>
                   <td>{formatPartnerDriverLanguages(driver.languageCodes, locale)}</td>
                   <td>
                     <span

@@ -26,6 +26,8 @@ const ERROR_COPY: Record<
   "invalid-phone": "invalidPhone",
   "invalid-languages": "invalidDriverLanguages",
   "duplicate-national-id": "duplicateNationalId",
+  "invalid-email": "invalidDriverEmail",
+  "duplicate-email": "duplicateDriverEmail",
   "not-found": "driverSaveFailed",
   "in-use": "driverSaveFailed",
   failed: "driverSaveFailed",
@@ -58,6 +60,10 @@ export function PartnerDriverCreateForm({ locale, copy }: PartnerDriverCreateFor
           maxLength={11}
           required
         />
+      </label>
+      <label className="ops-field">
+        <span>{copy.driverEmail}</span>
+        <input name="email" type="email" autoComplete="email" />
       </label>
       <PhoneField
         locale={locale}

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { OpsUserForm } from "@/components/ops/user-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
@@ -25,7 +25,7 @@ export default async function OpsUserDetailPage({
   if (!user) {
     notFound();
   }
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   const canManage = actorCan(actor, "users.manage");
 
   return (

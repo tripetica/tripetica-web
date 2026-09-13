@@ -596,7 +596,8 @@ export function BosphorusTripPanel({
                 inputMode="text"
                 autoComplete="off"
                 spellCheck={false}
-                className="booking-flight-input"
+                className="booking-flight-input ltr-isolate"
+                dir="ltr"
                 placeholder={pageCopy.flightCodePlaceholder}
                 value={flightInput}
                 onFocus={() => {

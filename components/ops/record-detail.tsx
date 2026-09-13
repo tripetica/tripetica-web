@@ -7,6 +7,7 @@ import {
   type OpsDetailPlace,
   type OpsRecordDetail,
 } from "@/lib/ops/record-detail";
+import { DriverTaskSection } from "@/components/ops/driver-task-section";
 import { PaymentHistorySection } from "@/components/ops/payment-history-section";
 
 type RecordDetailProps = {
@@ -168,6 +169,13 @@ export function RecordDetail({
         </section>
       )}
 
+      {detail.passengerNote ? (
+        <section className="ops-passenger-note">
+          <h3>{copy.passengerNote}</h3>
+          <p className="ops-passenger-note-value">{detail.passengerNote}</p>
+        </section>
+      ) : null}
+
       <section>
         <h3>{copy.passengerInfo}</h3>
         {detail.passengers.length === 0 ? (
@@ -214,6 +222,14 @@ export function RecordDetail({
           <h4 className="ops-assignment-subhead">{copy.assignmentVehicle}</h4>
           <DetailRows rows={detail.operationAssignment.vehicle} />
         </section>
+      ) : null}
+
+      {detail.driverTask ? (
+        <DriverTaskSection
+          copy={copy}
+          reservationId={detail.id}
+          driverTask={detail.driverTask}
+        />
       ) : null}
 
       {detail.technical && detail.technical.length > 0 ? (

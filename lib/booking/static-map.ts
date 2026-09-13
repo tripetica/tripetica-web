@@ -25,6 +25,9 @@ function mapLanguage(locale: Locale) {
   if (locale === "tr") {
     return "tr";
   }
+  if (locale === "ar") {
+    return "ar";
+  }
   return "en";
 }
 

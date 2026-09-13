@@ -1270,7 +1270,8 @@ export function TransferTripPanel({
                 inputMode="text"
                 autoComplete="off"
                 spellCheck={false}
-                className="booking-flight-input"
+                className="booking-flight-input ltr-isolate"
+                dir="ltr"
                 placeholder={copy.flightCodePlaceholder}
                 value={flightInput}
                 onFocus={() => {

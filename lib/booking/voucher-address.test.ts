@@ -9,6 +9,7 @@ test("voucher Turkey label follows locale (EN uses Türkiye)", () => {
   assert.equal(voucherTurkeyCountryLabel("tr"), "Türkiye");
   assert.equal(voucherTurkeyCountryLabel("en"), "Türkiye");
   assert.equal(voucherTurkeyCountryLabel("ru"), "Турция");
+  assert.equal(voucherTurkeyCountryLabel("ar"), "تركيا");
 });
 
 test("TR voucher replaces Russian Turkey country remnant", () => {

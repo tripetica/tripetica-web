@@ -1,4 +1,4 @@
-import { type Locale } from "@/lib/i18n/config";
+import { asPanelLocale, type Locale, type PanelLocale } from "@/lib/i18n/config";
 
 export const PARTNER_DRIVER_LANGUAGE_CODES = [
   "tr",
@@ -43,7 +43,7 @@ export const PARTNER_DRIVER_LANGUAGE_CODES = [
 
 export type PartnerDriverLanguageCode = (typeof PARTNER_DRIVER_LANGUAGE_CODES)[number];
 
-const LABELS: Record<PartnerDriverLanguageCode, Record<Locale, string>> = {
+const LABELS: Record<PartnerDriverLanguageCode, Record<PanelLocale, string>> = {
   tr: { tr: "Türkçe", en: "Turkish", ru: "Турецкий" },
   en: { tr: "İngilizce", en: "English", ru: "Английский" },
   ru: { tr: "Rusça", en: "Russian", ru: "Русский" },
@@ -108,13 +108,14 @@ export function partnerDriverLanguageLabel(
   if (!isPartnerDriverLanguageCode(code)) {
     return code;
   }
-  return LABELS[code][locale];
+  return LABELS[code][asPanelLocale(locale)];
 }
 
 export function partnerDriverLanguageOptions(locale: Locale) {
+  const panelLocale = asPanelLocale(locale);
   return PARTNER_DRIVER_LANGUAGE_CODES.map((code) => ({
     code,
-    label: LABELS[code][locale],
+    label: LABELS[code][panelLocale],
   }));
 }
 
@@ -127,7 +128,7 @@ export function formatPartnerDriverLanguages(
   if (normalized.length === 0) {
     return "—";
   }
-  const labels = normalized.map((code) => LABELS[code][locale]);
+  const labels = normalized.map((code) => LABELS[code][asPanelLocale(locale)]);
   if (labels.length <= maxVisible) {
     return labels.join(", ");
   }
@@ -143,7 +144,7 @@ export function formatPartnerDriverLanguagesFull(
   if (normalized.length === 0) {
     return "—";
   }
-  return normalized.map((code) => LABELS[code][locale]).join(" · ");
+  return normalized.map((code) => LABELS[code][asPanelLocale(locale)]).join(" · ");
 }
 
 export function partnerDriverLanguageSearchHaystack(

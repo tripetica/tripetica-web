@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { OpsPagination } from "@/components/ops/pagination";
 import { PartnerTable } from "@/components/ops/partner-table";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { parsePage, parseQuery } from "@/lib/ops/format";
@@ -30,7 +30,7 @@ export default async function OpsPartnersPage({
     dir: parseQuery(query.dir),
   });
   const page = parsePage(query.page);
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   const { items, total } = await listOpsPartners({
     query: filters.query,
     status: filters.status,

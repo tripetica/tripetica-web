@@ -43,6 +43,22 @@ test("Twilio request uses Hangup TwiML and does not embed a conversation", () =>
   assert.doesNotMatch(request.body, /Say|Gather|Play/);
 });
 
+test("Twilio request can send assignment-alarm Say TwiML without changing Hangup default", () => {
+  const config = readTwilioVoiceConfig(validEnv)!;
+  const hangup = new URLSearchParams(buildTwilioCallRequest(config).body);
+  assert.equal(hangup.get("Twiml"), VOICE_ALERT_TWIML);
+
+  const spoken = new URLSearchParams(
+    buildTwilioCallRequest(config, {
+      twiml: '<Response><Say language="tr-TR">Test</Say></Response>',
+    }).body,
+  );
+  assert.equal(
+    spoken.get("Twiml"),
+    '<Response><Say language="tr-TR">Test</Say></Response>',
+  );
+});
+
 test("startTwilioVoiceCall treats HTTP and missing SID as failure", async () => {
   const config = readTwilioVoiceConfig(validEnv)!;
   const ok = await startTwilioVoiceCall(config, async () =>

@@ -2,6 +2,7 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import { parseOpsAmount, selectedStoredAmount } from "@/lib/ops/money";
+import { asPanelLocale } from "@/lib/i18n/config";
 import { partnerCopy } from "@/lib/partner/copy";
 import { formatPartnerMoney, partnerPayoutAmount } from "@/lib/partner/job-payout";
 import {
@@ -98,7 +99,7 @@ async function releaseRank(row: JobPushRow, rank: PartnerJobRank) {
     return;
   }
   await sendPartnerPushToSubscriptions(subscriptions, (subscription) => {
-    const copy = partnerCopy[subscription.locale];
+    const copy = partnerCopy[asPanelLocale(subscription.locale)];
     return buildPartnerJobPushPayload({
       reservationId: fresh.id,
       locale: subscription.locale,

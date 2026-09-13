@@ -53,8 +53,13 @@ export function partnerJobOccupancyLine(
 export function partnerJobOccupancyCompact(input: {
   passengerCount: number | null;
   luggageCount: number | null;
+  babySeatCount?: number | null;
 }) {
-  return `${input.passengerCount ?? 0} / ${input.luggageCount ?? 0}`;
+  return `${input.passengerCount ?? 0} / ${input.luggageCount ?? 0} / ${input.babySeatCount ?? 0}`;
+}
+
+export function partnerJobNeedsBabySeat(count: number | null | undefined) {
+  return (count ?? 0) > 0;
 }
 
 export function partnerJobNotePreview(notes: string | null | undefined, presentLabel: string) {

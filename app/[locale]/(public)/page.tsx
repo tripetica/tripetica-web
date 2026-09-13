@@ -39,7 +39,7 @@ const homeCopy: Record<
     socialImageAlt:
       "Tripetica: трансферы, автомобиль с водителем и частные туры по Турции",
     openGraphLocale: "ru_RU",
-    openGraphAlternateLocales: ["en_US", "tr_TR"],
+    openGraphAlternateLocales: ["en_US", "tr_TR", "ar_AR"],
   },
   en: {
     title:
@@ -52,7 +52,7 @@ const homeCopy: Record<
     socialImageAlt:
       "Tripetica airport transfers, chauffeur service and private tours across Türkiye",
     openGraphLocale: "en_US",
-    openGraphAlternateLocales: ["ru_RU", "tr_TR"],
+    openGraphAlternateLocales: ["ru_RU", "tr_TR", "ar_AR"],
   },
   tr: {
     title:
@@ -65,7 +65,20 @@ const homeCopy: Record<
     socialImageAlt:
       "Tripetica havalimanı transferi, şoförlü araç ve Türkiye genelinde özel turlar",
     openGraphLocale: "tr_TR",
-    openGraphAlternateLocales: ["ru_RU", "en_US"],
+    openGraphAlternateLocales: ["ru_RU", "en_US", "ar_AR"],
+  },
+  ar: {
+    title:
+      "النقل من المطار، خدمة السائق الخاص والجولات الخاصة في إسطنبول وأنطاليا وتركيا | Tripetica",
+    description:
+      "النقل من المطار، النقل الخاص، خدمة السائق الخاص والجولات الخاصة في إسطنبول وأنطاليا وفي أنحاء تركيا. حلول سفر آمنة ومريحة ومصمّمة وفق احتياجاتكم.",
+    socialTitle:
+      "Tripetica | النقل من المطار، السائق الخاص والجولات الخاصة",
+    socialImage: "/og-home-en.jpg",
+    socialImageAlt:
+      "Tripetica: النقل من المطار وخدمة السائق الخاص والجولات الخاصة في تركيا",
+    openGraphLocale: "ar_AR",
+    openGraphAlternateLocales: ["ru_RU", "en_US", "tr_TR"],
   },
 };
 
@@ -152,7 +165,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         "@id": `${getSiteUrl().origin}/#website`,
         url: getSiteUrl().origin,
         name: "Tripetica",
-        inLanguage: ["tr", "en", "ru"],
+        inLanguage: ["tr", "en", "ru", "ar"],
         publisher: { "@id": organizationId },
       },
     ],

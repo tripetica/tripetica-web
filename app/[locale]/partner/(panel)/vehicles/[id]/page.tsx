@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerVehicleDetail } from "@/components/partner/vehicle-detail";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { getPartnerVehicle } from "@/lib/partner/fleet";
@@ -25,7 +25,7 @@ export default async function PartnerVehicleDetailPage({
       <PartnerVehicleDetail
         key={`${vehicle.id}:${vehicle.updatedAt}`}
         locale={locale}
-        copy={partnerCopy[locale]}
+        copy={partnerCopy[asPanelLocale(locale)]}
         vehicle={vehicle}
       />
     </div>

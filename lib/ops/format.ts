@@ -66,6 +66,14 @@ export function parsePage(value: string | string[] | undefined) {
   return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
+/** Visual index in the current filtered/sorted result set, not a stored id. */
+export function listRowNumber(page: number, pageSize: number, rowIndex: number) {
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const safeSize = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 1;
+  const safeIndex = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : 0;
+  return (safePage - 1) * safeSize + safeIndex + 1;
+}
+
 export function parseQuery(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   return (raw ?? "").trim();

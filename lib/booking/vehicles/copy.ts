@@ -179,6 +179,49 @@ export const vehicleCardCopy: Record<Locale, VehicleCardCopy> = {
     previousImage: "Предыдущее изображение",
     nextImage: "Следующее изображение",
   },
+  ar: {
+    title: "سيدان بريميوم إكونومي",
+    example: "Renault Clio أو ما شابه",
+    standardCapacityLabel: "السعة القياسية",
+    standardCapacity: "راكبان + قطعتا أمتعة",
+    maxCapacityLabel: "السعة القصوى",
+    maxCapacity: "3 ركاب + 3 أمتعة",
+    baseFee: "رسوم الخدمة الأساسية",
+    bursaBridgeRoute: "خيار الجسر والطريق السريع",
+    bursaUludagAscent: "الصعود إلى أولوداغ بالمركبة",
+    extraPassenger: "رسوم راكب إضافي",
+    extraLuggage: "رسوم أمتعة إضافية",
+    babySeat: "رسوم مقعد أطفال",
+    meetAndGreet: "رسوم الاستقبال والترحيب",
+    total: "الأجرة الإجمالية",
+    currencyGroup: "العملة",
+    rateUnavailable: "سعر الصرف غير متاح مؤقتًا",
+    currencyNames: {
+      USD: "الدولار الأمريكي",
+      EUR: "اليورو",
+      TRY: "الليرة التركية",
+      RUB: "الروبل الروسي",
+      GBP: "الجنيه الإسترليني",
+    },
+    select: "اختر وتابع",
+    selected: "تم الاختيار",
+    dropoffDistanceFee: "رسوم إضافية لنقطة الوصول",
+    selectBlockedDesktop: "يُرجى إجراء اختياراتكم من اللوحة على اليسار.",
+    selectUnappliedDesktop: "يُرجى تطبيق التغييرات في اللوحة على اليسار.",
+    gallery: {
+      exterior: "الخارج",
+      interior: "الداخل",
+      luggage: "الأمتعة",
+    },
+    alt: {
+      exterior: "المظهر الخارجي لسيدان بريميوم إكونومي",
+      interior: "المقصورة الداخلية لسيدان بريميوم إكونومي",
+      luggage: "حيز الأمتعة في سيدان بريميوم إكونومي",
+    },
+    closeGallery: "إغلاق الصورة",
+    previousImage: "الصورة السابقة",
+    nextImage: "الصورة التالية",
+  },
 };
 
 export type VehicleIdentityCopy = Pick<
@@ -223,6 +266,17 @@ const standardMinivanIdentity: Record<Locale, VehicleIdentityCopy> = {
       luggage: "Багажное отделение стандартного минивэна",
     },
   },
+  ar: {
+    title: "ميني فان قياسي",
+    example: "Volkswagen Caravelle أو ما شابه",
+    standardCapacity: "5 ركاب + 5 أمتعة",
+    maxCapacity: "7 ركاب + 8 أمتعة",
+    alt: {
+      exterior: "المظهر الخارجي للميني فان القياسي",
+      interior: "المقصورة الداخلية للميني فان القياسي",
+      luggage: "حيز الأمتعة في الميني فان القياسي",
+    },
+  },
 };
 
 const businessMinivanIdentity: Record<Locale, VehicleIdentityCopy> = {
@@ -257,6 +311,17 @@ const businessMinivanIdentity: Record<Locale, VehicleIdentityCopy> = {
       exterior: "Внешний вид бизнес минивэна",
       interior: "Салон бизнес минивэна",
       luggage: "Багажное отделение бизнес минивэна",
+    },
+  },
+  ar: {
+    title: "ميني فان بزنس",
+    example: "Mercedes-Benz Vito",
+    standardCapacity: "4 ركاب + 4 أمتعة",
+    maxCapacity: "6 ركاب + 6 أمتعة",
+    alt: {
+      exterior: "المظهر الخارجي لميني فان بزنس",
+      interior: "المقصورة الداخلية لميني فان بزنس",
+      luggage: "حيز الأمتعة في ميني فان بزنس",
     },
   },
 };
@@ -307,6 +372,21 @@ const firstClassMinivanIdentity: Record<Locale, VehicleIdentityCopy> = {
       luggage: "Детали салона First Class минивэна",
     },
   },
+  ar: {
+    title: "ميني فان فيرست كلاس",
+    example: "Mercedes-Benz Vito VIP فائقة الفخامة",
+    standardCapacity: "3 ركاب + 3 أمتعة",
+    maxCapacity: "5 ركاب + 5 أمتعة",
+    gallery: {
+      luggage: "المقصورة",
+    },
+    includedServices: "يشمل الاستقبال والترحيب وموقف السيارات.",
+    alt: {
+      exterior: "المظهر الخارجي لميني فان فيرست كلاس",
+      interior: "المقصورة الداخلية لميني فان فيرست كلاس",
+      luggage: "تفاصيل مقصورة ميني فان فيرست كلاس",
+    },
+  },
 };
 
 const firstClassSedanIdentity: Record<Locale, VehicleIdentityCopy> = {
@@ -346,6 +426,18 @@ const firstClassSedanIdentity: Record<Locale, VehicleIdentityCopy> = {
       luggage: "Багажное отделение First Class седана",
     },
   },
+  ar: {
+    title: "سيدان فيرست كلاس",
+    example: "Mercedes-Benz S-Class أو ما شابه",
+    standardCapacity: "راكبان + قطعتا أمتعة",
+    maxCapacity: "3 ركاب + 3 أمتعة",
+    includedServices: "يشمل الاستقبال والترحيب وموقف السيارات.",
+    alt: {
+      exterior: "المظهر الخارجي لسيدان فيرست كلاس",
+      interior: "المقصورة الداخلية لسيدان فيرست كلاس",
+      luggage: "حيز الأمتعة في سيدان فيرست كلاس",
+    },
+  },
 };
 
 const minibusIdentity: Record<Locale, VehicleIdentityCopy> = {
@@ -380,6 +472,17 @@ const minibusIdentity: Record<Locale, VehicleIdentityCopy> = {
       exterior: "Внешний вид минибуса",
       interior: "Салон минибуса",
       luggage: "Багажное отделение минибуса",
+    },
+  },
+  ar: {
+    title: "ميني باص",
+    example: "Mercedes-Benz Sprinter أو ما شابه",
+    standardCapacity: "9 ركاب + 9 أمتعة",
+    maxCapacity: "18 راكبًا + 19 قطعة أمتعة",
+    alt: {
+      exterior: "المظهر الخارجي للميني باص",
+      interior: "المقصورة الداخلية للميني باص",
+      luggage: "حيز الأمتعة في الميني باص",
     },
   },
 };
@@ -418,6 +521,17 @@ const midibusIdentity: Record<Locale, VehicleIdentityCopy> = {
       luggage: "Багажное отделение мидибуса",
     },
   },
+  ar: {
+    title: "ميدي باص",
+    example: "Isuzu Turkuaz أو ما شابه",
+    standardCapacity: "20 راكبًا + 20 قطعة أمتعة",
+    maxCapacity: "25 راكبًا + 27 قطعة أمتعة",
+    alt: {
+      exterior: "المظهر الخارجي للميدي باص",
+      interior: "المقصورة الداخلية للميدي باص",
+      luggage: "حيز الأمتعة في الميدي باص",
+    },
+  },
 };
 
 const busIdentity: Record<Locale, VehicleIdentityCopy> = {
@@ -452,6 +566,17 @@ const busIdentity: Record<Locale, VehicleIdentityCopy> = {
       exterior: "Внешний вид автобуса",
       interior: "Салон автобуса",
       luggage: "Багажное отделение автобуса",
+    },
+  },
+  ar: {
+    title: "حافلة",
+    example: "Mercedes-Benz Tourismo أو ما شابه",
+    standardCapacity: "35 راكبًا + 35 قطعة أمتعة",
+    maxCapacity: "45 راكبًا + 45 قطعة أمتعة",
+    alt: {
+      exterior: "المظهر الخارجي للحافلة",
+      interior: "المقصورة الداخلية للحافلة",
+      luggage: "حيز الأمتعة في الحافلة",
     },
   },
 };

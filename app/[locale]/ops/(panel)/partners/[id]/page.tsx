@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerDetail } from "@/components/ops/partner-detail";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { getOpsPartner, getPrimaryPartnerId } from "@/lib/ops/partners";
@@ -39,7 +39,7 @@ export default async function OpsPartnerDetailPage({
     listOpsPartnerAcceptedJobs(partner.id, locale),
     getPrimaryPartnerId(),
   ]);
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
 
   return (
     <PartnerDetail

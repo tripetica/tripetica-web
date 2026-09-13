@@ -10,7 +10,7 @@ import {
 } from "./euro";
 import { type LocationGeo, type TransferProvinceCode } from "./location-codes";
 
-export const TRANSFER_PRICING_VERSION = "transfer-pricing.v1";
+export const TRANSFER_PRICING_VERSION = "transfer-pricing.v2";
 export const TRANSFER_PRICING_SERVICE_TYPE = "transfer";
 
 export type TransferOpeningFeeRule = {
@@ -84,13 +84,13 @@ export const TRANSFER_PRICING_V1: TransferPricingRules = {
   openingFees: [
     { maxKmInclusive: 15, feeEur: "25" },
     { maxKmInclusive: 30, feeEur: "23" },
-    { maxKmInclusive: null, feeEur: "15" },
+    { maxKmInclusive: null, feeEur: "20" },
   ],
   distanceBands: [
-    { fromKmExclusive: 0, toKmInclusive: 60, rateEurPerKm: "0.55" },
-    { fromKmExclusive: 60, toKmInclusive: 90, rateEurPerKm: "0.60" },
-    { fromKmExclusive: 90, toKmInclusive: 120, rateEurPerKm: "0.65" },
-    { fromKmExclusive: 120, toKmInclusive: 160, rateEurPerKm: "0.70" },
+    { fromKmExclusive: 0, toKmInclusive: 60, rateEurPerKm: "0.60" },
+    { fromKmExclusive: 60, toKmInclusive: 90, rateEurPerKm: "0.65" },
+    { fromKmExclusive: 90, toKmInclusive: 120, rateEurPerKm: "0.70" },
+    { fromKmExclusive: 120, toKmInclusive: 160, rateEurPerKm: "0.75" },
     { fromKmExclusive: 160, toKmInclusive: 220, rateEurPerKm: "0.80" },
     { fromKmExclusive: 220, toKmInclusive: 300, rateEurPerKm: "0.90" },
     { fromKmExclusive: 300, toKmInclusive: 400, rateEurPerKm: "1.00" },

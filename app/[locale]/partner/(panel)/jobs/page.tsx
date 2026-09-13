@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerJobList } from "@/components/partner/job-list";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { listOpenPartnerJobs } from "@/lib/partner/jobs";
@@ -15,7 +15,7 @@ export default async function PartnerJobsPage({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
   const jobs = await listOpenPartnerJobs({
     partnerId: actor.partnerId,
     userId: actor.userId,

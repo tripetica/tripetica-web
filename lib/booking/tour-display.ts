@@ -77,6 +77,9 @@ export function formatLayoverPackageCoverage(locale: Locale): string {
   if (locale === "tr") {
     return `${LAYOVER_PACKAGE_HOURS} saat / ${LAYOVER_PACKAGE_KM} km`;
   }
+  if (locale === "ar") {
+    return `${LAYOVER_PACKAGE_HOURS} ساعات / ${LAYOVER_PACKAGE_KM} كم`;
+  }
   return `${LAYOVER_PACKAGE_HOURS} hours / ${LAYOVER_PACKAGE_KM} km`;
 }
 
@@ -84,6 +87,7 @@ export const layoverUsageOverrunNote: Record<Locale, string> = {
   tr: "7 saati aşan kullanım için +15 € / saat, 120 km'yi aşan kullanım için +0,50 € / km ek ücret uygulanır.",
   en: "Usage beyond 7 hours is charged at +€15/hour; usage beyond 120 km at +€0.50/km.",
   ru: "За использование свыше 7 часов взимается +15 €/час; за пробег свыше 120 км — +0,50 €/км.",
+  ar: "يُطبَّق رسم +15 € / ساعة عند تجاوز 7 ساعات، و+0,50 € / كم عند تجاوز 120 كم.",
 };
 
 export const layoverVehicleTariffCopy: Record<
@@ -105,6 +109,11 @@ export const layoverVehicleTariffCopy: Record<
     hourOverrun: "Превышение по времени: +15 EUR / час",
     kmOverrun: "Превышение по км: +0,50 EUR / км",
   },
+  ar: {
+    packageLabel: "تغطية الباقة",
+    hourOverrun: "تجاوز المدة: +15 EUR / ساعة",
+    kmOverrun: "تجاوز المسافة: +0,50 EUR / كم",
+  },
 };
 
 export function isLayoverTourDraft(
@@ -121,6 +130,9 @@ export function formatHalfDayPackageCoverage(locale: Locale): string {
   if (locale === "tr") {
     return `${HALF_DAY_PACKAGE_HOURS} saat / ${HALF_DAY_PACKAGE_KM} km`;
   }
+  if (locale === "ar") {
+    return `${HALF_DAY_PACKAGE_HOURS} ساعات / ${HALF_DAY_PACKAGE_KM} كم`;
+  }
   return `${HALF_DAY_PACKAGE_HOURS} hours / ${HALF_DAY_PACKAGE_KM} km`;
 }
 
@@ -131,6 +143,9 @@ export function formatFullDayPackageCoverage(locale: Locale): string {
   if (locale === "tr") {
     return `${FULL_DAY_PACKAGE_HOURS} saat / ${FULL_DAY_PACKAGE_KM} km`;
   }
+  if (locale === "ar") {
+    return `${FULL_DAY_PACKAGE_HOURS} ساعات / ${FULL_DAY_PACKAGE_KM} كم`;
+  }
   return `${FULL_DAY_PACKAGE_HOURS} hours / ${FULL_DAY_PACKAGE_KM} km`;
 }
 
@@ -140,6 +155,9 @@ export function formatSapancaPackageCoverage(locale: Locale): string {
   }
   if (locale === "tr") {
     return `${SAPANCA_PACKAGE_HOURS} saat`;
+  }
+  if (locale === "ar") {
+    return `${SAPANCA_PACKAGE_HOURS} ساعات`;
   }
   return `${SAPANCA_PACKAGE_HOURS} hours`;
 }
@@ -158,6 +176,9 @@ export function formatBursaPackageCoverage(
   }
   if (locale === "tr") {
     return `${BURSA_PACKAGE_HOURS} saat · ${routeLabel}${uludag}`;
+  }
+  if (locale === "ar") {
+    return `${BURSA_PACKAGE_HOURS} ساعات · ${routeLabel}${uludag}`;
   }
   return `${BURSA_PACKAGE_HOURS} hours · ${routeLabel}${uludag}`;
 }
@@ -189,6 +210,7 @@ export const halfDayUsageOverrunNote: Record<Locale, string> = {
   tr: "Paket kapsamı 6 saat ve 70 km ile sınırlıdır. Paket sınırının aşılması halinde her ilave saat için €15, her ilave kilometre için €0,50 ek ücret uygulanır. Avrupa ve Anadolu yakaları arasında geçiş yapılması halinde €15 ek ücret uygulanır.",
   en: "The package is limited to 6 hours and 70 km. If the package limits are exceeded, each additional hour is charged at €15 and each additional kilometre at €0.50. A €15 surcharge applies when the tour crosses between the European and Asian sides of Istanbul.",
   ru: "Пакет ограничен 6 часами и 70 км. При превышении лимитов пакета каждый дополнительный час оплачивается по €15, каждый дополнительный километр — по €0,50. При переезде между европейской и азиатской частями Стамбула взимается доплата €15.",
+  ar: "الباقة محدودة بـ 6 ساعات و70 كم. عند تجاوز حدود الباقة تُحتسب كل ساعة إضافية بـ 15 € وكل كيلومتر إضافي بـ 0,50 €. يُطبَّق رسم إضافي 15 € عند عبور الجولة بين الجانبين الأوروبي والآسيوي في إسطنبول.",
 };
 
 export const halfDayVehicleTariffCopy: Record<
@@ -213,12 +235,19 @@ export const halfDayVehicleTariffCopy: Record<
     kmOverrun: "Превышение по км: +0,50 EUR / км",
     crossingFee: "Переезд Европа–Азия: +15 EUR",
   },
+  ar: {
+    packageLabel: "تغطية الباقة",
+    hourOverrun: "تجاوز المدة: +15 EUR / ساعة",
+    kmOverrun: "تجاوز المسافة: +0,50 EUR / كم",
+    crossingFee: "عبور أوروبا–آسيا: +15 EUR",
+  },
 };
 
 export const fullDayUsageOverrunNote: Record<Locale, string> = {
   tr: "Paket kapsamı 10 saat ve 110 km ile sınırlıdır. Paket sınırının aşılması halinde her ilave saat için €15, her ilave kilometre için €0,50 ek ücret uygulanır. Avrupa ve Anadolu yakaları arasında geçiş yapılması halinde €15 ek ücret uygulanır.",
   en: "The package is limited to 10 hours and 110 km. If the package limits are exceeded, each additional hour is charged at €15 and each additional kilometre at €0.50. A €15 surcharge applies when the tour crosses between the European and Asian sides of Istanbul.",
   ru: "Пакет ограничен 10 часами и 110 км. При превышении лимитов пакета каждый дополнительный час оплачивается по €15, каждый дополнительный километр — по €0,50. При переезде между европейской и азиатской частями Стамбула взимается доплата €15.",
+  ar: "الباقة محدودة بـ 10 ساعات و110 كم. عند تجاوز حدود الباقة تُحتسب كل ساعة إضافية بـ 15 € وكل كيلومتر إضافي بـ 0,50 €. يُطبَّق رسم إضافي 15 € عند عبور الجولة بين الجانبين الأوروبي والآسيوي في إسطنبول.",
 };
 
 export const fullDayVehicleTariffCopy: Record<
@@ -243,12 +272,19 @@ export const fullDayVehicleTariffCopy: Record<
     kmOverrun: "Превышение по км: +0,50 EUR / км",
     crossingFee: "Переезд Европа–Азия: +15 EUR",
   },
+  ar: {
+    packageLabel: "تغطية الباقة",
+    hourOverrun: "تجاوز المدة: +15 EUR / ساعة",
+    kmOverrun: "تجاوز المسافة: +0,50 EUR / كم",
+    crossingFee: "عبور أوروبا–آسيا: +15 EUR",
+  },
 };
 
 export const sapancaUsageOverrunNote: Record<Locale, string> = {
   tr: "Paket kapsamı 11 saate kadardır. Süre aşımında her ilave saat için 15,00 € ek ücret uygulanır.",
   en: "The package covers up to 11 hours. Each additional hour beyond that is charged at €15.00.",
   ru: "Пакет рассчитан на 11 часов. Каждый дополнительный час сверх этого оплачивается по 15,00 €.",
+  ar: "تغطي الباقة حتى 11 ساعة. تُحتسب كل ساعة إضافية بعد ذلك بـ 15,00 €.",
 };
 
 export const sapancaVehicleTariffCopy: Record<
@@ -267,12 +303,17 @@ export const sapancaVehicleTariffCopy: Record<
     packageLabel: "Пакет включает",
     hourOverrun: "Превышение по времени: +15 EUR / час",
   },
+  ar: {
+    packageLabel: "تغطية الباقة",
+    hourOverrun: "تجاوز المدة: +15 EUR / ساعة",
+  },
 };
 
 export const bursaUsageOverrunNote: Record<Locale, string> = {
   tr: "Paket kapsamı 12 saate kadardır. Süre aşımında her ilave saat için 15,00 € ek ücret uygulanır.",
   en: "The package covers up to 12 hours. Each additional hour beyond that is charged at €15.00.",
   ru: "Пакет рассчитан на 12 часов. Каждый дополнительный час сверх этого оплачивается по 15,00 €.",
+  ar: "تغطي الباقة حتى 12 ساعة. تُحتسب كل ساعة إضافية بعد ذلك بـ 15,00 €.",
 };
 
 export const bursaVehicleTariffCopy: Record<
@@ -301,6 +342,12 @@ export const bursaVehicleTariffCopy: Record<
     hourOverrun: "Превышение по времени: +15 EUR / час",
     bridgeRouteSurcharge: `Мост + автомагистраль: +${BURSA_BRIDGE_ROUTE_SURCHARGE_EUR} EUR`,
     uludagVehicleAscent: `Подъём на Улудаг на автомобиле: +${BURSA_ULUDAG_ASCENT_SURCHARGE_EUR} EUR`,
+  },
+  ar: {
+    packageLabel: "تغطية الباقة",
+    hourOverrun: "تجاوز المدة: +15 EUR / ساعة",
+    bridgeRouteSurcharge: `خيار الجسر والطريق السريع: +${BURSA_BRIDGE_ROUTE_SURCHARGE_EUR} EUR`,
+    uludagVehicleAscent: `الصعود إلى أولوداغ بالمركبة: +${BURSA_ULUDAG_ASCENT_SURCHARGE_EUR} EUR`,
   },
 };
 
@@ -334,6 +381,12 @@ const overrunRateCopy: Record<
     kmLabel: "Превышение по км",
     hourUnit: "час",
     kmUnit: "км",
+  },
+  ar: {
+    hourLabel: "تجاوز المدة",
+    kmLabel: "تجاوز المسافة",
+    hourUnit: "ساعة",
+    kmUnit: "كم",
   },
 };
 

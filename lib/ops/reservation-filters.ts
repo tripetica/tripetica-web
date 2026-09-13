@@ -29,6 +29,8 @@ export type ReservationSortDir = (typeof RESERVATION_SORT_DIRS)[number];
 
 export const RESERVATION_STATUSES = ["confirmed", "cancelled", "payment_pending"] as const;
 export const RESERVATION_PAYMENT_METHODS = ["cash", "sbp"] as const;
+export const RESERVATION_OPERATION_FILTERS = ["completed"] as const;
+export type ReservationOperationFilter = (typeof RESERVATION_OPERATION_FILTERS)[number];
 
 const OPERATION_TOLERANCE_MS = 6 * 60 * 60 * 1000;
 
@@ -41,6 +43,7 @@ export type ReservationListFilters = {
   to: string;
   sort: ReservationSortField | "";
   dir: ReservationSortDir | "";
+  operation?: ReservationOperationFilter | "";
 };
 
 export type PickupAtBounds =
@@ -73,6 +76,12 @@ export function parseReservationStatus(value: string) {
 
 export function parseReservationPayment(value: string) {
   return (RESERVATION_PAYMENT_METHODS as readonly string[]).includes(value) ? value : "";
+}
+
+export function parseReservationOperation(value: string) {
+  return (RESERVATION_OPERATION_FILTERS as readonly string[]).includes(value)
+    ? (value as ReservationOperationFilter)
+    : "";
 }
 
 export function pickupAtBounds(
@@ -213,12 +222,17 @@ export function reservationQueryRecord(
     to: filters.date === "range" ? filters.to : "",
     sort: filters.sort,
     dir: filters.sort ? filters.dir || "asc" : "",
+    operation: filters.operation ?? "",
   };
 }
 
 export function hasActiveReservationFilters(filters: ReservationListFilters) {
   return Boolean(
-    filters.query || filters.status || filters.payment || filters.date,
+    filters.query ||
+      filters.status ||
+      filters.payment ||
+      filters.date ||
+      filters.operation,
   );
 }
 
@@ -231,6 +245,7 @@ export function parseReservationListFilters(input: {
   to?: string;
   sort?: string;
   dir?: string;
+  operation?: string;
 }): ReservationListFilters {
   const date = parseReservationDatePreset(input.date ?? "");
   const from = parseIsoDate(input.from ?? "") ?? "";
@@ -248,5 +263,6 @@ export function parseReservationListFilters(input: {
     to: date === "range" ? to : "",
     sort,
     dir,
+    operation: parseReservationOperation(input.operation ?? ""),
   };
 }

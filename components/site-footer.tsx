@@ -88,8 +88,12 @@ export function SiteFooter({ locale }: SiteFooterProps) {
             </section>
 
             <div className="site-footer-meta">
-              <p>{copy.tursab}</p>
-              <p>{copy.d2}</p>
+              <p className="ltr-isolate" dir="ltr">
+                {copy.tursab}
+              </p>
+              <p className="ltr-isolate" dir="ltr">
+                {copy.d2}
+              </p>
             </div>
           </div>
 
@@ -115,7 +119,9 @@ export function SiteFooter({ locale }: SiteFooterProps) {
                     <span className="site-footer-icon">{channel.icon}</span>
                     <span className="site-footer-channel-copy">
                       <span className="site-footer-channel-name">{channel.name}</span>
-                      <span className="site-footer-channel-value">{channel.value}</span>
+                      <span className="site-footer-channel-value ltr-isolate" dir="ltr">
+                        {channel.value}
+                      </span>
                     </span>
                   </a>
                 </li>

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../deploy";
 
 :root {
   --background: #171516;
@@ -301,7 +302,7 @@ body {
   }
 
   .booking-input-wrap .booking-field-button {
-    padding-right: 2.2rem;
+    padding-inline-end: 2.2rem;
   }
 
   .booking-input-wrap .booking-clear {
@@ -352,7 +353,7 @@ body {
     grid-row: 1 / 3;
     grid-column: 1;
     top: 50%;
-    right: calc(0.45rem + 10px);
+    inset-inline-end: calc(0.45rem + 10px);
     margin-top: calc(2.65rem / -2);
   }
 }
@@ -572,7 +573,7 @@ body {
 .booking-swap {
   position: absolute;
   top: calc(50% - 0.58rem);
-  right: 0.45rem;
+  inset-inline-end: 0.45rem;
   z-index: 4;
   display: inline-flex;
   width: 2.65rem;
@@ -591,7 +592,7 @@ body {
 @media (max-width: 639px) {
   .booking-swap {
     top: calc(50% - 0.58rem - 10px);
-    right: calc(0.45rem + 10px + 10px);
+    inset-inline-end: calc(0.45rem + 10px + 10px);
   }
 }
 
@@ -660,7 +661,7 @@ body {
   font: inherit;
   font-size: 0.92rem;
   font-weight: 400;
-  text-align: left;
+  text-align: start;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -674,13 +675,13 @@ body {
 }
 
 .booking-input-wrap .booking-field-input {
-  padding-right: 2.2rem;
+  padding-inline-end: 2.2rem;
 }
 
 .booking-clear {
   position: absolute;
   top: 50%;
-  right: 0.35rem;
+  inset-inline-end: 0.35rem;
   z-index: 5;
   display: inline-flex;
   height: 1.75rem;
@@ -718,7 +719,7 @@ body {
 }
 
 .booking-input-wrap.is-clearable .booking-datetime-native {
-  right: 2.2rem;
+  inset-inline-end: 2.2rem;
   width: auto;
 }
 
@@ -840,7 +841,7 @@ body {
 }
 
 .location-search-wrap .booking-field-input {
-  padding-right: 2.2rem;
+  padding-inline-end: 2.2rem;
 }
 
 .location-sheet {
@@ -1215,11 +1216,11 @@ body {
 }
 
 .booking-input-wrap .booking-field-button {
-  padding-right: 2.2rem;
+  padding-inline-end: 2.2rem;
 }
 
 .booking-input-wrap.is-clearable .booking-field-button {
-  padding-right: 2.75rem;
+  padding-inline-end: 2.75rem;
 }
 
 .booking-field-input::placeholder {
@@ -1402,7 +1403,7 @@ body {
   color: #f3efe6;
   font: inherit;
   font-size: 0.9rem;
-  text-align: left;
+  text-align: start;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1453,7 +1454,7 @@ body {
   .booking-swap {
     position: relative;
     top: auto;
-    right: auto;
+    inset-inline-end: auto;
     width: 2.25rem;
     height: 2.25rem;
     margin-bottom: 0.28rem;
@@ -1580,7 +1581,7 @@ body {
 .contact-launcher {
   position: fixed;
   z-index: 80;
-  right: max(1rem, env(safe-area-inset-right, 0px));
+  inset-inline-end: max(1rem, env(safe-area-inset-inline-end, 0px));
   bottom: max(1rem, calc(0.85rem + env(safe-area-inset-bottom, 0px)));
   transition:
     opacity 0.28s ease,
@@ -6657,7 +6658,7 @@ body:has(.home-hero) {
   padding: 0;
   cursor: pointer;
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 
 .checkout-layout {
@@ -6871,7 +6872,7 @@ body:has(.home-hero) {
 
 .checkout-phone-placeholder {
   color: var(--lt-text-muted, #8b93a7);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -6971,7 +6972,7 @@ body:has(.home-hero) {
   font: inherit;
   font-size: 0.98rem;
   font-weight: 650;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -7031,7 +7032,7 @@ body:has(.home-hero) {
   background: #fff;
   color: var(--lt-text, #172033);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -7564,7 +7565,7 @@ body:has(.home-hero) {
   background: var(--lt-input-bg, #f8fafc);
   color: var(--lt-text, #172033);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -7682,7 +7683,7 @@ body:has(.home-hero) {
   background: transparent;
   color: var(--lt-text, #172033);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -8627,6 +8628,21 @@ body:has(.checkout-info-overlay) .contact-launcher {
   width: 2.4rem;
   text-align: center;
   vertical-align: middle;
+}
+
+.ops-table th.ops-row-num-col,
+.ops-table td.ops-row-num-col {
+  width: 2.1rem;
+  min-width: 2.1rem;
+  max-width: 2.6rem;
+  padding-left: 0.12rem;
+  padding-right: 0.12rem;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: #4a5560;
 }
 
 .ops-check-only {
@@ -9704,6 +9720,22 @@ body:has(.checkout-info-overlay) .contact-launcher {
 .ops-kv dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.ops-passenger-note {
+  margin: 0.85rem 0 0;
+}
+
+.ops-passenger-note h3 {
+  margin: 0 0 0.4rem;
+}
+
+.ops-passenger-note-value {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #172033;
+  line-height: 1.45;
 }
 
 .ops-pre {
@@ -12167,7 +12199,8 @@ body:has(.checkout-info-overlay) .contact-launcher {
   }
 
   .partner-jobs-page .partner-jobs-table .partner-job-occupancy {
-    width: 6.5%;
+    width: 9%;
+    white-space: normal;
   }
 
   .partner-jobs-page .partner-jobs-table .partner-job-payout {
@@ -12222,7 +12255,8 @@ body:has(.checkout-info-overlay) .contact-launcher {
   }
 
   .partner-jobs-accepted .partner-jobs-table .partner-job-occupancy {
-    width: 6%;
+    width: 8%;
+    white-space: normal;
   }
 
   .partner-jobs-accepted .partner-jobs-table .partner-job-payout {
@@ -12241,6 +12275,31 @@ body:has(.checkout-info-overlay) .contact-launcher {
     overflow: visible;
     padding-inline: 0.35rem;
   }
+}
+
+.partner-accepted-filters {
+  margin-bottom: 1rem;
+}
+
+.partner-accepted-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.partner-job-occupancy-value {
+  display: block;
+}
+
+.partner-job-baby-seat {
+  display: block;
+  margin-top: 0.2rem;
+  color: #9a3412;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .partner-job-section {
@@ -12721,4 +12780,397 @@ body:has(.checkout-info-overlay) .contact-launcher {
   .partner-jobs-table .ops-table td:nth-child(2):not([data-label]) {
     display: none;
   }
+}
+
+.ops-table th.ops-col-operation,
+.ops-table td.ops-col-operation {
+  max-width: 8.5rem;
+  white-space: nowrap;
+}
+
+.ops-driver-task-section {
+  margin-top: 1.25rem;
+}
+
+.partner-job-assignment .ops-driver-task-section {
+  margin-top: 0;
+}
+
+.partner-job-assignment .ops-driver-task-section h3 {
+  margin: 0;
+  color: #142e5c;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.ops-driver-task-status {
+  margin: 0.35rem 0 0.55rem;
+}
+
+.ops-driver-task-visibility {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.7rem;
+}
+
+.ops-driver-task-visibility .ops-check {
+  font-size: 0.86rem;
+}
+
+.ops-driver-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ops-driver-task-history ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.driver-task-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  min-height: 100dvh;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1.1rem 1rem 2rem;
+  background: #f4f6fb;
+  color: #142e5c;
+  font-family: inherit;
+}
+
+.driver-portal-header {
+  display: flow-root;
+  flex: 0 0 auto;
+  padding-bottom: 0.9rem;
+}
+
+.driver-portal-header .driver-task-brand {
+  margin-bottom: 0;
+}
+
+.driver-task-body {
+  display: block;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.driver-task-brand {
+  text-align: center;
+  margin-bottom: 0.9rem;
+}
+
+.driver-task-logo {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+}
+
+.driver-task-brand h1 {
+  margin: 0.2rem 0 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+
+.driver-task-progress {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 0.35rem;
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.driver-task-step .is-done {
+  color: #174a31;
+}
+
+.driver-task-arrow {
+  color: #8a94a6;
+  margin: 0 0.1rem;
+}
+
+.driver-task-action {
+  width: 100%;
+  min-height: 3.4rem;
+  border: 0;
+  border-radius: 12px;
+  background: #142e5c;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.driver-task-action:disabled {
+  opacity: 0.65;
+}
+
+.driver-task-done {
+  margin: 0 0 0.9rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #174a31;
+}
+
+.driver-task-error,
+.driver-task-invalid {
+  text-align: center;
+  font-weight: 650;
+}
+
+.driver-task-card {
+  margin-top: 0.9rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #d8deea;
+}
+
+.driver-task-card h2,
+.driver-task-card h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+
+.driver-task-card dl {
+  margin: 0;
+}
+
+.driver-task-card dl div + div {
+  margin-top: 0.45rem;
+}
+
+.driver-task-card dt {
+  color: #5b6578;
+  font-size: 0.75rem;
+}
+
+.driver-task-card dd {
+  margin: 0.1rem 0 0;
+  font-weight: 650;
+}
+
+.driver-task-note p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.driver-task-sensitive {
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid #e4e8f0;
+}
+
+.driver-task-sensitive a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.driver-task-card dd.driver-task-price-other {
+  color: #5b6578;
+  font-weight: 500;
+}
+
+.driver-task-location-address {
+  margin: 0.2rem 0 0;
+  color: #5b6578;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+.driver-task-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  margin-top: 0.4rem;
+}
+
+.driver-task-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid #c9d2e3;
+  border-radius: 8px;
+  background: #f7f8fb;
+  color: #142e5c;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.driver-task-passengers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.driver-task-passengers li + li {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid #edf1f6;
+}
+
+.driver-task-passengers span {
+  display: block;
+  color: #5b6578;
+  font-size: 0.82rem;
+}
+
+.driver-portal-card,
+.driver-portal-jobs,
+.driver-portal-empty {
+  background: #fff;
+  border: 1px solid #d8deea;
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.driver-portal-form + .driver-portal-form {
+  margin-top: 1rem;
+}
+
+.driver-portal-field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.driver-portal-field input {
+  min-height: 2.8rem;
+  border: 1px solid #c9d2e3;
+  border-radius: 10px;
+  padding: 0 0.75rem;
+  font: inherit;
+  font-weight: 500;
+}
+
+.driver-portal-error,
+.driver-portal-empty {
+  margin: 0 0 0.8rem;
+  font-weight: 650;
+}
+
+.driver-portal-nav {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: calc(0.75rem + 0.86rem * 1.25);
+  margin: 0;
+  padding: 0.75rem 1rem 0;
+}
+
+.driver-portal-nav.is-start {
+  justify-content: flex-start;
+}
+
+.driver-portal-nav.is-end {
+  justify-content: flex-end;
+}
+
+.driver-portal-nav form {
+  display: contents;
+}
+
+.driver-portal-nav-link,
+.driver-portal-logout {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #142e5c;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: normal;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 100ms ease, opacity 100ms ease;
+}
+
+.driver-portal-logout:hover {
+  opacity: 0.88;
+}
+
+.driver-portal-logout:active {
+  transform: scale(0.97);
+  opacity: 0.7;
+}
+
+.driver-portal-jobs {
+  display: grid;
+  gap: 1rem;
+}
+
+.driver-portal-jobs h2 {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+}
+
+.driver-portal-job + .driver-portal-job {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #edf1f6;
+}
+
+.driver-portal-job-time,
+.driver-portal-job-service {
+  margin: 0;
+  font-weight: 800;
+}
+
+.driver-portal-job-place,
+.driver-portal-job-status {
+  margin: 0.2rem 0 0;
+  color: #3d4a63;
+}
+
+.driver-portal-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.75rem;
+  text-decoration: none;
+}
+
+/* Public Arabic RTL — scoped so TR/EN/RU stay unchanged */
+html[dir="rtl"] body {
+  font-family: var(--font-arabic), var(--font-geist-sans), "Segoe UI", Tahoma, sans-serif;
+}
+
+html[dir="rtl"] .booking-field-label {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[dir="rtl"] .ltr-isolate,
+html[dir="rtl"] .vehicle-card-currency-pill-face,
+html[dir="rtl"] .checkout-success-code,
+html[dir="rtl"] .site-footer-channel-value,
+html[dir="rtl"] .booking-flight-input,
+html[dir="rtl"] input[type="email"],
+html[dir="rtl"] input[type="tel"],
+html[dir="rtl"] input[type="url"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+html[dir="rtl"] .rtl-flip,
+html[dir="rtl"] .location-back {
+  transform: scaleX(-1);
 }

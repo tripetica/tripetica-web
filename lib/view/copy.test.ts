@@ -49,7 +49,18 @@ test("review page copy matches the requested locale texts", () => {
     yandexSupporting: "Поделитесь впечатлениями на Яндексе",
     footer: "Спасибо! Будем рады снова видеть вас среди наших пассажиров.",
   });
-  assert.deepEqual(locales.slice().sort(), ["en", "ru", "tr"]);
+  assert.deepEqual(reviewPageCopy.ar, {
+    title: "كيف كانت رحلتك؟",
+    description:
+      "شكرًا لكم على اختيار Tripetica. مشاركة تجربتكم مهمة لنا وللمسافرين الآخرين الذين يفكرون في اختيار Tripetica.",
+    sectionTitle: "أين تودّ مشاركة تقييمك؟",
+    googleButton: "اترك تقييمًا على Google",
+    googleSupporting: "شارك تجربتك على Google",
+    yandexButton: "اترك تقييمًا على Yandex",
+    yandexSupporting: "شارك تجربتك على Yandex",
+    footer: "شكرًا لكم. نتطلع إلى استقبالكم مجددًا في رحلاتكم القادمة.",
+  });
+  assert.deepEqual(locales.slice().sort(), ["ar", "en", "ru", "tr"]);
 });
 
 test("review page opens the requested Google and Yandex destinations", () => {

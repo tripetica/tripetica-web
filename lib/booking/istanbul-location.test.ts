@@ -70,7 +70,7 @@ test("non-Istanbul province locations are rejected by Istanbul boundary helper",
 });
 
 test("bosphorus service info and outside-area copy cover TR EN RU without the old short asia-only line", () => {
-  for (const locale of ["tr", "en", "ru"] as const) {
+  for (const locale of ["tr", "en", "ru", "ar"] as const) {
     const copy = bosphorusDinnerCopy[locale];
     assert.equal(copy.serviceInfoParagraphs.length, 2);
     assert.match(copy.serviceInfoParagraphs[1], /IST|SAW|ИСТ|САВ|Стамбул|İstanbul|Istanbul/i);

@@ -50,16 +50,13 @@ import {
   STANDARD_MINIVAN_CODE,
 } from "@/lib/booking/pricing/vehicle-quote";
 import { vehicleCardCopyFor } from "@/lib/booking/vehicles/copy";
-import {
-  formatOpsOtherPrice,
-  formatOpsSelectedPrice,
-  otherStoredAmounts,
-  selectedStoredAmount,
-} from "@/lib/ops/money";
-import { parseManualPriceTotals } from "@/lib/ops/price-override";
+import { priceFields, reservationPriceDisplay } from "@/lib/ops/reservation-price-display";
 import { evaluateOpsCancelPolicy } from "@/lib/ops/cancellation-policy";
 import { evaluateOpsRefundGate, isActiveRefundStatus } from "@/lib/ops/refund-gate";
 import { ONLINE_PAYMENT_METHOD } from "@/lib/payments/online-payment";
+import { passengerNoteText } from "@/lib/booking/passenger-note";
+
+export { passengerNoteText };
 
 const KNOWN_OPS_VEHICLE_CODES = new Set([
   PREMIUM_ECONOMY_SEDAN_CODE,
@@ -130,6 +127,8 @@ export type OpsRecordDetail = {
   otherCurrencies: string[];
   pricing: OpsDetailRow[];
   customer: OpsDetailRow[];
+  /** Passenger-written booking note. Null when empty — do not render a section. */
+  passengerNote: string | null;
   passengers: OpsDetailPassenger[];
   technical: OpsDetailRow[] | null;
   /** Reservation-only context for cancel/refund toolbar actions. */
@@ -140,6 +139,17 @@ export type OpsRecordDetail = {
     partner: OpsDetailRow[];
     driver: OpsDetailRow[];
     vehicle: OpsDetailRow[];
+  } | null;
+  driverTask: {
+    stage: import("@/lib/ops/driver-task-stages").DriverTaskStage;
+    openPath: string;
+    events: Array<{
+      stage: import("@/lib/ops/driver-task-stages").DriverTaskProgressStage;
+      occurredAt: string;
+      eventSource: import("@/lib/ops/driver-task-stages").DriverTaskEventSource;
+    }>;
+    showPriceInfo: boolean;
+    showPassengerContact: boolean;
   } | null;
 };
 
@@ -331,6 +341,7 @@ export type ReservationDetailSource = {
     gender: string | null;
     isPrimary: boolean;
   }>;
+  driverTask?: import("@/lib/ops/driver-task").DriverTaskOpsView | null;
 };
 
 export function displayText(value: unknown): string {
@@ -969,36 +980,7 @@ export function isOpsContactRow(label: string, copy: OpsCopy) {
   return label === copy.email || label === copy.phone;
 }
 
-function priceFields(
-  locale: Locale,
-  currency: string | null | undefined,
-  appliedVehicleTotal: string | number | null | undefined,
-  fxSnapshot: unknown,
-  appliedVehicleTotalEur?: string | number | null,
-  totalPrice?: string | number | null,
-  priceManuallyOverridden?: boolean,
-  manualPriceTotals?: unknown,
-) {
-  const manualTotals = parseManualPriceTotals(manualPriceTotals);
-  const selected = selectedStoredAmount({
-    currency,
-    appliedVehicleTotal,
-    totalPrice,
-    fxSnapshot,
-    priceManuallyOverridden,
-    manualPriceTotals: manualTotals,
-  });
-  return {
-    selectedPrice: formatOpsSelectedPrice(selected.amount, selected.currency, locale) || null,
-    otherCurrencies: otherStoredAmounts({
-      currency: selected.currency,
-      appliedVehicleTotalEur,
-      fxSnapshot,
-      priceManuallyOverridden,
-      manualPriceTotals: manualTotals,
-    }).map((item) => formatOpsOtherPrice(item.amount, item.code, locale)),
-  };
-}
+export { reservationPriceDisplay };
 
 export function toProcessRecordDetail(
   item: ProcessDetailSource,
@@ -1170,8 +1152,8 @@ export function toProcessRecordDetail(
         countryName(item.customerCountryCode, locale) || displayText(item.customerCountryCode),
       ),
       row(copy.paymentMethod, paymentLabel(item.paymentMethod, copy)),
-      row(copy.notes, displayText(item.notes)),
     ]),
+    passengerNote: passengerNoteText(item.notes),
     passengers: mapPassengers(item.passengers, locale, copy),
     technical: compact([
       row(copy.locale, localeLabel(item.locale, copy)),
@@ -1197,6 +1179,7 @@ export function toProcessRecordDetail(
     actionContext: null,
     paymentHistory: null,
     operationAssignment: null,
+    driverTask: null,
   };
 }
 
@@ -1349,12 +1332,13 @@ export function toReservationRecordDetail(
     customer: compact([
       row(copy.email, displayText(item.customerEmail)),
       row(copy.phone, displayText(item.customerPhone)),
-      row(copy.notes, displayText(item.notes)),
     ]),
+    passengerNote: passengerNoteText(item.notes),
     passengers: mapPassengers(item.passengers, locale, copy, "111"),
     technical: null,
     paymentHistory: item.paymentHistory ?? null,
     operationAssignment: reservationOperationAssignment(item, locale, copy),
+    driverTask: item.driverTask ?? null,
     actionContext: buildReservationActionContext({
       status: item.status,
       serviceType: item.serviceType,

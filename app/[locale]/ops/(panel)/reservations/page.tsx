@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { parsePage } from "@/lib/ops/format";
@@ -15,6 +15,7 @@ import {
 import { actorCan } from "@/lib/ops/session";
 import { OpsPagination } from "@/components/ops/pagination";
 import { ReservationFilters } from "@/components/ops/reservation-filters";
+import { OpsLiveRefresh } from "@/components/ops/ops-live-refresh";
 import { ReservationTable } from "@/components/ops/reservation-table";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export default async function OpsReservationsPage({
   const query = await searchParams;
   const filters = parseReservationListFilters(query);
   const page = parsePage(query.page);
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   const canAssign = actorCan(actor, "reservations.manage");
   const partners = await listActiveOpsAssignmentPartners();
   const fleets = await loadOpsAssignmentFleets(partners.map((partner) => partner.id));
@@ -44,6 +45,7 @@ export default async function OpsReservationsPage({
   return (
     <section className="ops-page">
       <h1>{copy.reservations}</h1>
+      <OpsLiveRefresh />
       <ReservationFilters locale={locale} copy={copy} filters={filters} />
       {items.length === 0 ? (
         <p className="ops-empty">{copy.emptyReservations}</p>
@@ -52,6 +54,8 @@ export default async function OpsReservationsPage({
           locale={locale}
           copy={copy}
           items={items}
+          page={page}
+          pageSize={pageSize}
           filters={filters}
           partners={partners}
           fleets={fleets}

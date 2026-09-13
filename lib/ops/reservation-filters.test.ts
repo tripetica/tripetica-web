@@ -6,11 +6,13 @@ import {
   parseIsoDate,
 } from "@/lib/ops/process-filters";
 import {
+  hasActiveReservationFilters,
   nextReservationSortDir,
   parseReservationDatePreset,
   parseReservationListFilters,
   pickupAtBounds,
   reservationOrderBy,
+  reservationQueryRecord,
 } from "@/lib/ops/reservation-filters";
 
 const NOW = Date.parse("2026-08-27T15:00:00.000Z");
@@ -125,6 +127,22 @@ test("combined reservation filters keep search, status, payment, and date", () =
   assert.equal(parseIsoDate(filters.to), "2026-08-28");
   assert.equal(filters.sort, "");
   assert.equal(filters.dir, "");
+  assert.equal(filters.operation, "");
+});
+
+test("completed operation filter is independent of date search", () => {
+  const filters = parseReservationListFilters({
+    q: "TRP",
+    date: "today",
+    operation: "completed",
+  });
+  assert.equal(filters.query, "TRP");
+  assert.equal(filters.date, "today");
+  assert.equal(filters.operation, "completed");
+  assert.equal(hasActiveReservationFilters(filters), true);
+  const record = reservationQueryRecord(filters);
+  assert.equal(record.operation, "completed");
+  assert.equal(record.date, "today");
 });
 
 test("sort params parse and default dir to asc when sort is set", () => {

@@ -12,7 +12,13 @@ export type ProcessListItem = {
   dropoffName: string | null;
   pickupAt: string | null;
   passengerCount: number | null;
+  luggageCount: number | null;
+  babySeatCount: number | null;
+  passengerLuggageBaby: string;
+  meetAndGreet: boolean | null;
   vehicleLabel: string | null;
+  flightCode: string | null;
+  distanceKm: number | null;
   price: string | null;
   currency: string | null;
   email: string | null;

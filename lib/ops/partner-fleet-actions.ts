@@ -28,6 +28,8 @@ export type OpsFleetFormState = {
     | "invalid-national-id"
     | "invalid-languages"
     | "duplicate-national-id"
+    | "invalid-email"
+    | "duplicate-email"
     | "invalid-phone"
     | "invalid-plate"
     | "invalid-brand"
@@ -112,6 +114,7 @@ export async function updateOpsPartnerDriverAction(
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean),
+      email: String(formData.get("email") ?? ""),
     });
     if (!result.ok) {
       logFleetFailure("update-driver", result.error, { partnerId, recordId });

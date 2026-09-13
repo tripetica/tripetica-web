@@ -104,7 +104,8 @@ export function CheckoutSuccessPanel({
       </h2>
       <p className="checkout-success-code-label">{copy.successCodeLabel}</p>
       <p
-        className={`checkout-success-code${showTourGuideInfo ? " checkout-success-code--with-guide" : ""}`}
+        className={`checkout-success-code ltr-isolate${showTourGuideInfo ? " checkout-success-code--with-guide" : ""}`}
+        dir="ltr"
       >
         {reservationCode}
       </p>

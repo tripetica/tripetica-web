@@ -11,6 +11,7 @@ import {
   partnerJobDurationLabel,
   partnerJobGenderLabel,
   partnerJobNotePreview,
+  partnerJobNeedsBabySeat,
   partnerJobOccupancyCompact,
   partnerJobOccupancyLine,
   partnerJobServiceTypeLabel,
@@ -187,7 +188,17 @@ test("occupancy hides baby seats at zero and notes stay compact", () => {
   );
   assert.equal(partnerJobNotePreview("Kısa not", "Not var"), "Kısa not");
   assert.equal(partnerJobNotePreview("x".repeat(80), "Not var"), "Not var");
-  assert.equal(partnerJobOccupancyCompact({ passengerCount: 3, luggageCount: 4 }), "3 / 4");
+  assert.equal(
+    partnerJobOccupancyCompact({ passengerCount: 3, luggageCount: 4, babySeatCount: 1 }),
+    "3 / 4 / 1",
+  );
+  assert.equal(
+    partnerJobOccupancyCompact({ passengerCount: 2, luggageCount: 3, babySeatCount: null }),
+    "2 / 3 / 0",
+  );
+  assert.equal(partnerJobNeedsBabySeat(1), true);
+  assert.equal(partnerJobNeedsBabySeat(0), false);
+  assert.equal(partnerJobNeedsBabySeat(null), false);
 });
 
 test("hourly partner duration uses reservation hours and catalog included km", () => {
@@ -366,9 +377,12 @@ test("open jobs hide cash collection and primary still gets accept/detail", () =
   assert.match(list, /copy\.jobAccept/);
   assert.match(list, /copy\.jobDetail/);
   assert.match(list, /jobDuration[\s\S]{0,120}jobOccupancy/);
+  assert.match(list, /partnerJobNeedsBabySeat/);
+  assert.match(list, /jobBabySeatRequired/);
   assert.doesNotMatch(list, /jobBabySeats/);
   assert.doesNotMatch(list, /jobNote/);
-  assert.doesNotMatch(list, /isPrimaryPartner/);
+  assert.doesNotMatch(list, /job\.customerName|job\.customerPhone|job\.customerEmail/);
+  assert.match(source("app/globals.css"), /@source not "\.\.\/deploy"/);
   assert.match(source("app/globals.css"), /table-layout: fixed/);
   assert.match(
     source("app/globals.css"),
@@ -380,6 +394,8 @@ test("open jobs hide cash collection and primary still gets accept/detail", () =
   assert.match(source("components/partner/job-detail.tsx"), /\(job\.babySeatCount \?\? 0\) > 0/);
   assert.doesNotMatch(source("components/partner/job-detail.tsx"), /babySeatCount != null \? String\(job\.babySeatCount\) : "0"/);
   assert.match(source("lib/partner/jobs.ts"), /input\.accepted && isCash/);
+  assert.match(source("lib/partner/copy.ts"), /Yolcu \/ Valiz \/ Bebek/);
+  assert.match(source("lib/partner/copy.ts"), /jobBabySeatRequired: "Bebek Koltuğu"/);
   assert.match(source("lib/partner/copy.ts"), /Size Ödenecek Tutar/);
   assert.doesNotMatch(source("lib/partner/copy.ts"), /Partnere Ödenecek/);
   assert.match(source("lib/partner/copy.ts"), /Yolcudan Nakit Tahsilat/);

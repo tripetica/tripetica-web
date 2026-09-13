@@ -32,6 +32,9 @@ function numberLocale(locale: Locale) {
   if (locale === "tr") {
     return "tr-TR";
   }
+  if (locale === "ar") {
+    return "ar-SA";
+  }
   return "en-GB";
 }
 
@@ -43,7 +46,7 @@ export function formatAmountDigits(amount: number, locale: Locale): string {
   const abs = Math.round(Math.abs(amount) * 100);
   const whole = Math.floor(abs / 100);
   const frac = abs % 100;
-  const decimal = locale === "en" ? "." : ",";
+  const decimal = locale === "en" || locale === "ar" ? "." : ",";
   const digits =
     frac === 0 ? String(whole) : `${whole}${decimal}${String(frac).padStart(2, "0")}`;
   return `${negative ? "−" : ""}${digits}`;
@@ -54,6 +57,7 @@ export function formatRateDigits(amount: number, locale: Locale): string {
     return "0";
   }
   return new Intl.NumberFormat(numberLocale(locale), {
+    numberingSystem: "latn",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: false,
@@ -79,6 +83,7 @@ export function formatCurrencyPill(
   const integer = code === "RUB";
   const tryAmount = code === "TRY";
   const formatted = new Intl.NumberFormat(numberLocale(locale), {
+    numberingSystem: "latn",
     minimumFractionDigits: integer ? 0 : tryAmount ? 0 : 2,
     maximumFractionDigits: integer ? 0 : 2,
     useGrouping: integer || tryAmount,

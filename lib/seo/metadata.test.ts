@@ -41,10 +41,10 @@ test("robots blocks dev and permits production public routes", () => {
     allow: "/",
     disallow: [
       "/api/",
-      "/tr/ops/", "/en/ops/", "/ru/ops/",
-      "/tr/partner/", "/en/partner/", "/ru/partner/",
-      "/tr/account/", "/en/account/", "/ru/account/",
-      "/tr/booking", "/en/booking", "/ru/booking",
+      "/tr/ops/", "/en/ops/", "/ru/ops/", "/ar/ops/",
+      "/tr/partner/", "/en/partner/", "/ru/partner/", "/ar/partner/",
+      "/tr/account/", "/en/account/", "/ru/account/", "/ar/account/",
+      "/tr/booking", "/en/booking", "/ru/booking", "/ar/booking",
     ],
   });
   assert.equal(production.sitemap, "https://tripetica.com/sitemap.xml");
@@ -88,7 +88,11 @@ test("public service and legal pages stay index follow with canonical hreflang",
     localeAlternates("tr", "/services/bursa-tour"),
   );
   assert.equal(seo.alternates?.canonical, "/tr/services/bursa-tour");
+  assert.equal(seo.alternates?.languages?.ar, "/ar/services/bursa-tour");
   assert.equal(seo.alternates?.languages?.["x-default"], "/ru/services/bursa-tour");
+  const arabic = publicPageSeo("ar", "/services/bursa-tour");
+  assert.equal(arabic.alternates?.canonical, "/ar/services/bursa-tour");
+  assert.equal(arabic.alternates?.languages?.["x-default"], "/ru/services/bursa-tour");
   assert.match(
     source("app/[locale]/(public)/services/airport-transfer/page.tsx"),
     /publicPageSeo\(locale, SERVICE_PATH\)/,
@@ -102,12 +106,12 @@ test("public service and legal pages stay index follow with canonical hreflang",
 test("sitemap contains only localized public home, service, and legal routes", () => {
   const entries = sitemap();
   const publicPathCount = 1 + serviceIds.length + legalSlugs.length;
-  assert.equal(entries.length, publicPathCount * 3);
+  assert.equal(entries.length, publicPathCount * 4);
   assert.equal(entries.some(({ url }) => /booking|account|ops|partner|api|payment|success|\/view/.test(url)), false);
   for (const entry of entries) {
     assert.equal(entry.url.startsWith("https://tripetica.com/"), true);
     assert.deepEqual(Object.keys(entry.alternates?.languages ?? {}).sort(), [
-      "en", "ru", "tr", "x-default",
+      "ar", "en", "ru", "tr", "x-default",
     ]);
     assert.equal(
       entry.alternates?.languages?.["x-default"]?.startsWith("https://tripetica.com/ru"),

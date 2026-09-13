@@ -57,43 +57,103 @@ const noLocation = {
 test("15 km opening fee and first band", () => {
   const quote = quoteTransferBase({ ...noLocation, distanceKm: 15 });
   assert.equal(quote.openingFeeEur, 25);
-  assert.equal(quote.distanceFeeEur, 8.25);
+  assert.equal(quote.distanceFeeEur, 9);
   assert.equal(quote.locationSurchargeEur, 0);
   assert.equal(quote.timeSurchargeEur, 0);
-  assert.equal(quote.baseTransferFeeEur, 33.25);
+  assert.equal(quote.baseTransferFeeEur, 34);
+  assert.equal(quote.pricingVersion, "transfer-pricing.v2");
 });
 
-test("30 km uses the 23 opening fee, not 15", () => {
+test("just over 15 km uses the 23 opening fee", () => {
+  const quote = quoteTransferBase({ ...noLocation, distanceKm: 15.01 });
+  assert.equal(quote.openingFeeEur, 23);
+  assert.equal(quote.distanceFeeEur, 9.01);
+  assert.equal(quote.baseTransferFeeEur, 32.01);
+});
+
+test("30 km uses the 23 opening fee, not 20", () => {
   const quote = quoteTransferBase({ ...noLocation, distanceKm: 30 });
   assert.equal(quote.openingFeeEur, 23);
-  assert.equal(quote.distanceFeeEur, 16.5);
-  assert.equal(quote.baseTransferFeeEur, 39.5);
+  assert.equal(quote.distanceFeeEur, 18);
+  assert.equal(quote.baseTransferFeeEur, 41);
 });
 
-test("60 km uses the 15 opening fee and first band only", () => {
+test("just over 30 km uses the 20 opening fee", () => {
+  const quote = quoteTransferBase({ ...noLocation, distanceKm: 30.01 });
+  assert.equal(quote.openingFeeEur, 20);
+  assert.equal(quote.distanceFeeEur, 18.01);
+  assert.equal(quote.baseTransferFeeEur, 38.01);
+});
+
+test("60 km uses the 20 opening fee and first band only", () => {
   const quote = quoteTransferBase({ ...noLocation, distanceKm: 60 });
-  assert.equal(quote.openingFeeEur, 15);
-  assert.equal(quote.distanceFeeEur, 33);
-  assert.equal(quote.baseTransferFeeEur, 48);
+  assert.equal(quote.openingFeeEur, 20);
+  assert.equal(quote.distanceFeeEur, 36);
+  assert.equal(quote.baseTransferFeeEur, 56);
 });
 
 test("61 km starts the second distance band", () => {
   const quote = quoteTransferBase({ ...noLocation, distanceKm: 61 });
-  assert.equal(quote.openingFeeEur, 15);
-  assert.equal(quote.distanceFeeEur, 33.6);
-  assert.equal(quote.baseTransferFeeEur, 48.6);
+  assert.equal(quote.openingFeeEur, 20);
+  assert.equal(quote.distanceFeeEur, 36.65);
+  assert.equal(quote.baseTransferFeeEur, 56.65);
 });
 
 test("90 km progressive bands", () => {
   const quote = quoteTransferBase({ ...noLocation, distanceKm: 90 });
-  assert.equal(quote.distanceFeeEur, 51);
-  assert.equal(quote.baseTransferFeeEur, 66);
+  assert.equal(quote.openingFeeEur, 20);
+  assert.equal(quote.distanceFeeEur, 55.5);
+  assert.equal(quote.baseTransferFeeEur, 75.5);
+});
+
+test("91 km starts the third distance band", () => {
+  const quote = quoteTransferBase({ ...noLocation, distanceKm: 91 });
+  assert.equal(quote.distanceFeeEur, 56.2);
+  assert.equal(quote.baseTransferFeeEur, 76.2);
 });
 
 test("120 km progressive bands", () => {
   const quote = quoteTransferBase({ ...noLocation, distanceKm: 120 });
-  assert.equal(quote.distanceFeeEur, 70.5);
-  assert.equal(quote.baseTransferFeeEur, 85.5);
+  assert.equal(quote.distanceFeeEur, 76.5);
+  assert.equal(quote.baseTransferFeeEur, 96.5);
+});
+
+test("121 km starts the fourth distance band", () => {
+  const quote = quoteTransferBase({ ...noLocation, distanceKm: 121 });
+  assert.equal(quote.distanceFeeEur, 77.25);
+  assert.equal(quote.baseTransferFeeEur, 97.25);
+});
+
+test("160 km ends the fourth band at 0.75", () => {
+  const quote = quoteTransferBase({ ...noLocation, distanceKm: 160 });
+  assert.equal(quote.distanceFeeEur, 106.5);
+  assert.equal(quote.baseTransferFeeEur, 126.5);
+});
+
+test("161 km starts the unchanged 0.80 band", () => {
+  const quote = quoteTransferBase({ ...noLocation, distanceKm: 161 });
+  assert.equal(quote.distanceFeeEur, 107.3);
+  assert.equal(quote.baseTransferFeeEur, 127.3);
+});
+
+test("30 km to 40 km no longer decreases", () => {
+  const at30 = quoteTransferBase({ ...noLocation, distanceKm: 30 });
+  const at40 = quoteTransferBase({ ...noLocation, distanceKm: 40 });
+  assert.equal(at30.baseTransferFeeEur, 41);
+  assert.equal(at40.baseTransferFeeEur, 44);
+  assert.ok(at40.baseTransferFeeEur > at30.baseTransferFeeEur);
+});
+
+test("sample base curve is monotonically increasing with distance", () => {
+  const samples = [10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 500];
+  const expected = [31, 35, 41, 44, 50, 65.75, 82.5, 119, 158.5, 246.5, 456.5];
+  const bases = samples.map(
+    (distanceKm) => quoteTransferBase({ ...noLocation, distanceKm }).baseTransferFeeEur,
+  );
+  assert.deepEqual(bases, expected);
+  for (let i = 1; i < bases.length; i += 1) {
+    assert.ok(bases[i]! > bases[i - 1]!, `${samples[i]} km must exceed ${samples[i - 1]} km`);
+  }
 });
 
 test("Bakirkoy and Sultanbeyli apply only the higher district fee", () => {
@@ -104,7 +164,7 @@ test("Bakirkoy and Sultanbeyli apply only the higher district fee", () => {
     dropoff: { provinceCode: "istanbul", districtCode: "sultanbeyli" },
   });
   assert.equal(quote.locationSurchargeEur, 15);
-  assert.equal(quote.baseTransferFeeEur, 48.25);
+  assert.equal(quote.baseTransferFeeEur, 49);
 });
 
 test("Tuzla and Sile apply only the higher district fee", () => {
@@ -155,7 +215,7 @@ test("Antalya location fee is 0", () => {
     dropoff: { provinceCode: "antalya", districtCode: null },
   });
   assert.equal(quote.locationSurchargeEur, 0);
-  assert.equal(quote.baseTransferFeeEur, 33.25);
+  assert.equal(quote.baseTransferFeeEur, 34);
 });
 
 test("Kartal at 14:00 adds 15 pickup-time surcharge", () => {
@@ -309,7 +369,7 @@ test("vehicle extras are zero for 2 passengers and 2 bags", () => {
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 33.25);
+  assert.equal(vehicle.totalEur, 34);
 });
 
 test("3 passengers add 1 euro", () => {
@@ -422,7 +482,7 @@ test("combined vehicle extras sum correctly", () => {
     babySeatCount: 1,
     meetAndGreet: true,
   });
-  assert.equal(vehicle.totalEur, 50.25);
+  assert.equal(vehicle.totalEur, 51);
 });
 
 test("does not treat Istanbul Caddesi as Istanbul province", () => {
@@ -465,13 +525,13 @@ test("standard minivan base is transfer fee times 1.10", () => {
     babySeatCount: 0,
     meetAndGreet: false,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 36.58);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 37.4);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 36.58);
+  assert.equal(vehicle.totalEur, 37.4);
 });
 
 test("standard minivan extra fees for 6 passengers, 6 bags, 1 baby seat", () => {
@@ -485,7 +545,7 @@ test("standard minivan extra fees for 6 passengers, 6 bags, 1 baby seat", () => 
   assert.equal(vehicle.extraPassengerFeeEur, 1);
   assert.equal(vehicle.extraLuggageFeeEur, 1);
   assert.equal(vehicle.babySeatFeeEur, 10);
-  assert.equal(vehicle.totalEur, 48.58);
+  assert.equal(vehicle.totalEur, 49.4);
 });
 
 test("standard minivan extra fees for 7 passengers, 8 bags, 2 baby seats", () => {
@@ -499,7 +559,7 @@ test("standard minivan extra fees for 7 passengers, 8 bags, 2 baby seats", () =>
   assert.equal(vehicle.extraPassengerFeeEur, 2);
   assert.equal(vehicle.extraLuggageFeeEur, 3);
   assert.equal(vehicle.babySeatFeeEur, 20);
-  assert.equal(vehicle.totalEur, 61.58);
+  assert.equal(vehicle.totalEur, 62.4);
 });
 
 test("standard minivan uses the same meet and greet fee as the sedan", () => {
@@ -654,11 +714,11 @@ test("business minivan base is transfer fee times 1.20", () => {
     babySeatCount: 0,
     meetAndGreet: false,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 39.9);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 40.8);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
-  assert.equal(vehicle.totalEur, 39.9);
+  assert.equal(vehicle.totalEur, 40.8);
 });
 
 test("business minivan extra passenger fees", () => {
@@ -795,13 +855,13 @@ test("first class minivan base is transfer fee times 2.70", () => {
     babySeatCount: 0,
     meetAndGreet: true,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 89.78);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 91.8);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 89.78);
+  assert.equal(vehicle.totalEur, 91.8);
 });
 
 test("first class minivan extra passenger and luggage fees are 5 euro each", () => {
@@ -854,7 +914,7 @@ test("first class minivan baby seat fees and no meet and greet charge", () => {
   });
   assert.equal(oneSeat.babySeatFeeEur, 10);
   assert.equal(oneSeat.meetAndGreetFeeEur, 0);
-  assert.equal(oneSeat.totalEur, 99.78);
+  assert.equal(oneSeat.totalEur, 101.8);
   const twoSeats = quoteFirstClassMinivan(base, {
     passengerCount: 5,
     luggageCount: 5,
@@ -865,7 +925,7 @@ test("first class minivan baby seat fees and no meet and greet charge", () => {
   assert.equal(twoSeats.extraLuggageFeeEur, 10);
   assert.equal(twoSeats.babySeatFeeEur, 20);
   assert.equal(twoSeats.meetAndGreetFeeEur, 0);
-  assert.equal(twoSeats.totalEur, 129.78);
+  assert.equal(twoSeats.totalEur, 131.8);
 });
 
 test("first class minivan visibility follows applied occupancy limits", () => {
@@ -933,13 +993,13 @@ test("first class sedan uses eight times the transfer base", () => {
     babySeatCount: 0,
     meetAndGreet: true,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 266);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 272);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 266);
+  assert.equal(vehicle.totalEur, 272);
 });
 
 test("first class sedan extra passenger and luggage fees are 10 euro each", () => {
@@ -976,7 +1036,7 @@ test("first class sedan baby seat fee and no meet and greet charge", () => {
   assert.equal(max.extraLuggageFeeEur, 10);
   assert.equal(max.babySeatFeeEur, 20);
   assert.equal(max.meetAndGreetFeeEur, 0);
-  assert.equal(max.totalEur, 306);
+  assert.equal(max.totalEur, 312);
 });
 
 test("first class sedan visibility follows applied occupancy limits", () => {
@@ -1044,13 +1104,13 @@ test("minibus uses 1.6 times the transfer base", () => {
     babySeatCount: 0,
     meetAndGreet: false,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 53.2);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 54.4);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 53.2);
+  assert.equal(vehicle.totalEur, 54.4);
 });
 
 test("minibus extra passenger and luggage fees match standard minivan", () => {
@@ -1103,7 +1163,7 @@ test("minibus baby seat and meet and greet fees", () => {
   });
   assert.equal(withSeat.babySeatFeeEur, 10);
   assert.equal(withSeat.meetAndGreetFeeEur, 0);
-  assert.equal(withSeat.totalEur, 63.2);
+  assert.equal(withSeat.totalEur, 64.4);
   const withMeet = quoteMinibus(base, {
     passengerCount: 9,
     luggageCount: 9,
@@ -1111,7 +1171,7 @@ test("minibus baby seat and meet and greet fees", () => {
     meetAndGreet: true,
   });
   assert.equal(withMeet.meetAndGreetFeeEur, 7);
-  assert.equal(withMeet.totalEur, 60.2);
+  assert.equal(withMeet.totalEur, 61.4);
   const max = quoteMinibus(base, {
     passengerCount: 18,
     luggageCount: 19,
@@ -1122,7 +1182,7 @@ test("minibus baby seat and meet and greet fees", () => {
   assert.equal(max.extraLuggageFeeEur, 10);
   assert.equal(max.babySeatFeeEur, 30);
   assert.equal(max.meetAndGreetFeeEur, 7);
-  assert.equal(max.totalEur, 109.2);
+  assert.equal(max.totalEur, 110.4);
 });
 
 test("minibus visibility follows applied occupancy limits", () => {
@@ -1280,13 +1340,13 @@ test("midibus uses 5.4 times the transfer base", () => {
     babySeatCount: 0,
     meetAndGreet: false,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 179.55);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 183.6);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 179.55);
+  assert.equal(vehicle.totalEur, 183.6);
 });
 
 test("midibus extra passenger and luggage fees match minibus per-unit extras", () => {
@@ -1339,7 +1399,7 @@ test("midibus baby seat and meet and greet fees", () => {
   });
   assert.equal(withSeat.babySeatFeeEur, 10);
   assert.equal(withSeat.meetAndGreetFeeEur, 0);
-  assert.equal(withSeat.totalEur, 189.55);
+  assert.equal(withSeat.totalEur, 193.6);
   const withMeet = quoteMidibus(base, {
     passengerCount: 20,
     luggageCount: 20,
@@ -1347,7 +1407,7 @@ test("midibus baby seat and meet and greet fees", () => {
     meetAndGreet: true,
   });
   assert.equal(withMeet.meetAndGreetFeeEur, 10);
-  assert.equal(withMeet.totalEur, 189.55);
+  assert.equal(withMeet.totalEur, 193.6);
   const max = quoteMidibus(base, {
     passengerCount: 25,
     luggageCount: 27,
@@ -1358,7 +1418,7 @@ test("midibus baby seat and meet and greet fees", () => {
   assert.equal(max.extraLuggageFeeEur, 7);
   assert.equal(max.babySeatFeeEur, 30);
   assert.equal(max.meetAndGreetFeeEur, 10);
-  assert.equal(max.totalEur, 231.55);
+  assert.equal(max.totalEur, 235.6);
 });
 
 test("midibus visibility follows applied occupancy limits", () => {
@@ -1471,13 +1531,13 @@ test("bus uses 10 times the transfer base", () => {
     babySeatCount: 0,
     meetAndGreet: false,
   });
-  assert.equal(base.baseTransferFeeEur, 33.25);
-  assert.equal(vehicle.baseServiceFeeEur, 332.5);
+  assert.equal(base.baseTransferFeeEur, 34);
+  assert.equal(vehicle.baseServiceFeeEur, 340);
   assert.equal(vehicle.extraPassengerFeeEur, 0);
   assert.equal(vehicle.extraLuggageFeeEur, 0);
   assert.equal(vehicle.babySeatFeeEur, 0);
   assert.equal(vehicle.meetAndGreetFeeEur, 0);
-  assert.equal(vehicle.totalEur, 332.5);
+  assert.equal(vehicle.totalEur, 340);
 });
 
 test("bus extra passenger and luggage fees are one euro per unit over 35", () => {
@@ -1547,12 +1607,12 @@ test("bus extra passenger and luggage fees are one euro per unit over 35", () =>
     babySeatCount: 3,
     meetAndGreet: true,
   });
-  assert.equal(max.baseServiceFeeEur, 332.5);
+  assert.equal(max.baseServiceFeeEur, 340);
   assert.equal(max.extraPassengerFeeEur, 10);
   assert.equal(max.extraLuggageFeeEur, 10);
   assert.equal(max.babySeatFeeEur, 30);
   assert.equal(max.meetAndGreetFeeEur, 15);
-  assert.equal(max.totalEur, 397.5);
+  assert.equal(max.totalEur, 405);
 });
 
 test("bus visibility follows applied occupancy limits", () => {

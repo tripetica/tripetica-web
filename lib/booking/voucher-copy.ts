@@ -34,6 +34,7 @@ export const voucherCopy: Record<
     email: string;
     passengerList: string;
     otherPassengers: string;
+    passengerNote: string;
     policySectionTitle: string;
     policyCancelTitle: string;
     policyCancelBody: string;
@@ -80,6 +81,7 @@ export const voucherCopy: Record<
     email: "E-posta",
     passengerList: "Yolcular",
     otherPassengers: "Diğer Yolcular",
+    passengerNote: "Yolcu Notu",
     policySectionTitle: "İPTAL, DEĞİŞİKLİK VE BEKLEME KOŞULLARI",
     policyCancelTitle: "İptal ve değişiklik",
     policyCancelBody:
@@ -130,6 +132,7 @@ export const voucherCopy: Record<
     email: "Email",
     passengerList: "Passengers",
     otherPassengers: "Other passengers",
+    passengerNote: "Passenger Note",
     policySectionTitle: "CANCELLATION, CHANGES AND WAITING TIME",
     policyCancelTitle: "Cancellation and changes",
     policyCancelBody:
@@ -180,6 +183,7 @@ export const voucherCopy: Record<
     email: "Эл. почта",
     passengerList: "Пассажиры",
     otherPassengers: "Другие пассажиры",
+    passengerNote: "Заметка пассажира",
     policySectionTitle: "ОТМЕНА, ИЗМЕНЕНИЯ И ВРЕМЯ ОЖИДАНИЯ",
     policyCancelTitle: "Отмена и изменения",
     policyCancelBody:
@@ -201,6 +205,57 @@ export const voucherCopy: Record<
     no: "Нет",
     paymentCash: "Наличные",
     paymentSbp: "Онлайн",
+  },
+  ar: {
+    voucherLabel: "قسيمة الحجز",
+    reservationCodeLabel: "رمز الحجز",
+    reservationSection: "بيانات الحجز",
+    reservationCode: "رمز الحجز",
+    serviceType: "نوع الخدمة",
+    vehicleClass: "فئة المركبة",
+    dateTimeLabel: "التاريخ والوقت",
+    durationLabel: "المدة",
+    packageCoverageLabel: "تغطية الباقة",
+    pickupPoint: "نقطة الانطلاق",
+    dropoffPoint: "نقطة الوصول",
+    distance: "المسافة",
+    distanceUnit: "كم",
+    flight: "رقم الرحلة",
+    passengers: "عدد الركاب",
+    luggage: "أمتعة",
+    babySeats: "مقعد أطفال",
+    meetAndGreet: "الاستقبال والترحيب",
+    paymentMethod: "وسيلة الدفع",
+    total: "المبلغ الإجمالي",
+    otherCurrencyEquivalents: "ما يعادله بالعملات الأخرى",
+    passengerSection: "بيانات الراكب",
+    fullName: "الاسم الكامل",
+    phone: "الهاتف",
+    email: "البريد الإلكتروني",
+    passengerList: "الركاب",
+    otherPassengers: "الركاب الآخرون",
+    passengerNote: "ملاحظة الراكب",
+    policySectionTitle: "الإلغاء والتغييرات ووقت الانتظار",
+    policyCancelTitle: "الإلغاء والتغييرات",
+    policyCancelBody:
+      "يمكن إلغاء الحجز أو تغييره ما دام قد تبقّى أكثر من 6 ساعات على بدء الخدمة. تُسترد بالكامل (100%) صافي المبلغ المحصّل سابقًا ولم يُعاد بعد، إذا تم الإلغاء ضمن المهلة المسموح بها. عندما يتبقّى 6 ساعات أو أقل على بدء الخدمة، لا يتاح الإلغاء أو التغيير. إذا غُيّرت نقطة الانطلاق أو نقطة الوصول أو التاريخ أو الوقت أو فئة المركبة أو أي بيانات أخرى مشمولة في الحجز، قد يُطبَّق فرق سعر أو رسم إضافي حسب نوع التغيير. يجب تقديم طلبات الإلغاء والتغيير عبر حساب Tripetica أو قنوات التواصل.",
+    policyWaitingTitle: "وقت الانتظار المجاني",
+    policyWaitingBody:
+      "وقت الانتظار المجاني 90 دقيقة عند الانطلاق من المطار، و30 دقيقة في محطات القطار، و20 دقيقة في سائر نقاط الانطلاق.",
+    policyNoShowTitle: "No-Show",
+    policyNoShowBody:
+      "إذا لم يصل الراكب إلى نقطة الانطلاق المحددة خلال فترة الانتظار المجاني المعمول بها، قد يُعدّ الحجز No-Show ولا يُرد أي مبلغ.",
+    policyHourlyWaitingTitle: "الانتظار ومدة الخدمة",
+    policyHourlyWaitingBody:
+      "إذا لم يكن الراكب جاهزًا خلال فترة الانتظار المجاني، يواصل السائق الخاص الانتظار ولا يُعدّ الحجز No-Show في هذه المرحلة. بدءًا من انتهاء فترة الانتظار المجاني، يُخصم وقت الانتظار من مدة الخدمة المختارة. إذا لم يكن الراكب جاهزًا حتى نهاية مدة الخدمة المختارة، يُعدّ الحجز No-Show ولا يُرد أي مبلغ.",
+    policyTourWaitingTitle: "الانتظار ومدة الجولة",
+    policyTourWaitingBody:
+      "إذا لم يكن الراكب جاهزًا خلال فترة الانتظار المجاني، يواصل السائق الخاص الانتظار ولا يُعدّ الحجز No-Show في هذه المرحلة. بدءًا من انتهاء فترة الانتظار المجاني، يُخصم وقت الانتظار من مدة الجولة/الباقة المشمولة في الحجز. إذا لم يكن الراكب جاهزًا حتى نهاية مدة الجولة/الباقة، يُعدّ الحجز No-Show ولا يُرد أي مبلغ.",
+    contactSection: "Tripetica",
+    yes: "نعم",
+    no: "لا",
+    paymentCash: "نقدًا",
+    paymentSbp: "عبر الإنترنت",
   },
 };
 

@@ -39,4 +39,10 @@ export const legalNavLabels: Record<
     "cancellation-refund-policy": "Политика отмены и возврата",
     "privacy-policy": "Политика конфиденциальности и защита персональных данных",
   },
+  ar: {
+    "preliminary-information": "نموذج المعلومات الأولية",
+    "distance-sales-agreement": "اتفاقية البيع عن بُعد",
+    "cancellation-refund-policy": "سياسة الإلغاء والاسترداد",
+    "privacy-policy": "سياسة الخصوصية وحماية البيانات الشخصية",
+  },
 };

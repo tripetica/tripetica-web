@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
@@ -21,7 +21,7 @@ export default async function OpsReservationDetailPage({
   if (!item) {
     notFound();
   }
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   return (
     <section className="ops-page">
       <p>

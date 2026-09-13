@@ -104,7 +104,7 @@ export function LanguageSwitcher({
           id={menuId}
           role="menu"
           aria-label={label}
-          className="glass-surface absolute right-0 z-30 mt-2 w-max overflow-hidden rounded-2xl py-1"
+          className="glass-surface absolute inset-inline-end-0 z-30 mt-2 w-max overflow-hidden rounded-2xl py-1"
         >
           {locales.map((target) => {
             const option = localeCatalog[target];

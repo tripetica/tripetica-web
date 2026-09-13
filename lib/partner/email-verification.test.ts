@@ -1,3 +1,4 @@
+import { asPanelLocale } from "@/lib/i18n/config";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -135,13 +136,13 @@ test("email verification never activates a partner and pending still cannot log 
 
 test("partner verification copy exists in tr, en, and ru", () => {
   for (const locale of ["tr", "en", "ru"] as const) {
-    assert.ok(partnerCopy[locale].sendVerificationCode);
-    assert.ok(partnerCopy[locale].emailVerifiedBadge);
-    assert.ok(partnerCopy[locale].unverifiedEmail);
-    assert.ok(partnerCopy[locale].securityTitle);
-    assert.ok(partnerCopy[locale].confirmNewEmail);
-    assert.ok(partnerCopy[locale].emailTaken);
-    assert.ok(partnerCopy[locale].changePasswordSubmit);
+    assert.ok(partnerCopy[asPanelLocale(locale)].sendVerificationCode);
+    assert.ok(partnerCopy[asPanelLocale(locale)].emailVerifiedBadge);
+    assert.ok(partnerCopy[asPanelLocale(locale)].unverifiedEmail);
+    assert.ok(partnerCopy[asPanelLocale(locale)].securityTitle);
+    assert.ok(partnerCopy[asPanelLocale(locale)].confirmNewEmail);
+    assert.ok(partnerCopy[asPanelLocale(locale)].emailTaken);
+    assert.ok(partnerCopy[asPanelLocale(locale)].changePasswordSubmit);
   }
   assert.match(source("lib/partner/mail.ts"), /sendAccountSmtpMail/);
   assert.match(source("lib/partner/mail.ts"), /ACCOUNT_EMAIL_PROVIDER/);

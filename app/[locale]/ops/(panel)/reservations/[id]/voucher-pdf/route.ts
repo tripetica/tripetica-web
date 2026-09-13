@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { buildReservationVoucherPdf } from "@/lib/booking/reservation-voucher-pdf";
 import { findReservationVoucherById } from "@/lib/booking/reservation-voucher-access";
@@ -24,7 +24,7 @@ export async function GET(
     redirect(localizedPath(locale, "/ops/login"));
   }
   if (!actorCan(actor, "reservations.view")) {
-    return new Response(opsCopy[locale].forbidden, { status: 403 });
+    return new Response(opsCopy[asPanelLocale(locale)].forbidden, { status: 403 });
   }
   if (!isUuid(id)) {
     return new Response(null, { status: 404 });
@@ -37,7 +37,7 @@ export async function GET(
   if (!voucher) {
     return new Response(null, { status: 404 });
   }
-  const pdf = await buildReservationVoucherPdf(voucher, locale);
+  const pdf = await buildReservationVoucherPdf(voucher, voucher.locale);
   const filename = reservationVoucherPdfFilename(
     item.reservationCode || voucher.reservationCode,
   );

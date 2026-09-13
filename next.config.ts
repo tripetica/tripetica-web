@@ -13,8 +13,7 @@ const nextConfig: NextConfig = {
     "62.238.123.40",
     "dev.tripetica.com",
   ],
-  // Locale, Bubble ?lang=, and slash/case normalization live in proxy.ts
-  // so destinations can be 301s that drop the lang query in one hop.
+  // Locale slash/case normalization lives in proxy.ts. Root ?lang= is 410.
   skipTrailingSlashRedirect: true,
 };
 

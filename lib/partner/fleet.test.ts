@@ -91,6 +91,15 @@ test("partner and ops driver screens share partner_drivers and ops cannot create
   assert.doesNotMatch(list, /Filtrele|type="submit"/);
   assert.equal((list.match(/ops-sort-link/g) ?? []).length, 1);
   assert.match(list, /copy\.driverFullName/);
+  assert.match(list, /copy\.driverEmail/);
+  assert.match(list, /driver\.email\?\.trim\(\) \|\| "—"/);
+  assert.ok(list.indexOf("copy.phoneNumber") < list.indexOf("copy.driverEmail"));
+  assert.ok(list.indexOf("copy.driverEmail") < list.indexOf("copy.driverLanguages"));
+  assert.ok(list.indexOf("formatPartnerFleetPhone(driver.phone)") < list.indexOf('driver.email?.trim() || "—"'));
+  assert.ok(
+    list.indexOf('driver.email?.trim() || "—"') <
+      list.indexOf("formatPartnerDriverLanguages(driver.languageCodes, locale)"),
+  );
   assert.doesNotMatch(source("lib/ops/partner-fleet-actions.ts"), /createPartnerDriver/);
   assert.doesNotMatch(source("components/ops/partner-info-form.tsx"), /addDriver|Sürücü Ekle/);
   assert.match(source("components/ops/partner-info-form.tsx"), /driverSearchPlaceholder/);
@@ -122,4 +131,7 @@ test("partner and ops driver screens share partner_drivers and ops cannot create
   assert.doesNotMatch(source("db/migrations/038_partner_vehicles.sql"), /CREATE TABLE partner_vehicles/);
   assert.doesNotMatch(source("db/migrations/038_partner_vehicles.sql"), /ALTER TABLE reservations/);
   assert.doesNotMatch(source("db/migrations/038_partner_vehicles.sql"), /economic-sedan/);
+  assert.match(source("db/migrations/046_driver_portal.sql"), /ADD COLUMN email TEXT/);
+  assert.match(source("lib/partner/driver-actions.ts"), /email: String\(formData\.get\("email"/);
+  assert.match(source("lib/ops/partner-fleet-actions.ts"), /email: String\(formData\.get\("email"/);
 });

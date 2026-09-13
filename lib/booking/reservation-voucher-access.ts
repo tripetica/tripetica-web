@@ -21,6 +21,7 @@ import {
 import { bosphorusDinnerCopy } from "@/lib/booking/bosphorus-dinner-copy";
 import {
   parseReservationServiceSnapshot,
+  reservationServiceContentForLocale,
   type ReservationServiceContent,
 } from "@/lib/booking/reservation-service-snapshot";
 import {
@@ -49,7 +50,9 @@ import {
   resolveStoredPriceAmount,
   type ManualPriceTotals,
 } from "@/lib/ops/price-override";
-import { type Locale } from "@/lib/i18n/config";
+import { passengerNoteText } from "@/lib/booking/passenger-note";
+import { resolveReservationCustomerLocale } from "@/lib/booking/reservation-voucher-locale";
+import { intlLocaleTag, type Locale } from "@/lib/i18n/config";
 
 export type ReservationVoucherData = {
   reservationCode: string;
@@ -83,6 +86,7 @@ export type ReservationVoucherData = {
   otherCurrencyLine: string | null;
   contactPhone: string;
   contactEmail: string;
+  passengerNote: string | null;
   passengerNames: string[];
   participantBreakdown: string[] | null;
   participantBreakdownHeading: string | null;
@@ -142,6 +146,7 @@ type VoucherRow = {
   bosphorus_adult_alcohol: string | number | null;
   bosphorus_child_5_9: string | number | null;
   bosphorus_child_0_4: string | number | null;
+  notes: string | null;
 };
 
 type PassengerRow = {
@@ -165,13 +170,7 @@ function displayAddress(
 }
 
 function intlLocale(locale: Locale) {
-  if (locale === "ru") {
-    return "ru-RU";
-  }
-  if (locale === "tr") {
-    return "tr-TR";
-  }
-  return "en-GB";
+  return intlLocaleTag(locale);
 }
 
 function formatVoucherDate(pickupAt: Date, locale: Locale) {
@@ -317,13 +316,14 @@ function bosphorusCountsFromRow(row: VoucherRow): BosphorusPaxCounts {
 function mapRow(
   row: VoucherRow,
   passengers: PassengerRow[],
-  locale: Locale,
+  fallbackLocale?: Locale,
 ): ReservationVoucherData {
-  const copy = voucherCopy[locale];
-  const bookingLocale =
-    row.locale === "en" || row.locale === "ru" || row.locale === "tr"
-      ? row.locale
-      : locale;
+  const voucherLocale = resolveReservationCustomerLocale(
+    row.locale,
+    fallbackLocale,
+  );
+  const copy = voucherCopy[voucherLocale];
+  const bookingLocale = voucherLocale;
   const pickupAt = row.pickup_at;
   const manualPriceTotals = parseManualPriceTotals(row.manual_price_totals);
   const price = resolveStoredPriceAmount({
@@ -354,9 +354,10 @@ function mapRow(
   const bosphorus = isBosphorusDinnerTour(row.service_type, row.tour_code);
   const bosphorusCopy = bosphorusDinnerCopy[bookingLocale];
   const snapshottedContent: ReservationServiceContent | null =
-    parseReservationServiceSnapshot(row.service_content_snapshot)?.locales[
-      bookingLocale
-    ] ?? null;
+    reservationServiceContentForLocale(
+      parseReservationServiceSnapshot(row.service_content_snapshot),
+      bookingLocale,
+    );
   const packageCoverageValue =
     snapshottedContent?.packageCoverage ??
     (bosphorus
@@ -466,6 +467,7 @@ function mapRow(
     }),
     contactPhone: row.customer_phone?.trim() || "—",
     contactEmail: row.customer_email?.trim() || "—",
+    passengerNote: passengerNoteText(row.notes),
     passengerNames: voucherPassengerNames(passengers, mainFirstName, mainLastName),
     participantBreakdown:
       participantBreakdown && participantBreakdown.length > 0
@@ -511,7 +513,7 @@ function mapRow(
 export async function findReservationVoucherForSession(
   browserSessionId: string,
   reservationCode: string,
-  locale: Locale,
+  fallbackLocale?: Locale,
 ): Promise<ReservationVoucherData | null> {
   const code = reservationCode.trim();
   if (!code) {
@@ -561,7 +563,8 @@ export async function findReservationVoucherForSession(
         r.bosphorus_adult_soft,
         r.bosphorus_adult_alcohol,
         r.bosphorus_child_5_9,
-        r.bosphorus_child_0_4
+        r.bosphorus_child_0_4,
+        r.notes
      FROM reservations r
      INNER JOIN reservation_searches s ON s.id = r.source_reservation_search_id
      WHERE s.browser_session_id = $1
@@ -581,12 +584,12 @@ export async function findReservationVoucherForSession(
      ORDER BY sequence_no ASC`,
     [row.id],
   );
-  return mapRow(row, passengers.rows, locale);
+  return mapRow(row, passengers.rows, fallbackLocale);
 }
 
 export async function findReservationVoucherById(
   reservationId: string,
-  locale: Locale,
+  fallbackLocale?: Locale,
 ): Promise<ReservationVoucherData | null> {
   const id = reservationId.trim();
   if (!id) {
@@ -636,7 +639,8 @@ export async function findReservationVoucherById(
         r.bosphorus_adult_soft,
         r.bosphorus_adult_alcohol,
         r.bosphorus_child_5_9,
-        r.bosphorus_child_0_4
+        r.bosphorus_child_0_4,
+        r.notes
      FROM reservations r
      WHERE r.id = $1
        AND r.deleted_at IS NULL
@@ -654,7 +658,7 @@ export async function findReservationVoucherById(
      ORDER BY sequence_no ASC`,
     [row.id],
   );
-  return mapRow(row, passengers.rows, locale);
+  return mapRow(row, passengers.rows, fallbackLocale);
 }
 
 export function voucherPdfFilename(reservationCode: string) {

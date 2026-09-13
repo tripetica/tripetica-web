@@ -14,6 +14,12 @@ const EN_NOUN: Record<OccupancyKind, { one: string; other: string }> = {
   babySeat: { one: "Baby seat", other: "Baby seats" },
 };
 
+const AR_NOUN: Record<OccupancyKind, { one: string; other: string }> = {
+  passenger: { one: "راكب", other: "ركاب" },
+  luggage: { one: "حقيبة", other: "حقائب" },
+  babySeat: { one: "مقعد أطفال", other: "مقاعد أطفال" },
+};
+
 const RU_NOUN: Record<OccupancyKind, { one: string; few: string; many: string }> = {
   passenger: {
     one: "пассажир",
@@ -54,6 +60,10 @@ export function occupancyOptionLabel(
   }
   if (locale === "en") {
     const noun = count === 1 ? EN_NOUN[kind].one : EN_NOUN[kind].other;
+    return `${count} ${noun}`;
+  }
+  if (locale === "ar") {
+    const noun = count === 1 ? AR_NOUN[kind].one : AR_NOUN[kind].other;
     return `${count} ${noun}`;
   }
   return `${count} ${RU_NOUN[kind][russianPluralForm(count)]}`;

@@ -11,9 +11,10 @@ import {
   findReservationVoucherById,
   voucherPdfFilename,
 } from "@/lib/booking/reservation-voucher-access";
+import { resolveReservationCustomerLocale } from "@/lib/booking/reservation-voucher-locale";
 import { buildReservationVoucherPdf } from "@/lib/booking/reservation-voucher-pdf";
 import { query } from "@/lib/db/postgres";
-import { isLocale, type Locale } from "@/lib/i18n/config";
+import { type Locale } from "@/lib/i18n/config";
 import {
   buildReservationMailContactSectionHtml,
   buildReservationMailContactSectionText,
@@ -61,6 +62,7 @@ function reservationMailFrom() {
 function intlLocale(locale: Locale) {
   if (locale === "ru") return "ru-RU";
   if (locale === "tr") return "tr-TR";
+  if (locale === "ar") return "ar-SA";
   return "en-GB";
 }
 
@@ -742,8 +744,7 @@ async function deliverReservationConfirmationEmail(
       return { ok: false, error: "missing_email" };
     }
 
-    const localeRaw = row.locale ?? "";
-    const locale: Locale = isLocale(localeRaw) ? localeRaw : "tr";
+    const locale = resolveReservationCustomerLocale(row.locale, "tr");
     const accountLabels = accountCopy[locale];
     const voucher = await findReservationVoucherById(id, locale);
     if (!voucher) {
@@ -797,7 +798,7 @@ async function deliverReservationConfirmationEmail(
       includeSawNoMeet: showSawNoMeetSection(row),
     });
 
-    const pdf = await buildReservationVoucherPdf(voucher, locale);
+    const pdf = await buildReservationVoucherPdf(voucher, voucher.locale);
     voucherPreparedAt = performance.now();
     const filename = voucherPdfFilename(row.reservation_code);
 

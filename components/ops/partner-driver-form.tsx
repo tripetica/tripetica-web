@@ -50,6 +50,12 @@ function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: 
   if (error === "duplicate-national-id") {
     return copy.duplicateNationalId;
   }
+  if (error === "invalid-email") {
+    return copy.invalidDriverEmail;
+  }
+  if (error === "duplicate-email") {
+    return copy.duplicateDriverEmail;
+  }
   if (error === "in-use") {
     return copy.fleetInUse;
   }
@@ -64,6 +70,7 @@ function driverStamp(driver: PartnerDriverRecord) {
     driver.fullName,
     driver.phone,
     driver.nationalId,
+    driver.email,
     driver.languageCodes.join(","),
   ].join(":");
 }
@@ -85,6 +92,7 @@ function PartnerDriverFormEditor({
   const initial = {
     fullName: driver.fullName,
     nationalId: driver.nationalId ?? "",
+    email: driver.email ?? "",
     phoneCountry: storedPhone.iso2 ?? PARTNER_DEFAULT_COUNTRY_CODE,
     phoneNational: storedPhone.national,
     languages: driver.languageCodes,
@@ -113,6 +121,7 @@ function PartnerDriverFormEditor({
   const dirty =
     values.fullName.trim() !== baseline.fullName.trim() ||
     values.nationalId.replace(/\D/g, "") !== baseline.nationalId.replace(/\D/g, "") ||
+    values.email.trim().toLowerCase() !== baseline.email.trim().toLowerCase() ||
     values.phoneCountry !== baseline.phoneCountry ||
     values.phoneNational.replace(/[\s-]+/g, "") !==
       baseline.phoneNational.replace(/[\s-]+/g, "") ||
@@ -242,6 +251,19 @@ function PartnerDriverFormEditor({
                 setValues((current) => ({ ...current, nationalId: event.target.value }))
               }
               required
+              disabled={!canManage}
+            />
+          </label>
+          <label className="ops-field">
+            <span>{copy.email}</span>
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={values.email}
+              onChange={(event) =>
+                setValues((current) => ({ ...current, email: event.target.value }))
+              }
               disabled={!canManage}
             />
           </label>

@@ -112,6 +112,28 @@ test("other currencies use snapshot rates with selected vehicle EUR when snapsho
   assert.equal(eur?.amount, "139.96");
 });
 
+test("quote snapshot is used only when no selected vehicle total exists", () => {
+  const quoteUsd = selectedStoredAmount({
+    currency: "USD",
+    appliedVehicleTotal: null,
+    fxSnapshot: snapshot,
+  });
+  assert.equal(quoteUsd.amount, snapshot.totals.USD);
+  const quoteEur = selectedStoredAmount({
+    currency: "EUR",
+    appliedVehicleTotal: null,
+    fxSnapshot: snapshot,
+  });
+  assert.equal(quoteEur.amount, snapshot.totals.EUR);
+  const selected = selectedStoredAmount({
+    currency: "USD",
+    appliedVehicleTotal: "112.81",
+    fxSnapshot: snapshot,
+  });
+  assert.equal(selected.amount, "112.81");
+  assert.notEqual(selected.amount, snapshot.totals.USD);
+});
+
 test("falls back to applied vehicle total when snapshot has no selected currency", () => {
   const result = selectedStoredAmount({
     currency: "GBP",

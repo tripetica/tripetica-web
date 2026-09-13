@@ -28,4 +28,10 @@ export const phoneFieldCopy: Record<
     selectCodeFirst: "Сначала выберите код страны",
     codeSearchLabel: "Поиск страны",
   },
+  ar: {
+    selectCode: "اختر الرمز",
+    phonePlaceholder: "رقم الهاتف",
+    selectCodeFirst: "اختر رمز الدولة أولًا",
+    codeSearchLabel: "البحث عن دولة",
+  },
 };

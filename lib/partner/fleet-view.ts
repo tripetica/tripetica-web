@@ -16,6 +16,7 @@ export type PartnerDriverRecord = {
   nationalId: string | null;
   phone: string | null;
   phoneCountryCode: string | null;
+  email: string | null;
   languageCodes: string[];
   status: PartnerFleetStatus;
   deletedAt: string | null;

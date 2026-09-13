@@ -17,6 +17,12 @@ import {
   type PartnerJobRank,
 } from "@/lib/partner/job-visibility";
 import {
+  appendPickupAtBoundsSql,
+  partnerAcceptedJobCompletedClause,
+  partnerAcceptedJobPickupBounds,
+  type PartnerAcceptedJobFilters,
+} from "@/lib/partner/accepted-job-filters";
+import {
   partnerJobGenderValue,
   partnerJobIsAirportPickup,
   partnerJobPlaceName,
@@ -280,18 +286,27 @@ export async function listOpenPartnerJobs(
 
 export async function listAcceptedPartnerJobs(
   viewer: PartnerJobViewer,
+  filters?: PartnerAcceptedJobFilters,
 ): Promise<PartnerJobRecord[]> {
   const context = await getPartnerJobContext(viewer.partnerId);
   if (!context) {
     return [];
   }
+  const values: unknown[] = [viewer.partnerId];
+  const clauses = ["deleted_at IS NULL", "accepted_partner_id = $1"];
+  if (filters) {
+    clauses.push(partnerAcceptedJobCompletedClause(filters.operation ?? ""));
+    const pickupBounds = partnerAcceptedJobPickupBounds(filters);
+    if (pickupBounds) {
+      appendPickupAtBoundsSql(clauses, values, pickupBounds);
+    }
+  }
   const result = await query<JobRow>(
     `SELECT ${JOB_SELECT}
      FROM reservations
-     WHERE deleted_at IS NULL
-       AND accepted_partner_id = $1
+     WHERE ${clauses.join("\n       AND ")}
      ORDER BY accepted_at DESC NULLS LAST, pickup_at DESC`,
-    [viewer.partnerId],
+    values,
   );
   const assignments = await assignmentViewsForRows(viewer.partnerId, result.rows);
   return result.rows.map((row) =>

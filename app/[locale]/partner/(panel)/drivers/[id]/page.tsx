@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerDriverDetail } from "@/components/partner/driver-detail";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { getPartnerDriver } from "@/lib/partner/fleet";
@@ -25,7 +25,7 @@ export default async function PartnerDriverDetailPage({
       <PartnerDriverDetail
         key={`${driver.id}:${driver.updatedAt}`}
         locale={locale}
-        copy={partnerCopy[locale]}
+        copy={partnerCopy[asPanelLocale(locale)]}
         driver={driver}
       />
     </div>

@@ -8,6 +8,7 @@ import { type OpsCopy } from "@/lib/ops/copy";
 import {
   RESERVATION_DATE_PRESETS,
   hasActiveReservationFilters,
+  reservationQueryRecord,
   type ReservationDatePreset,
   type ReservationListFilters,
 } from "@/lib/ops/reservation-filters";
@@ -59,6 +60,9 @@ export function ReservationFilters({ locale, copy, filters }: ReservationFilters
       {filters.sort && filters.dir ? (
         <input type="hidden" name="dir" value={filters.dir} />
       ) : null}
+      {filters.operation === "completed" ? (
+        <input type="hidden" name="operation" value="completed" />
+      ) : null}
       <div className="ops-reservation-search">
         <input
           type="search"
@@ -100,6 +104,25 @@ export function ReservationFilters({ locale, copy, filters }: ReservationFilters
               </button>
             ),
           )}
+        </div>
+        <div className="ops-date-filter">
+          <p className="ops-date-filter-label">{copy.operationStatus}</p>
+          <div className="ops-date-chips" role="group" aria-label={copy.operationStatus}>
+            <a
+              className={`ops-date-chip${filters.operation === "completed" ? " is-active" : ""}`}
+              href={`${localizedPath(locale, "/ops/reservations")}?${new URLSearchParams(
+                Object.entries(
+                  reservationQueryRecord({
+                    ...filters,
+                    operation: filters.operation === "completed" ? "" : "completed",
+                  }),
+                ).filter(([, value]) => value.length > 0),
+              ).toString()}`}
+              aria-pressed={filters.operation === "completed"}
+            >
+              {copy.operationCompleted}
+            </a>
+          </div>
         </div>
         {showRange ? (
           <div className="ops-date-range">

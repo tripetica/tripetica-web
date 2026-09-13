@@ -42,7 +42,7 @@ export async function GET(
     if (!voucher) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    const pdf = await buildReservationVoucherPdf(voucher, locale);
+    const pdf = await buildReservationVoucherPdf(voucher, voucher.locale);
     const filename = voucherPdfFilename(
       owned.reservationCode || voucher.reservationCode,
     );

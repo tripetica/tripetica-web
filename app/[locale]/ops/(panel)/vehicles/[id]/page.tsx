@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerVehicleForm } from "@/components/ops/partner-vehicle-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
@@ -25,7 +25,7 @@ export default async function OpsVehicleDetailPage({
   return (
     <PartnerVehicleForm
       locale={locale}
-      copy={opsCopy[locale]}
+      copy={opsCopy[asPanelLocale(locale)]}
       vehicle={vehicle}
       canManage={actorCan(actor, "partners.manage")}
       linkedPartner={{

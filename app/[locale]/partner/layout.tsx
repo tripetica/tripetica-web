@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { partnerCopy } from "@/lib/partner/copy";
 import { noindexNofollowRobots } from "@/lib/seo/metadata";
 
@@ -14,7 +14,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: partnerCopy[locale].panelName,
+    title: partnerCopy[asPanelLocale(locale)].panelName,
     robots: noindexNofollowRobots,
   };
 }

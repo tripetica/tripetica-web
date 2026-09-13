@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { type OpsCopy } from "@/lib/ops/copy";
-import { fillCopy, formatOpsDateTime, formatOpsDuration } from "@/lib/ops/format";
+import { fillCopy, formatOpsDateTime, formatOpsDuration, listRowNumber } from "@/lib/ops/format";
+import { driverTaskStageLabel } from "@/lib/ops/driver-task-copy";
 import { formatOpsAmountOrDash } from "@/lib/ops/money";
 import {
   nextReservationSortDir,
@@ -24,6 +25,8 @@ type ReservationTableProps = {
   locale: Locale;
   copy: OpsCopy;
   items: ReservationListItem[];
+  page: number;
+  pageSize: number;
   filters: ReservationListFilters;
   partners: OpsAssignmentPartnerOption[];
   fleets: Record<string, OpsAssignmentFleet>;
@@ -74,6 +77,8 @@ export function ReservationTable({
   locale,
   copy,
   items,
+  page,
+  pageSize,
   filters,
   partners,
   fleets,
@@ -178,13 +183,14 @@ export function ReservationTable({
                   />
                 </label>
               </th>
-              <th>{copy.reservationCode}</th>
+              <th className="ops-row-num-col">{copy.driverRowIndex}</th>
               <SortHeader
                 locale={locale}
                 label={copy.transferAt}
                 field="pickup_at"
                 filters={filters}
               />
+              <th>{copy.reservationCode}</th>
               <SortHeader
                 locale={locale}
                 label={copy.created}
@@ -205,6 +211,7 @@ export function ReservationTable({
               <th className="ops-col-assignment">{copy.assignmentPartner}</th>
               <th className="ops-col-assignment">{copy.assignmentDriver}</th>
               <th className="ops-col-assignment">{copy.assignmentVehicle}</th>
+              <th className="ops-col-operation">{copy.operationStatus}</th>
               <th>{copy.total}</th>
               <th>{copy.currency}</th>
               <th className="ops-col-payment">{copy.paymentMethod}</th>
@@ -217,7 +224,7 @@ export function ReservationTable({
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => {
+            {items.map((item, rowIndex) => {
               const selected = isRowSelected(item.id);
               return (
                 <tr
@@ -236,8 +243,11 @@ export function ReservationTable({
                       />
                     </label>
                   </td>
-                  <td>{item.reservationCode}</td>
+                  <td className="ops-row-num-col">
+                    {listRowNumber(page, pageSize, rowIndex)}
+                  </td>
                   <td>{formatOpsDateTime(item.pickupAt, locale)}</td>
+                  <td>{item.reservationCode}</td>
                   <td>{formatOpsDateTime(item.createdAt, locale)}</td>
                   <td>
                     <span className="ops-cell-stack">
@@ -278,6 +288,9 @@ export function ReservationTable({
                     vehicles={item.acceptedPartnerId ? fleets[item.acceptedPartnerId]?.vehicles ?? [] : []}
                     canAssign={canAssign}
                   />
+                  <td className="ops-col-operation">
+                    {driverTaskStageLabel(item.driverTaskStage, copy)}
+                  </td>
                   <td className="ops-amount-cell">
                     {formatOpsAmountOrDash(item.totalPrice, locale)}
                   </td>

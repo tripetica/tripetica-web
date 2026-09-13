@@ -11,6 +11,7 @@ import {
   isReservationCancelled,
   localeLabel,
   opsVehicleLabelFor,
+  passengerNoteText,
   paymentLabel,
   processPdfFilename,
   reservationPdfFilename,
@@ -20,6 +21,7 @@ import {
   stageLabel,
   statusLabel,
 } from "@/lib/ops/record-detail";
+import { readFileSync } from "node:fs";
 
 const copy = opsCopy.tr;
 
@@ -66,6 +68,30 @@ test("ops contact rows are identified by email and phone labels", () => {
   assert.equal(isOpsContactRow(copy.email, copy), true);
   assert.equal(isOpsContactRow(copy.phone, copy), true);
   assert.equal(isOpsContactRow(copy.firstName, copy), false);
+  assert.equal(isOpsContactRow(copy.passengerNote, copy), false);
+  assert.equal(isOpsContactRow(copy.notes, copy), false);
+});
+
+test("passenger note is separate from driver/assignment notes", () => {
+  assert.equal(copy.passengerNote, "Yolcu Notu");
+  assert.equal(opsCopy.en.passengerNote, "Passenger Note");
+  assert.equal(opsCopy.ru.passengerNote, "Заметка пассажира");
+  assert.notEqual(copy.passengerNote, copy.notes);
+  assert.equal(
+    passengerNoteText("Kapıda beklerim\nPlease call"),
+    "Kapıda beklerim\nPlease call",
+  );
+  const detailUi = readFileSync(
+    new URL("../../components/ops/record-detail.tsx", import.meta.url),
+    "utf8",
+  );
+  const pdf = readFileSync(new URL("./pdf.ts", import.meta.url), "utf8");
+  const mapper = readFileSync(new URL("./record-detail.ts", import.meta.url), "utf8");
+  assert.match(detailUi, /detail\.passengerNote/);
+  assert.match(detailUi, /copy\.passengerNote/);
+  assert.match(pdf, /drawPassengerNote/);
+  assert.match(mapper, /passengerNote: passengerNoteText\(item\.notes\)/);
+  assert.doesNotMatch(mapper, /row\(copy\.notes, displayText\(item\.notes\)\)/);
 });
 
 test("reservation voucher pdf filename uses Tripetica-Voucher prefix", () => {

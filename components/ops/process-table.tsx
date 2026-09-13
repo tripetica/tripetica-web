@@ -8,7 +8,7 @@ import {
 } from "@/lib/ops/actions";
 import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
-import { fillCopy, formatOpsDateTime, formatOpsDuration } from "@/lib/ops/format";
+import { fillCopy, formatOpsDateTime, formatOpsDistance, formatOpsDuration, listRowNumber } from "@/lib/ops/format";
 import { formatOpsAmountOrDash } from "@/lib/ops/money";
 import { type ProcessListFilters } from "@/lib/ops/process-filters";
 import { type ProcessListItem } from "@/lib/ops/process-types";
@@ -22,6 +22,8 @@ type ProcessTableProps = {
   copy: OpsCopy;
   items: ProcessListItem[];
   total: number;
+  page: number;
+  pageSize: number;
   filters: ProcessListFilters;
   canDelete: boolean;
 };
@@ -37,6 +39,8 @@ export function ProcessTable({
   copy,
   items,
   total,
+  page,
+  pageSize,
   filters,
   canDelete,
 }: ProcessTableProps) {
@@ -271,18 +275,22 @@ export function ProcessTable({
                   />
                 </label>
               </th>
+              <th className="ops-row-num-col">{copy.driverRowIndex}</th>
+              <th>{copy.transferAt}</th>
               <th>{copy.createdAt}</th>
               <th>{copy.updatedAt}</th>
               <th>{copy.status}</th>
               <th>{copy.stage}</th>
               <th>{copy.locale}</th>
-              <th>{copy.transferAt}</th>
               <th>{copy.serviceType}</th>
               <th>{copy.durationHours}</th>
               <th>{copy.pickup}</th>
               <th>{copy.dropoff}</th>
-              <th>{copy.passengerCount}</th>
-              <th>{copy.vehicle}</th>
+              <th>{copy.passengerLuggageBaby}</th>
+              <th>{copy.vehicleClass}</th>
+              <th>{copy.flight}</th>
+              <th>{copy.meetAndGreet}</th>
+              <th>{copy.kilometre}</th>
               <th>{copy.total}</th>
               <th>{copy.currency}</th>
               <th>{copy.email}</th>
@@ -293,7 +301,7 @@ export function ProcessTable({
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => {
+            {items.map((item, rowIndex) => {
               const selected = isRowSelected(item.id);
               const classes = [
                 item.converted ? "is-converted" : "",
@@ -318,12 +326,15 @@ export function ProcessTable({
                       />
                     </label>
                   </td>
+                  <td className="ops-row-num-col">
+                    {listRowNumber(page, pageSize, rowIndex)}
+                  </td>
+                  <td>{formatOpsDateTime(item.pickupAt, locale)}</td>
                   <td>{formatOpsDateTime(item.createdAt, locale)}</td>
                   <td>{formatOpsDateTime(item.updatedAt, locale)}</td>
                   <td>{item.status ?? "—"}</td>
                   <td>{item.currentStage ?? "—"}</td>
                   <td>{item.locale ?? "—"}</td>
-                  <td>{formatOpsDateTime(item.pickupAt, locale)}</td>
                   <td>
                     <span className="ops-cell-stack">
                       <span>
@@ -337,8 +348,17 @@ export function ProcessTable({
                   <td>{formatOpsDuration(item.durationHours, locale)}</td>
                   <td>{item.pickupName ?? "—"}</td>
                   <td>{item.dropoffName ?? "—"}</td>
-                  <td>{item.passengerCount ?? "—"}</td>
+                  <td>{item.passengerLuggageBaby}</td>
                   <td>{item.vehicleLabel ?? "—"}</td>
+                  <td>{item.flightCode ?? "—"}</td>
+                  <td>
+                    {item.meetAndGreet === true
+                      ? copy.yes
+                      : item.meetAndGreet === false
+                        ? copy.no
+                        : "—"}
+                  </td>
+                  <td>{formatOpsDistance(item.distanceKm, locale) || "—"}</td>
                   <td className="ops-amount-cell">{formatOpsAmountOrDash(item.price, locale)}</td>
                   <td>{item.currency ?? "—"}</td>
                   <td>{item.email ?? "—"}</td>

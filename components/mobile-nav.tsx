@@ -42,7 +42,7 @@ type MobileNavProps = {
 };
 
 const drawerItemClassName =
-  "drawer-nav-item liquid-lens-row flex min-h-12 cursor-pointer items-center border-b border-white/10 px-3 py-4 text-left text-[1.05rem] font-medium";
+  "drawer-nav-item liquid-lens-row flex min-h-12 cursor-pointer items-center border-b border-white/10 px-3 py-4 text-start text-[1.05rem] font-medium";
 
 function clearHamburgerVisualState(button: HTMLButtonElement | null) {
   if (!button) {
@@ -140,7 +140,7 @@ export function MobileNav({
               role="dialog"
               aria-modal="true"
               aria-label={copy.openMenu}
-              className="drawer-panel fixed inset-y-0 right-0 z-[120] flex w-[min(22rem,82vw)] max-w-full flex-col"
+              className="drawer-panel fixed inset-y-0 inset-inline-end-0 z-[120] flex w-[min(22rem,82vw)] max-w-full flex-col"
               style={{ transform: "none" }}
             >
               <div className="flex items-center justify-end px-3 py-3">

@@ -21,6 +21,8 @@ export type PartnerDriverFormState = {
     | "invalid-phone"
     | "invalid-languages"
     | "duplicate-national-id"
+    | "invalid-email"
+    | "duplicate-email"
     | "not-found"
     | "in-use"
     | "failed"
@@ -78,6 +80,7 @@ export async function partnerCreateDriverAction(
       phoneNational: String(formData.get("phoneNational") ?? ""),
       nationalId: String(formData.get("nationalId") ?? ""),
       languageCodes: languageCodesFromForm(formData),
+      email: String(formData.get("email") ?? ""),
     });
   } catch {
     return { error: "failed", ok: false };
@@ -110,6 +113,7 @@ export async function partnerUpdateDriverAction(
       phoneNational: String(formData.get("phoneNational") ?? ""),
       nationalId: String(formData.get("nationalId") ?? ""),
       languageCodes: languageCodesFromForm(formData),
+      email: String(formData.get("email") ?? ""),
     });
     if (!result.ok) {
       return { error: result.error, ok: false };

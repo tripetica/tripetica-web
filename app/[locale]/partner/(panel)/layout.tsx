@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { PartnerShell } from "@/components/partner/shell";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 
@@ -16,7 +16,7 @@ export default async function PartnerPanelLayout({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
   const headerList = await headers();
   const pathname = headerList.get("x-partner-pathname") ?? "";
   const pathWithoutLocale = pathname.replace(/^\/(tr|en|ru)/, "") || "/partner";

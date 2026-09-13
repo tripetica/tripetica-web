@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll Tripetica production assignment-missing reminders
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+AccuracySec=20s
+Persistent=true
+Unit=tripetica-assignment-alarm.service
+
+[Install]
+WantedBy=timers.target

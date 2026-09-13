@@ -2,6 +2,11 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import { pickupAtBounds, reservationOrderBy, type ReservationListFilters } from "@/lib/ops/reservation-filters";
+import {
+  ensureDriverTaskForReservation,
+  getDriverTaskForOps,
+  isDriverTaskStage,
+} from "@/lib/ops/driver-task";
 import { selectedStoredAmount } from "@/lib/ops/money";
 import { parseManualPriceTotals } from "@/lib/ops/price-override";
 import { type ReservationListItem } from "@/lib/ops/reservation-types";
@@ -67,6 +72,7 @@ export type ReservationDetail = ReservationListItem & {
   paymentHistoryLines: string[] | null;
   paymentHistory: import("@/lib/ops/payment-history").OpsPaymentHistorySection | null;
   passengers: ReservationPassenger[];
+  driverTask: import("@/lib/ops/driver-task").DriverTaskOpsView | null;
 };
 
 export type ReservationPassenger = {
@@ -135,6 +141,7 @@ type ListRow = {
   assigned_vehicle_luggage: number | null;
   assigned_vehicle_color: string | null;
   assigned_vehicle_features: string | null;
+  driver_task_stage: string | null;
 };
 
 type DetailRow = ListRow & {
@@ -217,6 +224,7 @@ function liveDriverFromRow(row: ListRow): PartnerDriverRecord | null {
     nationalId: row.assigned_driver_national_id,
     phone: row.assigned_driver_phone,
     phoneCountryCode: row.assigned_driver_phone_country,
+    email: null,
     languageCodes: row.assigned_driver_languages ?? [],
     status: "active",
     deletedAt: null,
@@ -317,6 +325,9 @@ function mapList(row: ListRow): ReservationListItem {
     paymentMovements: [],
     meetAndGreet: row.meet_and_greet,
     status: row.status,
+    driverTaskStage: isDriverTaskStage(row.driver_task_stage)
+      ? row.driver_task_stage
+      : "planned",
     createdAt: row.created_at.toISOString(),
     acceptedPartnerId: assignment.acceptedPartnerId,
     acceptedPartnerName: assignment.acceptedPartnerName,
@@ -360,6 +371,23 @@ export async function listReservations(input: {
   if (input.filters.payment) {
     values.push(input.filters.payment);
     filters.push(`payment_method = $${values.length}`);
+  }
+  if ((input.filters.operation ?? "") === "completed") {
+    filters.push(
+      `EXISTS (
+         SELECT 1 FROM reservation_driver_tasks driver_task
+         WHERE driver_task.reservation_id = reservations.id
+           AND driver_task.current_stage = 'completed'
+       )`,
+    );
+  } else {
+    filters.push(
+      `NOT EXISTS (
+         SELECT 1 FROM reservation_driver_tasks driver_task
+         WHERE driver_task.reservation_id = reservations.id
+           AND driver_task.current_stage = 'completed'
+       )`,
+    );
   }
   const pickupBounds = pickupAtBounds(
     input.filters.date,
@@ -425,7 +453,8 @@ export async function listReservations(input: {
         assigned_vehicle.passenger_capacity AS assigned_vehicle_passengers,
         assigned_vehicle.luggage_capacity AS assigned_vehicle_luggage,
         assigned_vehicle.color AS assigned_vehicle_color,
-        assigned_vehicle.features AS assigned_vehicle_features
+        assigned_vehicle.features AS assigned_vehicle_features,
+        jobs.driver_task_stage
      FROM (
         SELECT
           id, reservation_code, pickup_at, service_type, tour_code,
@@ -442,7 +471,13 @@ export async function listReservations(input: {
           status, created_at,
           accepted_partner_id,
           assigned_driver_kind, assigned_driver_id, assigned_driver_snapshot,
-          assigned_vehicle_kind, assigned_vehicle_id, assigned_vehicle_snapshot
+          assigned_vehicle_kind, assigned_vehicle_id, assigned_vehicle_snapshot,
+          (
+            SELECT current_stage
+            FROM reservation_driver_tasks
+            WHERE reservation_id = reservations.id
+            LIMIT 1
+          ) AS driver_task_stage
         FROM reservations
         WHERE ${where}
         ORDER BY ${orderBy}
@@ -557,6 +592,7 @@ export async function listReservations(input: {
 }
 
 export async function getReservation(id: string): Promise<ReservationDetail | null> {
+  await ensureDriverTaskForReservation({ query }, id);
   const result = await query<DetailRow>(
     `SELECT
         r.id, r.reservation_code, r.pickup_at,
@@ -600,7 +636,13 @@ export async function getReservation(id: string): Promise<ReservationDetail | nu
         assigned_vehicle.passenger_capacity AS assigned_vehicle_passengers,
         assigned_vehicle.luggage_capacity AS assigned_vehicle_luggage,
         assigned_vehicle.color AS assigned_vehicle_color,
-        assigned_vehicle.features AS assigned_vehicle_features
+        assigned_vehicle.features AS assigned_vehicle_features,
+        (
+          SELECT current_stage
+          FROM reservation_driver_tasks
+          WHERE reservation_id = r.id
+          LIMIT 1
+        ) AS driver_task_stage
      FROM reservations r
      LEFT JOIN partners accepted_partner ON accepted_partner.id = r.accepted_partner_id
      LEFT JOIN partner_drivers assigned_driver ON assigned_driver.id = r.assigned_driver_id
@@ -684,6 +726,7 @@ export async function getReservation(id: string): Promise<ReservationDetail | nu
       gender: item.gender,
       isPrimary: item.is_primary_passenger,
     })),
+    driverTask: await getDriverTaskForOps(id),
   };
 
   if ((detail.paymentMethod ?? "").trim().toLowerCase() === "sbp") {

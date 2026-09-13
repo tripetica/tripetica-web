@@ -22,6 +22,7 @@ export type ReservationListItem = {
   paymentMovements: import("@/lib/ops/payment-history").OpsPaymentMovementCompactLine[];
   meetAndGreet: boolean | null;
   status: string;
+  driverTaskStage: import("@/lib/ops/driver-task-stages").DriverTaskStage;
   createdAt: string;
   acceptedPartnerId: string | null;
   acceptedPartnerName: string | null;

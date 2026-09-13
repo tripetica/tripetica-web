@@ -8,6 +8,14 @@ import {
 } from "@/lib/ops/process-filters";
 import { selectedStoredAmount } from "@/lib/ops/money";
 import { parseManualPriceTotals } from "@/lib/ops/price-override";
+import {
+  formatPassengerLuggageBaby,
+  preferredProcessCount,
+  preferredProcessFlag,
+  processListDistanceKm,
+  processListFlightCode,
+  processListVehicleClassLabel,
+} from "@/lib/ops/process-list-display";
 import { type ProcessListItem } from "@/lib/ops/process-types";
 import {
   assertNoReservationChildOrphans,
@@ -112,8 +120,21 @@ type ListRow = {
   selected_pickup_at: Date | null;
   applied_passenger_count: number | null;
   selected_passenger_count: number | null;
+  applied_luggage_count: number | null;
+  selected_luggage_count: number | null;
+  applied_baby_seat_count: number | null;
+  selected_baby_seat_count: number | null;
+  applied_meet_and_greet: boolean | null;
+  selected_meet_and_greet: boolean | null;
+  applied_flight_code: string | null;
+  selected_flight_code: string | null;
+  applied_distance_km: string | null;
+  selected_distance_km: string | null;
+  applied_vehicle_code: string | null;
+  selected_vehicle_code: string | null;
   applied_vehicle_label_customer: string | null;
   applied_vehicle_label_tr: string | null;
+  selected_vehicle_label_tr: string | null;
   applied_vehicle_total: string | null;
   applied_price: string | null;
   applied_fx_snapshot: unknown;
@@ -134,6 +155,18 @@ function place(applied: string | null, appliedTr: string | null, selected: strin
 }
 
 function mapList(row: ListRow): ProcessListItem {
+  const passengerCount = preferredProcessCount(
+    row.applied_passenger_count,
+    row.selected_passenger_count,
+  );
+  const luggageCount = preferredProcessCount(
+    row.applied_luggage_count,
+    row.selected_luggage_count,
+  );
+  const babySeatCount = preferredProcessCount(
+    row.applied_baby_seat_count,
+    row.selected_baby_seat_count,
+  );
   return {
     id: row.id,
     createdAt: row.created_at.toISOString(),
@@ -155,11 +188,30 @@ function mapList(row: ListRow): ProcessListItem {
       row.selected_dropoff_name_customer,
     ),
     pickupAt: (row.applied_pickup_at ?? row.selected_pickup_at)?.toISOString() ?? null,
-    passengerCount: row.applied_passenger_count ?? row.selected_passenger_count,
-    vehicleLabel:
-      row.applied_vehicle_label_customer?.trim() ||
-      row.applied_vehicle_label_tr?.trim() ||
-      null,
+    passengerCount,
+    luggageCount,
+    babySeatCount,
+    passengerLuggageBaby: formatPassengerLuggageBaby(
+      passengerCount,
+      luggageCount,
+      babySeatCount,
+    ),
+    meetAndGreet: preferredProcessFlag(
+      row.applied_meet_and_greet,
+      row.selected_meet_and_greet,
+    ),
+    vehicleLabel: processListVehicleClassLabel({
+      appliedVehicleCode: row.applied_vehicle_code,
+      selectedVehicleCode: row.selected_vehicle_code,
+      appliedVehicleLabelTr: row.applied_vehicle_label_tr,
+      selectedVehicleLabelTr: row.selected_vehicle_label_tr,
+    }),
+    flightCode: processListFlightCode(row.applied_flight_code, row.selected_flight_code),
+    distanceKm: processListDistanceKm(
+      row.service_type,
+      row.applied_distance_km,
+      row.selected_distance_km,
+    ),
     price: selectedStoredAmount({
       currency: row.currency,
       appliedVehicleTotal: row.applied_vehicle_total,
@@ -242,7 +294,14 @@ export async function listProcesses(
         s.applied_dropoff_name_customer, s.applied_dropoff_name_tr, s.selected_dropoff_name_customer,
         s.applied_pickup_at, s.selected_pickup_at,
         s.applied_passenger_count, s.selected_passenger_count,
+        s.applied_luggage_count, s.selected_luggage_count,
+        s.applied_baby_seat_count, s.selected_baby_seat_count,
+        s.applied_meet_and_greet, s.selected_meet_and_greet,
+        s.applied_flight_code, s.selected_flight_code,
+        s.applied_distance_km::text, s.selected_distance_km::text,
+        s.applied_vehicle_code, s.selected_vehicle_code,
         s.applied_vehicle_label_customer, s.applied_vehicle_label_tr,
+        s.selected_vehicle_label_tr,
         s.applied_vehicle_total::text, s.applied_price::text, s.applied_fx_snapshot,
         s.price_manually_overridden, s.manual_price_totals, s.currency,
         s.customer_email, s.customer_phone, s.payment_method,

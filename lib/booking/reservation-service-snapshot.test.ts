@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildReservationServiceSnapshot } from "@/lib/booking/reservation-service-snapshot";
+import {
+  buildReservationServiceSnapshot,
+  parseReservationServiceSnapshot,
+  reservationServiceContentForLocale,
+} from "@/lib/booking/reservation-service-snapshot";
 import {
   BURSA_ROUTE_BRIDGE_ULUDAG,
   BURSA_ROUTE_FERRY,
@@ -104,7 +108,7 @@ test("Bosphorus snapshot includes duration and three localized service groups", 
     bursaRoute: null,
     vehicleCode: null,
   });
-  for (const locale of ["tr", "en", "ru"] as const) {
+  for (const locale of ["tr", "en", "ru", "ar"] as const) {
     assert.equal(snapshot.locales[locale].includedItems.length, 7);
     assert.equal(snapshot.locales[locale].serviceInfoGroups.length, 3);
   }
@@ -112,5 +116,24 @@ test("Bosphorus snapshot includes duration and three localized service groups", 
   assert.match(snapshot.locales.tr.serviceInfoGroups[0].body, /20:30/);
   assert.match(snapshot.locales.tr.serviceInfoGroups[0].body, /19:30–20:00/);
   assert.match(snapshot.locales.tr.serviceInfoGroups[2].body, /iki ayrı transfer/);
+});
+
+test("legacy snapshots without Arabic still parse and fall back to English", () => {
+  const built = buildReservationServiceSnapshot({
+    serviceType: "hourly",
+    tourCode: null,
+    durationHours: 10,
+    bursaRoute: null,
+    vehicleCode: STANDARD_MINIVAN_CODE,
+  });
+  const { ar: _ar, ...legacyLocales } = built.locales;
+  const parsed = parseReservationServiceSnapshot({
+    version: 1,
+    locales: legacyLocales,
+  });
+  assert.ok(parsed);
+  assert.equal(parsed?.locales.ar, undefined);
+  const arabic = reservationServiceContentForLocale(parsed, "ar");
+  assert.equal(arabic?.packageCoverage, built.locales.en.packageCoverage);
 });
 

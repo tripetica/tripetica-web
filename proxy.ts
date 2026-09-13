@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { DRIVER_PORTAL_SESSION_COOKIE } from "@/lib/driver-portal/constants";
+import { resolveLegacyDriverRedirect } from "@/lib/driver-routes";
 import { OPS_SESSION_COOKIE } from "@/lib/ops/constants";
 import { PARTNER_SESSION_COOKIE } from "@/lib/partner/constants";
 import {
+  isGoneLegacyLangRoot,
+  LEGACY_LANG_GONE_STATUS,
   resolveSeoRedirect,
   seoRedirectHref,
 } from "@/lib/seo/legacy-locale-redirect";
@@ -15,6 +19,10 @@ function withPathnameHeader(request: NextRequest, name: string, pathname: string
 }
 
 export function proxy(request: NextRequest) {
+  if (isGoneLegacyLangRoot(request.nextUrl.pathname, request.nextUrl.searchParams)) {
+    return new NextResponse(null, { status: LEGACY_LANG_GONE_STATUS });
+  }
+
   const seoRedirect = resolveSeoRedirect(
     request.nextUrl.pathname,
     request.nextUrl.searchParams,
@@ -27,6 +35,26 @@ export function proxy(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
+  const arabicPanel = pathname.match(
+    /^\/ar\/(ops|partner|driver|driver-task|sofor|sofor-gorevi)(\/.*)?$/,
+  );
+  if (arabicPanel) {
+    const url = request.nextUrl.clone();
+    const area = arabicPanel[1];
+    const rest = arabicPanel[2] ?? "";
+    const locale = area === "ops" || area === "partner" ? "en" : "tr";
+    url.pathname = `/${locale}/${area}${rest}`;
+    return NextResponse.redirect(url, 308);
+  }
+
+  const legacyDriver = resolveLegacyDriverRedirect(pathname);
+  if (legacyDriver) {
+    const url = request.nextUrl.clone();
+    url.pathname = legacyDriver;
+    url.search = "";
+    return NextResponse.redirect(url, 308);
+  }
+
   const opsMatch = pathname.match(/^\/(tr|en|ru)\/ops(?:\/(.*))?$/);
   if (opsMatch) {
     const locale = opsMatch[1];
@@ -40,6 +68,21 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     return withPathnameHeader(request, "x-ops-pathname", pathname);
+  }
+
+  const driverPortalMatch = pathname.match(/^\/(tr|en|ru)\/driver(?:\/(.*))?$/);
+  if (driverPortalMatch) {
+    const locale = driverPortalMatch[1];
+    const rest = driverPortalMatch[2] ?? "";
+    const isHome = rest === "" || rest === "/";
+    const hasSession = Boolean(request.cookies.get(DRIVER_PORTAL_SESSION_COOKIE)?.value);
+    if (!isHome && !hasSession) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${locale}/driver`;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
   }
 
   const partnerMatch = pathname.match(/^\/(tr|en|ru)\/partner(?:\/(.*))?$/);

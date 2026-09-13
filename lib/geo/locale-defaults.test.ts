@@ -6,13 +6,15 @@ import {
   resolveCountryIso2WithLocaleDefault,
 } from "@/lib/geo/locale-defaults";
 
-test("locale defaults map to RU / TR / GB", () => {
+test("locale defaults map to RU / TR / GB / SA", () => {
   assert.equal(defaultCountryIso2ForLocale("ru"), "RU");
   assert.equal(defaultCountryIso2ForLocale("tr"), "TR");
   assert.equal(defaultCountryIso2ForLocale("en"), "GB");
+  assert.equal(defaultCountryIso2ForLocale("ar"), "SA");
   assert.equal(formatDialCode("RU"), "+7");
   assert.equal(formatDialCode("TR"), "+90");
   assert.equal(formatDialCode("GB"), "+44");
+  assert.equal(formatDialCode("SA"), "+966");
 });
 
 test("stored country is not overwritten by locale default", () => {

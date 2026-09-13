@@ -13,9 +13,16 @@ import {
 } from "@/lib/contact/links";
 import { footerCopy } from "@/lib/footer/copy";
 import { type Locale } from "@/lib/i18n/config";
+import {
+  attachArabicVoucherRendering,
+  NOTO_SANS_ARABIC_BOLD,
+  NOTO_SANS_ARABIC_REGULAR,
+} from "@/lib/booking/voucher-pdf-arabic";
 
 const FONT_REGULAR = join(process.cwd(), "lib/ops/fonts/NotoSans-Regular.ttf");
 const FONT_BOLD = join(process.cwd(), "lib/ops/fonts/NotoSans-Bold.ttf");
+const FONT_ARABIC_REGULAR = NOTO_SANS_ARABIC_REGULAR;
+const FONT_ARABIC_BOLD = NOTO_SANS_ARABIC_BOLD;
 const LOGO_PATH = join(process.cwd(), "public/tripetica-logo-horizontal.png");
 
 const PAGE_WIDTH = 595.28;
@@ -37,8 +44,9 @@ type Copy = (typeof voucherCopy)[Locale];
 
 export async function buildReservationVoucherPdf(
   data: ReservationVoucherData,
-  locale: Locale,
+  _requestLocale?: Locale,
 ) {
+  const locale = data.locale;
   const copy = voucherCopy[locale];
   const footer = footerCopy[locale];
   const doc = new PDFDocument({
@@ -50,8 +58,14 @@ export async function buildReservationVoucherPdf(
     },
   });
   const done = collectPdf(doc);
-  doc.registerFont("Voucher", FONT_REGULAR);
-  doc.registerFont("Voucher-Bold", FONT_BOLD);
+  if (locale === "ar") {
+    doc.registerFont("Voucher", FONT_ARABIC_REGULAR);
+    doc.registerFont("Voucher-Bold", FONT_ARABIC_BOLD);
+    attachArabicVoucherRendering(doc);
+  } else {
+    doc.registerFont("Voucher", FONT_REGULAR);
+    doc.registerFont("Voucher-Bold", FONT_BOLD);
+  }
 
   drawHeader(doc, data, copy, footer.tursab);
   drawReservationSection(doc, data, copy, locale);
@@ -162,7 +176,13 @@ function drawSectionTitle(
   ensureSpace(doc, 20);
   const titleY = doc.y;
   const upperLocale =
-    locale === "tr" ? "tr-TR" : locale === "ru" ? "ru-RU" : "en-GB";
+    locale === "tr"
+      ? "tr-TR"
+      : locale === "ru"
+        ? "ru-RU"
+        : locale === "ar"
+          ? "ar-SA"
+          : "en-GB";
   doc
     .font("Voucher-Bold")
     .fontSize(8.75)
@@ -532,6 +552,9 @@ function drawPassengerSection(
   drawStackField(doc, copy.phone, data.contactPhone);
   drawStackField(doc, copy.email, data.contactEmail);
   drawPassengerNameList(doc, copy.passengerList, data.passengerNames);
+  if (data.passengerNote) {
+    drawStackField(doc, copy.passengerNote, data.passengerNote);
+  }
   doc.y += 4;
 }
 

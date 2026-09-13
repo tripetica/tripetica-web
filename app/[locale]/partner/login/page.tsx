@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
 import { PartnerLoginForm } from "@/components/partner/login-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { partnerHomePath } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { safePartnerReturnPath } from "@/lib/partner/push/return-path";
@@ -18,7 +18,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: partnerCopy[locale].panelName,
+    title: partnerCopy[asPanelLocale(locale)].panelName,
     robots: { index: false, follow: false },
   };
 }
@@ -38,7 +38,7 @@ export default async function PartnerLoginPage({
   if (actor) {
     redirect(actor.mustChangePassword ? partnerHomePath(locale, actor) : (nextPath ?? partnerHomePath(locale, actor)));
   }
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
 
   return (
     <div className="ops-login">

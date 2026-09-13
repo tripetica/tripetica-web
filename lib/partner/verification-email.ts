@@ -1,4 +1,4 @@
-import { type Locale } from "@/lib/i18n/config";
+import { asPanelLocale, type Locale } from "@/lib/i18n/config";
 
 const COPY = {
   tr: {
@@ -46,7 +46,7 @@ const COPY = {
 } as const;
 
 export function buildPartnerRegisterCodeEmail(locale: Locale, code: string) {
-  const copy = COPY[locale];
+  const copy = COPY[asPanelLocale(locale)];
   return {
     subject: copy.registerSubject,
     text: copy.registerText(code),
@@ -54,7 +54,7 @@ export function buildPartnerRegisterCodeEmail(locale: Locale, code: string) {
 }
 
 export function buildPartnerEmailChangeCodeEmail(locale: Locale, code: string) {
-  const copy = COPY[locale];
+  const copy = COPY[asPanelLocale(locale)];
   return {
     subject: copy.changeSubject,
     text: copy.changeText(code),
@@ -62,7 +62,7 @@ export function buildPartnerEmailChangeCodeEmail(locale: Locale, code: string) {
 }
 
 export function buildPartnerEmailChangedNotice(locale: Locale) {
-  const copy = COPY[locale];
+  const copy = COPY[asPanelLocale(locale)];
   return {
     subject: copy.changedSubject,
     text: copy.changedText,
@@ -70,7 +70,7 @@ export function buildPartnerEmailChangedNotice(locale: Locale) {
 }
 
 export function buildPartnerPasswordChangedNotice(locale: Locale) {
-  const copy = COPY[locale];
+  const copy = COPY[asPanelLocale(locale)];
   return {
     subject: copy.passwordChangedSubject,
     text: copy.passwordChangedText,

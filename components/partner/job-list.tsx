@@ -19,6 +19,7 @@ import {
 import {
   filterPartnerJobs,
   partnerJobDurationLabel,
+  partnerJobNeedsBabySeat,
   partnerJobOccupancyCompact,
   sortPartnerJobs,
   type PartnerJobSort,
@@ -38,6 +39,7 @@ type PartnerJobListProps = {
   isPrimaryPartner?: boolean;
   drivers?: PartnerDriverRecord[];
   vehicles?: PartnerVehicleRecord[];
+  emptyLabel?: string;
 };
 
 export function PartnerJobList({
@@ -49,6 +51,7 @@ export function PartnerJobList({
   isPrimaryPartner = false,
   drivers = [],
   vehicles = [],
+  emptyLabel,
 }: PartnerJobListProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<PartnerJobSort>("newest");
@@ -62,7 +65,7 @@ export function PartnerJobList({
     [jobs, query, sort, mode],
   );
   const title = mode === "open" ? copy.jobs : copy.accepted;
-  const empty = mode === "open" ? copy.jobEmpty : copy.jobAcceptedEmpty;
+  const empty = mode === "open" ? copy.jobEmpty : (emptyLabel ?? copy.jobAcceptedEmpty);
   const searchEmpty = mode === "open" ? copy.jobSearchEmpty : copy.jobAcceptedSearchEmpty;
   const detailBase = mode === "open" ? "/partner/jobs" : "/partner/accepted";
 
@@ -194,7 +197,14 @@ export function PartnerJobList({
                     {duration}
                   </td>
                   <td className="partner-job-occupancy" data-label={copy.jobOccupancy}>
-                    {partnerJobOccupancyCompact(job)}
+                    <span className="partner-job-occupancy-value">
+                      {partnerJobOccupancyCompact(job)}
+                    </span>
+                    {partnerJobNeedsBabySeat(job.babySeatCount) ? (
+                      <span className="partner-job-baby-seat">
+                        {copy.jobBabySeatRequired}: {copy.jobYes}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="partner-job-payout" data-label={copy.jobPayout}>
                     {job.payoutLabel}

@@ -106,6 +106,10 @@ const BURSA_ROUTE_LABELS: Record<Locale, Record<BursaBaseRouteOption, string>> =
     ferry: "Обычная дорога + паром",
     bridge: "Мост + автомагистраль",
   },
+  ar: {
+    ferry: "الطريق العادي والعبارة",
+    bridge: "الجسر والطريق السريع",
+  },
 };
 
 export function bursaRouteLabel(
@@ -122,6 +126,7 @@ const BURSA_ULUDAG_LABELS: Record<Locale, string> = {
   tr: "Uludağ araçla çıkış",
   en: "Uludağ ascent by vehicle",
   ru: "Подъём на Улудаг на автомобиле",
+  ar: "الصعود إلى أولوداغ بالمركبة",
 };
 
 export function bursaUludagLabel(locale: Locale): string {
@@ -139,7 +144,9 @@ export function bursaPaidOptionLabels(locale: Locale): {
       ? "Uludağ'a araçla çıkış"
       : locale === "en"
         ? "Uludağ ascent by vehicle"
-        : "Подъём на Улудаг на автомобиле";
+        : locale === "ar"
+          ? "الصعود إلى أولوداغ بالمركبة"
+          : "Подъём на Улудаг на автомобиле";
   return {
     bridge: bursaRouteLabel(BURSA_ROUTE_BRIDGE, locale),
     uludag,
@@ -158,7 +165,9 @@ export function bursaRouteOptions(locale: Locale): Array<{
       ? "Включено в стоимость"
       : locale === "tr"
         ? "Ücrete dahil"
-        : "Included";
+        : locale === "ar"
+          ? "مشمول في السعر"
+          : "Included";
   return [
     {
       id: BURSA_ROUTE_FERRY,

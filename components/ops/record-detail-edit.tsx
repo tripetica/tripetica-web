@@ -250,7 +250,7 @@ export function RecordDetailEdit({
             />
           </label>
           <label className="ops-field ops-field-wide">
-            <span>{copy.notes}</span>
+            <span>{copy.passengerNote}</span>
             <textarea
               rows={3}
               value={form.notes}

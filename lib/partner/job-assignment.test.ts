@@ -288,6 +288,7 @@ test("list assignment cells stay compact and NON TRP stays first for primary par
       nationalId: null,
       phone: "+905331112233",
       phoneCountryCode: "TR",
+      email: null,
       languageCodes: ["tr"],
       status: "active",
       deletedAt: null,
@@ -341,6 +342,7 @@ test("list assignment cells stay compact and NON TRP stays first for primary par
         nationalId: null,
         phone: null,
         phoneCountryCode: null,
+        email: null,
         languageCodes: [],
         status: "active",
         deletedAt: null,
@@ -355,6 +357,7 @@ test("list assignment cells stay compact and NON TRP stays first for primary par
         nationalId: null,
         phone: null,
         phoneCountryCode: null,
+        email: null,
         languageCodes: [],
         status: "active",
         deletedAt: null,
@@ -425,6 +428,14 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.match(store, /AND partner_id = \$2/);
 
   const ui = source("components/partner/job-assignment.tsx");
+  const assignmentRender = ui.slice(ui.indexOf("return ("), ui.indexOf("function DriverAssignmentBlock"));
+  assert.match(assignmentRender, /VehicleAssignmentBlock/);
+  assert.ok(assignmentRender.indexOf("VehicleAssignmentBlock") < assignmentRender.indexOf("DriverTaskSection"));
+  assert.match(ui, /allowVisibilityControls=\{false\}/);
+  assert.doesNotMatch(ui, /driverTaskShowPrice|driverTaskShowContact|updateDriverTaskVisibilityAction/);
+  assert.match(source("lib/partner/driver-task.ts"), /accepted_partner_id = \$2/);
+  assert.match(source("lib/partner/driver-task.ts"), /getDriverTaskForOps/);
+  assert.match(source("app/[locale]/partner/(panel)/accepted/[id]/page.tsx"), /getDriverTaskForPartner/);
   assert.match(ui, /NON_TRP_SELECTION/);
   assert.match(ui, /isPrimaryPartner/);
   assert.match(ui, /jobAssignDriver/);

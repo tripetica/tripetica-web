@@ -1,6 +1,6 @@
 "use client";
 
-import { localeCatalog, locales, type Locale } from "@/lib/i18n/config";
+import { localeCatalog, panelLocales, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 
 type OpsLanguageSwitcherProps = {
@@ -16,7 +16,7 @@ export function OpsLanguageSwitcher({
 }: OpsLanguageSwitcherProps) {
   return (
     <nav className="ops-lang" aria-label={label}>
-      {locales.map((item) => (
+      {panelLocales.map((item) => (
         <a
           key={item}
           href={localizedPath(item, pathWithoutLocale)}

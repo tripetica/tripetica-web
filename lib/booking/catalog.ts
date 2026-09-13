@@ -43,6 +43,9 @@ export function formatDurationOption(
   if (locale === "tr") {
     return `${option.hours} saat (${option.includedKm} km)`;
   }
+  if (locale === "ar") {
+    return `${option.hours} ساعات (${option.includedKm} كم)`;
+  }
   return `${option.hours} Hours (${option.includedKm} km)`;
 }
 
@@ -87,6 +90,9 @@ export function formatHourlyPackageCoverage(
   if (locale === "tr") {
     return `${option.hours} saat / ${option.includedKm} km`;
   }
+  if (locale === "ar") {
+    return `${option.hours} ساعات / ${option.includedKm} كم`;
+  }
   return `${option.hours} hours / ${option.includedKm} km`;
 }
 
@@ -126,6 +132,14 @@ export function formatHourlyVehicleTariffRows(
       hourOverrun: `Превышение по времени: +${hourOverrun} EUR / час`,
       kmOverrun: `Превышение по километражу: +${kmOverrun} EUR / км`,
       crossingFee: `Переезд Европа–Азия: +${HOURLY_CONTINENT_CROSSING_EUR} EUR`,
+    };
+  }
+  if (locale === "ar") {
+    return {
+      packageCoverage: `تغطية الباقة: ${coverage}`,
+      hourOverrun: `تجاوز المدة: +${hourOverrun} EUR / ساعة`,
+      kmOverrun: `تجاوز المسافة: +${kmOverrun} EUR / كم`,
+      crossingFee: `عبور أوروبا–آسيا: +${HOURLY_CONTINENT_CROSSING_EUR} EUR`,
     };
   }
   return {
@@ -170,6 +184,14 @@ export const hourlyVehicleTariffCopy: Record<
     notice:
       "Выбранный пакет включает указанное время и километраж. При превышении времени пакета взимается +15 EUR/час, при превышении лимита километров — +0,50 EUR/км. При переезде между европейской и азиатской сторонами во время услуги применяется сбор +15 EUR. Дополнительное использование оплачивается отдельно по фактическому использованию в конце услуги.",
   },
+  ar: {
+    packageLabel: "تغطية الباقة",
+    hourOverrun: "تجاوز المدة: +15 EUR / ساعة",
+    kmOverrun: "تجاوز المسافة: +0,50 EUR / كم",
+    crossingFee: "عبور أوروبا–آسيا: +15 EUR",
+    notice:
+      "تغطي الباقة المختارة المدة والمسافة المذكورتين. يُحتسب تجاوز مدة الباقة بـ +15 EUR/ساعة، وتجاوز حد الكيلومترات بـ +0,50 EUR/كم. يُطبَّق رسم عبور +15 EUR إذا عبرت الخدمة بين الجانبين الأوروبي والآسيوي. تُحتسب الاستخدامات الإضافية بشكل منفصل وفق الاستخدام الفعلي في نهاية الخدمة.",
+  },
 };
 
 /** Multiline overrun rules for hourly voucher PDF under package coverage. */
@@ -187,6 +209,7 @@ export const hourlyKmOverrunNote: Record<Locale, string> = {
   tr: hourlyVehicleTariffCopy.tr.kmOverrun,
   en: hourlyVehicleTariffCopy.en.kmOverrun,
   ru: hourlyVehicleTariffCopy.ru.kmOverrun,
+  ar: hourlyVehicleTariffCopy.ar.kmOverrun,
 };
 
 export const tourOptions: TourOption[] = [

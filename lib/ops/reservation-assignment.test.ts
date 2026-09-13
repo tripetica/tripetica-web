@@ -1,3 +1,4 @@
+import { asPanelLocale } from "@/lib/i18n/config";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -9,7 +10,7 @@ function source(path: string) {
 
 test("ops reservation assignment copy is complete in all locales", () => {
   for (const locale of ["tr", "en", "ru"] as const) {
-    const copy = opsCopy[locale];
+    const copy = opsCopy[asPanelLocale(locale)];
     assert.ok(copy.assignmentSelectPartner);
     assert.ok(copy.assignmentSearchPartner);
     assert.ok(copy.assignmentRemovePartnerConfirm.includes("?") || copy.assignmentRemovePartnerConfirm.length > 10);

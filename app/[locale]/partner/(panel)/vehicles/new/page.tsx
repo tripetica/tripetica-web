@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerVehicleCreateForm } from "@/components/partner/vehicle-create-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 
@@ -14,7 +14,7 @@ export default async function PartnerVehicleNewPage({
     notFound();
   }
   await requirePartnerPage(locale);
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
 
   return (
     <div className="ops-page partner-profile-page">

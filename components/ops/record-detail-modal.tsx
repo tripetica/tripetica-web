@@ -201,6 +201,23 @@ export function RecordDetailModal({
   }, [copy.detailError, id, kind, locale]);
 
   useEffect(() => {
+    if (!id || kind !== "reservation") {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || editing || saving) {
+        return;
+      }
+      void getReservationRecordDetailAction(id, locale).then((result) => {
+        if (result.detail) {
+          setDetail(result.detail);
+        }
+      });
+    }, 6000);
+    return () => window.clearInterval(timer);
+  }, [editing, id, kind, locale, saving]);
+
+  useEffect(() => {
     if (!id) {
       return;
     }

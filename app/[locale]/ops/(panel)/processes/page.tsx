@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { parsePage, parseQuery } from "@/lib/ops/format";
@@ -32,7 +32,7 @@ export default async function OpsProcessesPage({
     to: parseQuery(query.to),
   });
   const page = parsePage(query.page);
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   const { items, total, pageSize } = await listProcesses({
     ...filters,
     page,
@@ -48,6 +48,8 @@ export default async function OpsProcessesPage({
         copy={copy}
         items={items}
         total={total}
+        page={page}
+        pageSize={pageSize}
         filters={filters}
         canDelete={canDelete}
       />

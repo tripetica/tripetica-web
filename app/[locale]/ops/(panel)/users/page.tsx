@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
@@ -24,7 +24,7 @@ export default async function OpsUsersPage({
   const role = parseQuery(query.role);
   const status = parseQuery(query.status);
   const page = parsePage(query.page);
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   const { items, total } = await listOpsUsers({
     query: q,
     role,

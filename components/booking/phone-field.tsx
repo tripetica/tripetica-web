@@ -80,7 +80,8 @@ export function PhoneField({
           </button>
         ) : (
           <input
-            className="checkout-phone-input"
+            className="checkout-phone-input ltr-isolate"
+            dir="ltr"
             type="tel"
             inputMode="tel"
             autoComplete="tel-national"

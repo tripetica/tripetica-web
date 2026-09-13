@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
 import { OpsLoginForm } from "@/components/ops/login-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { firstOpsHome } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { getOpsActor } from "@/lib/ops/session";
@@ -17,7 +17,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: opsCopy[locale].panelName,
+    title: opsCopy[asPanelLocale(locale)].panelName,
     robots: { index: false, follow: false },
   };
 }
@@ -33,7 +33,7 @@ export default async function OpsLoginPage({
   if (actor) {
     redirect(firstOpsHome(locale, actor));
   }
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
 
   return (
     <div className="ops-login">

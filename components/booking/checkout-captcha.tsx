@@ -39,6 +39,9 @@ function googleHl(locale: Locale) {
   if (locale === "ru") {
     return "ru";
   }
+  if (locale === "ar") {
+    return "ar";
+  }
   return "en";
 }
 

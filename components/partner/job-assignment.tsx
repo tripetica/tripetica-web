@@ -5,7 +5,10 @@ import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { SearchableSelect } from "@/components/partner/searchable-select";
+import { DriverTaskSection } from "@/components/ops/driver-task-section";
 import { type Locale } from "@/lib/i18n/config";
+import { type OpsCopy } from "@/lib/ops/copy";
+import { type DriverTaskOpsView } from "@/lib/ops/driver-task-fields";
 import {
   partnerAssignDriverAction,
   partnerAssignVehicleAction,
@@ -34,6 +37,8 @@ type PartnerJobAssignmentProps = {
   assignment: JobAssignmentView;
   drivers: PartnerDriverRecord[];
   vehicles: PartnerVehicleRecord[];
+  driverTask?: DriverTaskOpsView | null;
+  driverTaskCopy?: OpsCopy;
 };
 
 const DRIVER_ERROR_COPY: Partial<Record<AssignJobError, keyof PartnerCopy>> = {
@@ -112,6 +117,8 @@ export function PartnerJobAssignment({
   assignment,
   drivers,
   vehicles,
+  driverTask = null,
+  driverTaskCopy,
 }: PartnerJobAssignmentProps) {
   const driverOptions = useMemo(
     () => buildDriverAssignmentOptions(drivers, locale, isPrimaryPartner, copy.jobNonTrp),
@@ -145,6 +152,16 @@ export function PartnerJobAssignment({
         options={vehicleOptions}
         locked={assignment.locked}
       />
+      {driverTask && driverTaskCopy ? (
+        <section className="partner-job-assignment-block partner-driver-task-block">
+          <DriverTaskSection
+            copy={driverTaskCopy}
+            reservationId={jobId}
+            driverTask={driverTask}
+            allowVisibilityControls={false}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

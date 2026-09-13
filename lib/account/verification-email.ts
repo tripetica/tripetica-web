@@ -49,6 +49,16 @@ const copyByLocale: Record<Locale, VerificationCopy> = {
       "Если вы не создавали этот аккаунт, просто проигнорируйте это письмо. Никаких изменений не будет.",
     footer: "Tripetica",
   },
+  ar: {
+    subject: "Tripetica — أكّد بريدك الإلكتروني",
+    greeting: "مرحبًا،",
+    intro: "يُرجى تأكيد بريدك الإلكتروني لتفعيل حسابك في Tripetica.",
+    button: "تأكيد بريدي الإلكتروني",
+    fallback: "إذا لم يعمل الزر، الصق هذا الرابط في المتصفح:",
+    ignore:
+      "إذا لم تُنشئ هذا الحساب، يمكنك تجاهل هذه الرسالة. لن يُجرى أي تغيير على حسابك.",
+    footer: "Tripetica",
+  },
 };
 
 function escapeHtml(value: string) {

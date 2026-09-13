@@ -1,7 +1,8 @@
 import "server-only";
 
 import { query } from "@/lib/db/postgres";
-import { phoneValidity, toE164 } from "@/lib/booking/phone";
+import { isValidEmail, phoneValidity, toE164 } from "@/lib/booking/phone";
+import { normalizePartnerEmail } from "@/lib/partner/email";
 import { normalizeIso2 } from "@/lib/geo/countries";
 import { joinPartnerContactName, splitPartnerContactName } from "@/lib/partner/contact-name";
 import { PARTNER_CONTACT_NAME_MAX_LENGTH } from "@/lib/partner/constants";
@@ -45,6 +46,7 @@ type DriverRow = {
   national_id: string | null;
   phone: string | null;
   phone_country_code: string | null;
+  email: string | null;
   languages: string[] | null;
   status: PartnerFleetStatus;
   deleted_at: Date | null;
@@ -86,6 +88,7 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
     nationalId: row.national_id,
     phone: row.phone,
     phoneCountryCode: row.phone_country_code,
+    email: row.email,
     languageCodes: normalizePartnerDriverLanguageCodes(row.languages ?? []),
     status: row.status,
     deletedAt: row.deleted_at?.toISOString() ?? null,
@@ -122,7 +125,7 @@ function mapVehicle(row: VehicleRow): PartnerVehicleRecord {
 
 const DRIVER_SELECT = `
   id, partner_id, first_name, last_name, national_id, phone, phone_country_code,
-  languages, status, deleted_at, updated_at
+  email, languages, status, deleted_at, updated_at
 `;
 
 const VEHICLE_SELECT = `
@@ -221,6 +224,32 @@ function editorColumns(editor: PartnerFleetEditor) {
   };
 }
 
+function uniquePartnerDriverConflict(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error) || error.code !== "23505") {
+    return null;
+  }
+  const constraint = "constraint" in error ? String(error.constraint) : "";
+  if (constraint.includes("email")) {
+    return "duplicate-email" as const;
+  }
+  return "duplicate-national-id" as const;
+}
+
+function parseDriverEmail(value: string | undefined) {
+  if (value == null) {
+    return { ok: true as const, email: undefined };
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: true as const, email: null };
+  }
+  const email = normalizePartnerEmail(trimmed);
+  if (!isValidEmail(email) || email.length < 3 || email.length > 254) {
+    return { ok: false as const, error: "invalid-email" as const };
+  }
+  return { ok: true as const, email };
+}
+
 function parseDriverInput(input: {
   fullName: string;
   existingFirst: string;
@@ -229,6 +258,7 @@ function parseDriverInput(input: {
   phoneNational: string;
   nationalId: string;
   languageCodes: readonly string[];
+  email?: string;
 }) {
   const names = parseDriverName(input.fullName, input.existingFirst, input.existingLast);
   if (
@@ -255,6 +285,10 @@ function parseDriverInput(input: {
   if (languageCodes.length === 0) {
     return { ok: false as const, error: "invalid-languages" as const };
   }
+  const email = parseDriverEmail(input.email);
+  if (!email.ok) {
+    return email;
+  }
   return {
     ok: true as const,
     value: {
@@ -264,6 +298,7 @@ function parseDriverInput(input: {
       phone,
       phoneCountryCode,
       languageCodes,
+      email: email.email,
     },
   };
 }
@@ -295,6 +330,7 @@ export async function createPartnerDriver(input: {
   phoneNational: string;
   nationalId: string;
   languageCodes: readonly string[];
+  email?: string;
 }) {
   const parsed = parseDriverInput({
     fullName: input.fullName,
@@ -304,6 +340,7 @@ export async function createPartnerDriver(input: {
     phoneNational: input.phoneNational,
     nationalId: input.nationalId,
     languageCodes: input.languageCodes,
+    email: input.email ?? "",
   });
   if (!parsed.ok) {
     return parsed;
@@ -313,9 +350,9 @@ export async function createPartnerDriver(input: {
     const created = await query<{ id: string }>(
       `INSERT INTO partner_drivers (
           partner_id, first_name, last_name, national_id, phone, phone_country_code,
-          languages, status, last_edited_by_ops_user_id, last_edited_by_partner_user_id
+          email, languages, status, last_edited_by_ops_user_id, last_edited_by_partner_user_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10)
        RETURNING id`,
       [
         input.partnerId,
@@ -324,6 +361,7 @@ export async function createPartnerDriver(input: {
         parsed.value.nationalId,
         parsed.value.phone,
         parsed.value.phoneCountryCode,
+        parsed.value.email ?? null,
         parsed.value.languageCodes,
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
@@ -335,8 +373,9 @@ export async function createPartnerDriver(input: {
     }
     return { ok: true as const, driverId: id };
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "23505") {
-      return { ok: false as const, error: "duplicate-national-id" as const };
+    const conflict = uniquePartnerDriverConflict(error);
+    if (conflict) {
+      return { ok: false as const, error: conflict };
     }
     throw error;
   }
@@ -351,6 +390,7 @@ export async function updatePartnerDriver(input: {
   phoneNational: string;
   nationalId: string;
   languageCodes: readonly string[];
+  email?: string;
 }) {
   const current = await getPartnerDriver(input.partnerId, input.driverId);
   if (!current) {
@@ -364,10 +404,12 @@ export async function updatePartnerDriver(input: {
     phoneNational: input.phoneNational,
     nationalId: input.nationalId,
     languageCodes: input.languageCodes,
+    email: input.email,
   });
   if (!parsed.ok) {
     return parsed;
   }
+  const nextEmail = parsed.value.email === undefined ? current.email : parsed.value.email;
   const edited = editorColumns(input.editor);
   try {
     const updated = await query(
@@ -377,9 +419,10 @@ export async function updatePartnerDriver(input: {
            national_id = $5,
            phone = $6,
            phone_country_code = $7,
-           languages = $8,
-           last_edited_by_ops_user_id = COALESCE($9, last_edited_by_ops_user_id),
-           last_edited_by_partner_user_id = COALESCE($10, last_edited_by_partner_user_id)
+           email = $8,
+           languages = $9,
+           last_edited_by_ops_user_id = COALESCE($10, last_edited_by_ops_user_id),
+           last_edited_by_partner_user_id = COALESCE($11, last_edited_by_partner_user_id)
        WHERE id = $1
          AND partner_id = $2
          AND deleted_at IS NULL`,
@@ -391,6 +434,7 @@ export async function updatePartnerDriver(input: {
         parsed.value.nationalId,
         parsed.value.phone,
         parsed.value.phoneCountryCode,
+        nextEmail,
         parsed.value.languageCodes,
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
@@ -401,8 +445,9 @@ export async function updatePartnerDriver(input: {
     }
     return { ok: true as const };
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "23505") {
-      return { ok: false as const, error: "duplicate-national-id" as const };
+    const conflict = uniquePartnerDriverConflict(error);
+    if (conflict) {
+      return { ok: false as const, error: conflict };
     }
     throw error;
   }

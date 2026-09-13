@@ -2,6 +2,11 @@ import "server-only";
 
 import { join } from "node:path";
 import PDFDocument from "pdfkit";
+import {
+  attachArabicPdfRendering,
+  NOTO_SANS_ARABIC_BOLD,
+  NOTO_SANS_ARABIC_REGULAR,
+} from "@/lib/booking/voucher-pdf-arabic";
 import { type OpsCopy } from "@/lib/ops/copy";
 import {
   isOpsContactRow,
@@ -43,6 +48,18 @@ export async function buildOpsRecordPdf(
   const done = collectPdf(doc);
   doc.registerFont("Ops", FONT_REGULAR);
   doc.registerFont("Ops-Bold", FONT_BOLD);
+  doc.registerFont("Ops-Arabic", NOTO_SANS_ARABIC_REGULAR);
+  doc.registerFont("Ops-Arabic-Bold", NOTO_SANS_ARABIC_BOLD);
+  attachArabicPdfRendering(doc, {
+    paragraphDir: "ltr",
+    forceRtlAlign: false,
+    resolveArabicFont(currentFont) {
+      if (currentFont === "Ops-Bold" || currentFont === "Ops-Arabic-Bold") {
+        return "Ops-Arabic-Bold";
+      }
+      return "Ops-Arabic";
+    },
+  });
 
   drawHeader(doc, detail, copy, isReservation);
   drawRows(doc, detail.service);
@@ -60,6 +77,9 @@ export async function buildOpsRecordPdf(
   drawAlternateCurrencies(doc, copy, detail, isReservation);
   if (customer.length > 0) {
     drawSection(doc, isReservation ? copy.contactInfo : copy.customer, customer);
+  }
+  if (detail.passengerNote) {
+    drawPassengerNote(doc, copy.passengerNote, detail.passengerNote);
   }
   drawPassengers(doc, copy, detail, isReservation);
   if (detail.technical && detail.technical.length > 0) {
@@ -115,6 +135,28 @@ function drawHeader(
   } else {
     drawRows(doc, detail.summary);
   }
+}
+
+function drawPassengerNote(
+  doc: PDFKit.PDFDocument,
+  title: string,
+  note: string,
+) {
+  const height = doc.font("Ops").fontSize(9).heightOfString(note, {
+    width: CONTENT_WIDTH,
+    lineGap: 1.5,
+  });
+  ensureSpace(doc, 28 + height);
+  doc.moveDown(0.28);
+  doc.font("Ops-Bold").fontSize(10).fillColor("#142e5c").text(title, {
+    width: CONTENT_WIDTH,
+  });
+  doc.moveDown(0.12);
+  doc
+    .font("Ops")
+    .fontSize(9)
+    .fillColor("#172033")
+    .text(note, { width: CONTENT_WIDTH, lineGap: 1.5 });
 }
 
 function drawSection(

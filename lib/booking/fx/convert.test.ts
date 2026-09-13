@@ -74,7 +74,7 @@ test("TR EN RU share the same raw FX totals; only display text changes", () => {
     RUB: 4120,
     GBP: 34,
   });
-  for (const locale of ["tr", "en", "ru"] as const) {
+  for (const locale of ["tr", "en", "ru", "ar"] as const) {
     const localized = currencyTotalsFromBook(40, book);
     assert.deepEqual(
       localized.map((item) => item.amount),
@@ -189,8 +189,8 @@ test("transfer EUR base and extras are unchanged by FX conversion", () => {
     dropoff: { provinceCode: "istanbul", districtCode: "besiktas" },
   });
   assert.equal(quote.openingFeeEur, 25);
-  assert.equal(quote.distanceFeeEur, 8.25);
-  assert.equal(quote.baseTransferFeeEur, 33.25);
+  assert.equal(quote.distanceFeeEur, 9);
+  assert.equal(quote.baseTransferFeeEur, 34);
   const vehicle = quotePremiumEconomySedan(quote, {
     passengerCount: 3,
     luggageCount: 3,

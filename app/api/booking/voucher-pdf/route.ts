@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (!voucher) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const pdf = await buildReservationVoucherPdf(voucher, locale);
+    const pdf = await buildReservationVoucherPdf(voucher, voucher.locale);
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",

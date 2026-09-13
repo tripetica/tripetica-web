@@ -1,10 +1,16 @@
 import { type Locale } from "@/lib/i18n/config";
 
-const TURKEY_ALIASES = ["Türkiye", "Turkiye", "Turkey", "Турция"] as const;
+const TURKEY_ALIASES = ["Türkiye", "Turkiye", "Turkey", "Турция", "تركيا"] as const;
 
 /** Display label for Turkey on customer vouchers (EN uses official “Türkiye”). */
 export function voucherTurkeyCountryLabel(locale: Locale): string {
-  return locale === "ru" ? "Турция" : "Türkiye";
+  if (locale === "ru") {
+    return "Турция";
+  }
+  if (locale === "ar") {
+    return "تركيا";
+  }
+  return "Türkiye";
 }
 
 /**
@@ -23,7 +29,7 @@ export function localizeVoucherAddressCountry(
   let next = trimmed;
 
   // Prefer trailing ", Country" (typical Places formatted_address).
-  const trailing = /^(.*?)(?:,\s*)?(Türkiye|Turkiye|Turkey|Турция)\s*$/iu.exec(next);
+  const trailing = /^(.*?)(?:,\s*)?(Türkiye|Turkiye|Turkey|Турция|تركيا)\s*$/iu.exec(next);
   if (trailing) {
     const prefix = trailing[1].trim().replace(/,\s*$/, "");
     next = prefix ? `${prefix}, ${label}` : label;

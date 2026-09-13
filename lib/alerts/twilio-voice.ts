@@ -48,12 +48,16 @@ export function readTwilioVoiceConfig(
   return { accountSid, apiKeySid, apiSecret, fromNumber, toNumber };
 }
 
-export function buildTwilioCallRequest(config: TwilioVoiceConfig) {
+export function buildTwilioCallRequest(
+  config: TwilioVoiceConfig,
+  options?: { twiml?: string },
+) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Calls.json`;
+  const twiml = options?.twiml?.trim() || VOICE_ALERT_TWIML;
   const body = new URLSearchParams({
     To: config.toNumber,
     From: config.fromNumber,
-    Twiml: VOICE_ALERT_TWIML,
+    Twiml: twiml,
     Timeout: "20",
   });
   const authorization = Buffer.from(
@@ -78,8 +82,9 @@ export type TwilioCallResult =
 export async function startTwilioVoiceCall(
   config: TwilioVoiceConfig,
   fetchImpl: typeof fetch = fetch,
+  options?: { twiml?: string },
 ): Promise<TwilioCallResult> {
-  const request = buildTwilioCallRequest(config);
+  const request = buildTwilioCallRequest(config, options);
   let response: Response;
   try {
     response = await fetchImpl(request.url, {

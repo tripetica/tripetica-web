@@ -61,4 +61,19 @@ export const quotePanelCopy: Record<Locale, QuotePanelCopy> = {
     whatsappMessage:
       "Здравствуйте, я хотел(а) бы получить предложение на индивидуальный тур по Турции.",
   },
+  ar: {
+    title: "تواصل معنا للحصول على عرض سعر",
+    lead: "أخبرنا بالوجهات التي ترغب في زيارتها وكيف تفضّل السفر. سنعدّ لك عرضًا خاصًا للجولات والنقل وفق خطتك.",
+    close: "إغلاق اللوحة",
+    whatsapp: "WhatsApp",
+    telegram: "Telegram",
+    viber: "Viber",
+    call: "اتصال",
+    whatsappAria: "التواصل عبر WhatsApp",
+    telegramAria: "التواصل عبر Telegram",
+    viberAria: "التواصل عبر Viber",
+    callAria: "الاتصال بنا",
+    whatsappMessage:
+      "مرحبًا، أرغب في الحصول على عرض سعر لجولة خاصة في Türkiye.",
+  },
 };

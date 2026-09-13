@@ -1,6 +1,7 @@
 import "server-only";
 
 import { query } from "@/lib/db/postgres";
+import { syncDriverTaskAfterAssignment } from "@/lib/ops/driver-task";
 import { isUuid } from "@/lib/ops/process-filters";
 import { normalizePartnerDriverLanguageCodes } from "@/lib/partner/driver-languages";
 import {
@@ -89,6 +90,7 @@ function mapLiveDriver(row: LiveDriverRow) {
     nationalId: row.national_id,
     phone: row.phone,
     phoneCountryCode: row.phone_country_code,
+    email: null,
     languageCodes: normalizePartnerDriverLanguageCodes(row.languages ?? []),
     status: row.status,
     deletedAt: row.deleted_at?.toISOString() ?? null,
@@ -290,6 +292,7 @@ export async function assignPartnerJobDriver(input: {
     if (!updated.rows[0]) {
       return { ok: false, error: "failed" };
     }
+    await syncDriverTaskAfterAssignment(input.reservationId);
     return { ok: true };
   }
   if (!isUuid(selection)) {
@@ -333,6 +336,7 @@ export async function assignPartnerJobDriver(input: {
   if (!updated.rows[0]) {
     return { ok: false, error: "failed" };
   }
+  await syncDriverTaskAfterAssignment(input.reservationId);
   return { ok: true };
 }
 
@@ -570,6 +574,7 @@ export async function clearPartnerJobDriver(input: {
   if (!updated.rows[0]) {
     return { ok: false, error: "failed" };
   }
+  await syncDriverTaskAfterAssignment(input.reservationId);
   return { ok: true };
 }
 

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPool, query } from "@/lib/db/postgres";
+import { syncDriverTaskAfterAssignment } from "@/lib/ops/driver-task";
 import { isUuid } from "@/lib/ops/process-filters";
 import {
   type OpsAssignmentError,
@@ -174,6 +175,7 @@ export async function assignOpsReservationPartner(input: {
       return { ok: false, error: "failed" };
     }
     await client.query("COMMIT");
+    await syncDriverTaskAfterAssignment(input.reservationId);
     return { ok: true, previousPartnerId, partnerId: input.partnerId };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -223,6 +225,7 @@ export async function clearOpsReservationPartner(input: {
       return { ok: false, error: "failed" };
     }
     await client.query("COMMIT");
+    await syncDriverTaskAfterAssignment(input.reservationId);
     return { ok: true };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -325,6 +328,7 @@ export async function assignOpsReservationDriver(input: {
     if (!updated.rows[0]) {
       return { ok: false, error: "failed" };
     }
+    await syncDriverTaskAfterAssignment(input.reservationId);
     return { ok: true };
   }
   if (!isUuid(selection)) {
@@ -357,11 +361,12 @@ export async function assignOpsReservationDriver(input: {
       loaded.partnerId,
     ],
   );
-  if (!updated.rows[0]) {
-    return { ok: false, error: "failed" };
+    if (!updated.rows[0]) {
+      return { ok: false, error: "failed" };
+    }
+    await syncDriverTaskAfterAssignment(input.reservationId);
+    return { ok: true };
   }
-  return { ok: true };
-}
 
 export async function assignOpsReservationVehicle(input: {
   reservationId: string;
@@ -467,11 +472,12 @@ export async function clearOpsReservationDriver(input: {
      RETURNING id`,
     [input.reservationId, access.partnerId],
   );
-  if (!updated.rows[0]) {
-    return { ok: false, error: "failed" };
+    if (!updated.rows[0]) {
+      return { ok: false, error: "failed" };
+    }
+    await syncDriverTaskAfterAssignment(input.reservationId);
+    return { ok: true };
   }
-  return { ok: true };
-}
 
 export async function clearOpsReservationVehicle(input: {
   reservationId: string;

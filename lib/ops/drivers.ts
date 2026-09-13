@@ -43,6 +43,7 @@ type DriverListRow = {
 type DriverDetailRow = DriverListRow & {
   national_id: string | null;
   phone_country_code: string | null;
+  email: string | null;
   deleted_at: Date | null;
   updated_at: Date;
 };
@@ -153,6 +154,7 @@ export async function getOpsDriver(driverId: string): Promise<OpsDriverRecord | 
         d.national_id,
         d.phone,
         d.phone_country_code,
+        d.email,
         d.languages,
         d.status,
         d.deleted_at,
@@ -180,6 +182,7 @@ export async function getOpsDriver(driverId: string): Promise<OpsDriverRecord | 
     nationalId: row.national_id,
     phone: row.phone,
     phoneCountryCode: row.phone_country_code,
+    email: row.email,
     languageCodes: normalizePartnerDriverLanguageCodes(row.languages ?? []),
     status: row.status,
     deletedAt: row.deleted_at?.toISOString() ?? null,

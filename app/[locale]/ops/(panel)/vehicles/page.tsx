@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { OpsVehicleTable } from "@/components/ops/vehicle-table";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { parsePage, parseQuery } from "@/lib/ops/format";
@@ -30,7 +30,7 @@ export default async function OpsVehiclesPage({
     <section className="ops-page">
       <OpsVehicleTable
         locale={locale}
-        copy={opsCopy[locale]}
+        copy={opsCopy[asPanelLocale(locale)]}
         initialQuery={filters.query}
         initialPage={page}
         initialItems={items}

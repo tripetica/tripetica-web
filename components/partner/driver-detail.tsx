@@ -33,12 +33,13 @@ type PartnerDriverDetailProps = {
 type DriverDraft = {
   fullName: string;
   nationalId: string;
+  email: string;
   phoneCountry: string;
   phoneNational: string;
   languages: string[];
 };
 
-type EditableField = "fullName" | "nationalId" | "phone" | "languages";
+type EditableField = "fullName" | "nationalId" | "email" | "phone" | "languages";
 
 const ERROR_COPY: Record<
   Exclude<PartnerDriverFormState["error"], null>,
@@ -49,6 +50,8 @@ const ERROR_COPY: Record<
   "invalid-phone": "invalidPhone",
   "invalid-languages": "invalidDriverLanguages",
   "duplicate-national-id": "duplicateNationalId",
+  "invalid-email": "invalidDriverEmail",
+  "duplicate-email": "duplicateDriverEmail",
   "not-found": "driverSaveFailed",
   "in-use": "driverSaveFailed",
   failed: "driverSaveFailed",
@@ -59,6 +62,7 @@ function draftFromDriver(driver: PartnerDriverRecord): DriverDraft {
   return {
     fullName: joinPartnerContactName(driver.firstName, driver.lastName) || driver.fullName,
     nationalId: driver.nationalId ?? "",
+    email: driver.email ?? "",
     phoneCountry: storedPhone.iso2 ?? PARTNER_DEFAULT_COUNTRY_CODE,
     phoneNational: storedPhone.national,
     languages: driver.languageCodes,
@@ -69,6 +73,7 @@ function draftsEqual(left: DriverDraft, right: DriverDraft) {
   return (
     left.fullName.trim().replace(/\s+/g, " ") === right.fullName.trim().replace(/\s+/g, " ") &&
     left.nationalId.replace(/\D/g, "") === right.nationalId.replace(/\D/g, "") &&
+    left.email.trim().toLowerCase() === right.email.trim().toLowerCase() &&
     left.phoneCountry === right.phoneCountry &&
     left.phoneNational.replace(/\D/g, "") === right.phoneNational.replace(/\D/g, "") &&
     left.languages.join(",") === right.languages.join(",")
@@ -178,6 +183,7 @@ export function PartnerDriverDetail({ locale, copy, driver }: PartnerDriverDetai
         <input type="hidden" name="id" value={driver.id} />
         <input type="hidden" name="fullName" value={draft.fullName} />
         <input type="hidden" name="nationalId" value={draft.nationalId} />
+        <input type="hidden" name="email" value={draft.email} />
         <input type="hidden" name="phoneCountryCode" value={draft.phoneCountry} />
         <input type="hidden" name="phoneNational" value={draft.phoneNational} />
         <input type="hidden" name="languages" value={draft.languages.join(",")} />
@@ -223,6 +229,28 @@ export function PartnerDriverDetail({ locale, copy, driver }: PartnerDriverDetai
             </div>
           ) : (
             <p className="partner-billing-value">{draft.nationalId || "—"}</p>
+          )}
+        </DetailRow>
+
+        <DetailRow
+          label={copy.driverEmail}
+          editLabel={`${copy.editField}: ${copy.driverEmail}`}
+          editing={Boolean(editing.email)}
+          onEdit={() => setEditing((current) => ({ ...current, email: !current.email }))}
+        >
+          {editing.email ? (
+            <div className="ops-field">
+              <input
+                type="email"
+                autoComplete="email"
+                value={draft.email}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, email: event.target.value }))
+                }
+              />
+            </div>
+          ) : (
+            <p className="partner-billing-value">{draft.email || "—"}</p>
           )}
         </DetailRow>
 

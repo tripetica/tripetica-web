@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { OpsPagination } from "@/components/ops/pagination";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
@@ -31,7 +31,7 @@ export default async function OpsCustomersPage({
   const status = parseQuery(query.status);
   const verification = parseQuery(query.verification);
   const page = parsePage(query.page);
-  const copy = opsCopy[locale];
+  const copy = opsCopy[asPanelLocale(locale)];
   const { items, total, pageSize } = await listOpsCustomers({
     query: q,
     status,

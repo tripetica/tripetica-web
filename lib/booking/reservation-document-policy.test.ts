@@ -17,8 +17,8 @@ test("reservation documents select waiting policy from canonical service data", 
   );
 });
 
-test("TR EN RU contain distinct hourly and vehicle-tour waiting copy", () => {
-  for (const locale of ["tr", "en", "ru"] as const) {
+test("TR EN RU AR contain distinct hourly and vehicle-tour waiting copy", () => {
+  for (const locale of ["tr", "en", "ru", "ar"] as const) {
     const copy = voucherCopy[locale];
     assert.ok(copy.policyWaitingBody.includes("90"));
     assert.ok(copy.policyWaitingBody.includes("30"));

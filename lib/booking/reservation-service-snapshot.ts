@@ -111,6 +111,20 @@ export function buildReservationServiceSnapshot(
   };
 }
 
+export function reservationServiceContentForLocale(
+  snapshot: ReservationServiceSnapshot | null | undefined,
+  locale: Locale,
+): ReservationServiceContent | null {
+  if (!snapshot) {
+    return null;
+  }
+  return (
+    snapshot.locales[locale] ??
+    (locale === "ar" ? snapshot.locales.en : null) ??
+    null
+  );
+}
+
 export function parseReservationServiceSnapshot(
   value: unknown,
 ): ReservationServiceSnapshot | null {
@@ -119,8 +133,13 @@ export function parseReservationServiceSnapshot(
   if (candidate.version !== 1 || !candidate.locales) return null;
   for (const locale of locales) {
     const content = candidate.locales[locale];
+    if (!content) {
+      if (locale === "ar") {
+        continue;
+      }
+      return null;
+    }
     if (
-      !content ||
       !Array.isArray(content.packageNotes) ||
       !Array.isArray(content.includedItems) ||
       !Array.isArray(content.serviceInfoGroups)

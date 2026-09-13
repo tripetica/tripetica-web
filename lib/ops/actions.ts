@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { isLocale, type Locale } from "@/lib/i18n/config";
+import { isLocale, asPanelLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { loginOpsUser, logoutOpsUser } from "@/lib/ops/auth";
 import {
@@ -305,7 +305,7 @@ export async function getProcessRecordDetailAction(
   const canEdit = canEditOpsRecords(actor.role);
   return {
     error: null,
-    detail: toProcessRecordDetail(item, locale, opsCopy[locale]),
+    detail: toProcessRecordDetail(item, locale, opsCopy[asPanelLocale(locale)]),
     edit: canEdit ? processToEditForm(item) : null,
     canEdit,
     canDelete: false,
@@ -332,7 +332,7 @@ export async function getReservationRecordDetailAction(
   const canDelete = canDeleteOpsReservations(actor.role);
   return {
     error: null,
-    detail: toReservationRecordDetail(item, locale, opsCopy[locale]),
+    detail: toReservationRecordDetail(item, locale, opsCopy[asPanelLocale(locale)]),
     edit: canEdit ? reservationToEditForm(item) : null,
     canEdit,
     canDelete,
@@ -373,7 +373,7 @@ export async function saveProcessRecordAction(
   }
   return {
     error: null,
-    detail: toProcessRecordDetail(refreshed, locale, opsCopy[locale]),
+    detail: toProcessRecordDetail(refreshed, locale, opsCopy[asPanelLocale(locale)]),
     edit: processToEditForm(refreshed),
     canEdit: true,
   };
@@ -406,7 +406,7 @@ export async function saveReservationRecordAction(
   }
   return {
     error: null,
-    detail: toReservationRecordDetail(refreshed, locale, opsCopy[locale]),
+    detail: toReservationRecordDetail(refreshed, locale, opsCopy[asPanelLocale(locale)]),
     edit: reservationToEditForm(refreshed),
     canEdit: true,
   };
@@ -518,7 +518,7 @@ export async function setReservationStatusAction(
   }
   return {
     error: null,
-    detail: toReservationRecordDetail(refreshed, locale, opsCopy[locale]),
+    detail: toReservationRecordDetail(refreshed, locale, opsCopy[asPanelLocale(locale)]),
     edit: reservationToEditForm(refreshed),
     canEdit: true,
     canDelete: canDeleteOpsReservations(actor.role),
@@ -568,7 +568,7 @@ export async function requestReservationRefundAction(
 
   const refreshed = await getReservation(id);
   const detail = refreshed
-    ? toReservationRecordDetail(refreshed, locale, opsCopy[locale])
+    ? toReservationRecordDetail(refreshed, locale, opsCopy[asPanelLocale(locale)])
     : null;
   const edit = refreshed ? reservationToEditForm(refreshed) : null;
 
@@ -632,7 +632,7 @@ export async function requestReservationPaymentTxnRefundAction(
 
   const refreshed = await getReservation(reservationId);
   const detail = refreshed
-    ? toReservationRecordDetail(refreshed, locale, opsCopy[locale])
+    ? toReservationRecordDetail(refreshed, locale, opsCopy[asPanelLocale(locale)])
     : null;
   const edit = refreshed ? reservationToEditForm(refreshed) : null;
 
@@ -694,7 +694,7 @@ export async function requestReservationPaymentTxnCancelAction(
 
   const refreshed = await getReservation(reservationId);
   const detail = refreshed
-    ? toReservationRecordDetail(refreshed, locale, opsCopy[locale])
+    ? toReservationRecordDetail(refreshed, locale, opsCopy[asPanelLocale(locale)])
     : null;
   const edit = refreshed ? reservationToEditForm(refreshed) : null;
 

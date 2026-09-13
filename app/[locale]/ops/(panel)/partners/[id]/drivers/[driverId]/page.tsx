@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerDriverForm } from "@/components/ops/partner-driver-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { getOpsPartner } from "@/lib/ops/partners";
@@ -29,7 +29,7 @@ export default async function OpsPartnerDriverPage({
   return (
     <PartnerDriverForm
       locale={locale}
-      copy={opsCopy[locale]}
+      copy={opsCopy[asPanelLocale(locale)]}
       driver={driver}
       canManage={actorCan(actor, "partners.manage")}
       linkedPartner={{

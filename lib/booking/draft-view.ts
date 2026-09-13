@@ -1,5 +1,5 @@
 import { isLocationFilled, type LocationValue } from "@/lib/booking/types";
-import { type Locale } from "@/lib/i18n/config";
+import { intlLocaleTag, type Locale } from "@/lib/i18n/config";
 import { hasAppliedPassengerCount } from "@/lib/booking/occupancy";
 import { type CurrencyTotalView, type DisplayCurrency } from "@/lib/booking/pricing/format-eur";
 import { type FxRateQuote } from "@/lib/booking/fx/types";
@@ -91,18 +91,12 @@ export type BookingDraftView = {
 };
 
 export function intlLocale(locale: Locale) {
-  if (locale === "ru") {
-    return "ru-RU";
-  }
-  if (locale === "tr") {
-    return "tr-TR";
-  }
-  return "en-GB";
+  return intlLocaleTag(locale);
 }
 
 export function formatDistanceKm(km: number, locale: Locale) {
   const value = (Math.round(km * 10) / 10).toFixed(1);
-  if (locale === "en") {
+  if (locale === "en" || locale === "ar") {
     return value;
   }
   return value.replace(".", ",");

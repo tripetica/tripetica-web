@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
 import { PartnerRegisterForm } from "@/components/partner/register-form";
-import { isLocale } from "@/lib/i18n/config";
+import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { partnerHomePath } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { getPartnerActor } from "@/lib/partner/session";
@@ -17,7 +17,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: partnerCopy[locale].registerTitle,
+    title: partnerCopy[asPanelLocale(locale)].registerTitle,
     robots: { index: false, follow: false },
   };
 }
@@ -33,7 +33,7 @@ export default async function PartnerRegisterPage({
   if (actor) {
     redirect(partnerHomePath(locale, actor));
   }
-  const copy = partnerCopy[locale];
+  const copy = partnerCopy[asPanelLocale(locale)];
 
   return (
     <div className="ops-login">

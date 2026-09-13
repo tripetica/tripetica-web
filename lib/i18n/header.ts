@@ -55,4 +55,17 @@ export const headerCopy: Record<
     mobileNav: "Mobil",
     home: "Ana Sayfa",
   },
+  ar: {
+    services: "خدماتنا",
+    contact: "تواصل معنا",
+    language: "اللغة",
+    account: "الحساب",
+    accountMenu: "قائمة الحساب",
+    signIn: "تسجيل الدخول",
+    openMenu: "فتح القائمة",
+    closeMenu: "إغلاق القائمة",
+    primaryNav: "القائمة الرئيسية",
+    mobileNav: "الجوال",
+    home: "الرئيسية",
+  },
 };
