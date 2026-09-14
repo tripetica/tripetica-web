@@ -17,6 +17,7 @@ type RecordDetailProps = {
   contactsVisible?: boolean;
   onToggleContacts?: () => void;
   onPaymentHistoryUpdated?: (detail: OpsRecordDetail) => void;
+  showFooterPdf?: boolean;
 };
 
 type DetailRowView = OpsRecordDetail["transfer"][number] & {
@@ -51,6 +52,7 @@ export function RecordDetail({
   contactsVisible = true,
   onToggleContacts,
   onPaymentHistoryUpdated,
+  showFooterPdf = true,
 }: RecordDetailProps) {
   const isReservation = detail.kind === "reservation";
 
@@ -239,7 +241,7 @@ export function RecordDetail({
         </section>
       ) : null}
 
-      {detail.kind === "process" ? (
+      {detail.kind === "process" && showFooterPdf ? (
         <p className="ops-detail-actions">
           <a className="ops-btn-primary" href={detail.pdfHref}>
             {copy.downloadPdf}

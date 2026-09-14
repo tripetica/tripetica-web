@@ -5,6 +5,7 @@ import {
   formatOpsOtherPrice,
   formatOpsSelectedPrice,
   otherStoredAmounts,
+  parseOpsAmount,
   selectedStoredAmount,
 } from "@/lib/ops/money";
 
@@ -52,6 +53,15 @@ const snapshot = {
     TRY: "4593.496595",
   },
 };
+
+test("parseOpsAmount accepts 100, 100.00 and 100,00 style inputs", () => {
+  assert.equal(parseOpsAmount("100"), 100);
+  assert.equal(parseOpsAmount("100.00"), 100);
+  assert.equal(parseOpsAmount("100,00"), 100);
+  assert.equal(parseOpsAmount("1.100,00"), 1100);
+  assert.equal(parseOpsAmount("1,100.00"), 1100);
+  assert.equal(parseOpsAmount("8552.283886"), 8552.283886);
+});
 
 test("ops amounts use 2 decimals and locale separators without currency", () => {
   assert.equal(formatOpsAmount("80.81", "tr"), "80,81");

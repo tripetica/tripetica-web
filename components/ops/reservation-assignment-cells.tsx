@@ -6,6 +6,7 @@ import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
 import { FloatingPopover } from "@/components/partner/floating-popover";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
+import { NonTrpAssignPanelHeader } from "@/components/partner/non-trp-assign-panel-header";
 import { SearchableSelect } from "@/components/partner/searchable-select";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { type Locale } from "@/lib/i18n/config";
@@ -452,11 +453,17 @@ function OpsDriverAssignmentCell({
             ? "partner-job-assign-layer partner-job-assign-panel"
             : "partner-job-assign-layer partner-job-assign-picker"
         }
+        dismissOnOutsidePress={mode !== "nontrp"}
         onDismiss={() => setMode("closed")}
       >
         {mode === "nontrp" ? (
           <>
-            <p className="partner-job-assign-kind">{copy.assignmentNonTrp}</p>
+            <NonTrpAssignPanelHeader
+              title={copy.assignmentNonTrp}
+              closeLabel={copy.close}
+              disabled={busy}
+              onClose={() => setMode("closed")}
+            />
             <label className="ops-field">
               <span>{copy.driverFullName}</span>
               <input
@@ -713,11 +720,17 @@ function OpsVehicleAssignmentCell({
             ? "partner-job-assign-layer partner-job-assign-panel"
             : "partner-job-assign-layer partner-job-assign-picker"
         }
+        dismissOnOutsidePress={mode !== "nontrp"}
         onDismiss={() => setMode("closed")}
       >
         {mode === "nontrp" ? (
           <>
-            <p className="partner-job-assign-kind">{copy.assignmentNonTrp}</p>
+            <NonTrpAssignPanelHeader
+              title={copy.assignmentNonTrp}
+              closeLabel={copy.close}
+              disabled={busy}
+              onClose={() => setMode("closed")}
+            />
             <label className="ops-field">
               <span>{copy.vehiclePlate}</span>
               <input

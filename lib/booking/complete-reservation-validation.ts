@@ -1,7 +1,7 @@
 import { isValidEmail } from "@/lib/booking/phone";
 import { HOURLY_SERVICE_TYPE } from "@/lib/booking/pricing/hourly-pricing";
 import { isBosphorusDinnerTour } from "@/lib/booking/pricing/bosphorus-dinner-pricing";
-import { selectedStoredAmount } from "@/lib/ops/money";
+import { resolveStoredPriceAmount, type ManualPriceTotals } from "@/lib/ops/price-override";
 
 export const COMPLETION_CHECKOUT_STAGE = "checkout";
 
@@ -48,6 +48,8 @@ export type CompletionDraft = {
   currency: string | null;
   appliedVehicleTotal: number | null;
   appliedFxSnapshot: unknown;
+  priceManuallyOverridden?: boolean;
+  manualPriceTotals?: ManualPriceTotals | null;
   customerEmail: string | null;
   customerPhone: string | null;
   passengers: CompletionPassenger[];
@@ -172,10 +174,12 @@ export function validateDraftForCashCompletion(draft: CompletionDraft) {
   if (!isPrimaryPassengerReady(primary)) {
     return "passenger";
   }
-  const price = selectedStoredAmount({
+  const price = resolveStoredPriceAmount({
     currency: draft.currency,
     appliedVehicleTotal: draft.appliedVehicleTotal,
     fxSnapshot: draft.appliedFxSnapshot,
+    priceManuallyOverridden: draft.priceManuallyOverridden,
+    manualPriceTotals: draft.manualPriceTotals,
   });
   if (!price.amount || !price.currency) {
     return "price";

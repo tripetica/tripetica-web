@@ -1,5 +1,4 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { maybeStartEmergencyReservationVoiceAlert } from "@/lib/alerts/emergency-reservation-voice-alert";
 import { sendPaymentConfirmationEmail } from "@/lib/mail/send-payment-confirmation";
 import { sendReservationConfirmationEmail } from "@/lib/mail/send-reservation-confirmation";
 import { sendOperationReservationNotification } from "@/lib/mail/send-operation-reservation-notification";
@@ -93,19 +92,6 @@ export async function POST(request: NextRequest) {
           await sendOperationReservationNotification(result.reservationId!);
         } catch (error) {
           console.error("[operation-mail] paid notification hook failed", {
-            reservationId: result.reservationId,
-            error:
-              error instanceof Error
-                ? { name: error.name, message: error.message }
-                : error,
-          });
-        }
-      });
-      after(async () => {
-        try {
-          await maybeStartEmergencyReservationVoiceAlert(result.reservationId!);
-        } catch (error) {
-          console.error("[voice-alert] paid confirmation hook failed", {
             reservationId: result.reservationId,
             error:
               error instanceof Error

@@ -23,6 +23,7 @@ import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { type OpsRecordEditInput } from "@/lib/ops/record-edit";
+import { opsDetailToolbarMode } from "@/lib/ops/record-edit-form";
 import {
   isReservationCancelled,
   type OpsCancelDialogKind,
@@ -156,6 +157,8 @@ export function RecordDetailModal({
   const [refundError, setRefundError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<OpsRecordEditInput | null>(null);
+  const [editDirty, setEditDirty] = useState(false);
   const [contactsVisible, setContactsVisible] = useState(false);
   const [toolbarScrolled, setToolbarScrolled] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -174,6 +177,8 @@ export function RecordDetailModal({
       setRefundError(null);
       setError(null);
       setSaveError(null);
+      setEditDraft(null);
+      setEditDirty(false);
       setContactsVisible(false);
       setToolbarScrolled(false);
       if (!id) {
@@ -292,22 +297,26 @@ export function RecordDetailModal({
     return () => shell.removeEventListener("scroll", onShellScroll);
   }, [id]);
 
-  function handleSave(value: OpsRecordEditInput) {
+  function handleSave(value?: OpsRecordEditInput) {
+    const payload = value ?? editDraft ?? edit;
+    if (!payload) {
+      return;
+    }
     setSaveError(null);
     startSave(async () => {
       const result =
         kind === "process"
-          ? await saveProcessRecordAction(value, locale)
-          : await saveReservationRecordAction(value, locale);
+          ? await saveProcessRecordAction(payload, locale)
+          : await saveReservationRecordAction(payload, locale);
       if (result.error) {
         setSaveError(copy.editSaveError);
-        if (result.edit) {
-          setEdit(result.edit);
-        }
+        setEditDirty(true);
         return;
       }
       setDetail(result.detail);
       setEdit(result.edit);
+      setEditDraft(result.edit);
+      setEditDirty(false);
       setEditing(false);
       onUpdated?.();
     });
@@ -459,6 +468,7 @@ export function RecordDetailModal({
   }
 
   const showActions = Boolean(detail && !editing);
+  const toolbarMode = opsDetailToolbarMode({ editing, dirty: editDirty });
   const isReservation = kind === "reservation";
   const cancelled = isReservationCancelled(detail?.status);
   const actionContext = detail?.actionContext ?? null;
@@ -548,16 +558,38 @@ export function RecordDetailModal({
       </div>
     ) : null;
 
-  const processActions =
-    showActions && !isReservation && canEdit ? (
+  const processActions = !isReservation && detail ? (
+    toolbarMode === "detail" ? (
+      <div className="ops-detail-action-row is-process">
+        <a className="ops-btn-secondary" href={opsPdfHref}>
+          {copy.downloadPdf}
+        </a>
+        {canEdit ? (
+          <button
+            type="button"
+            className="ops-btn-secondary"
+            onClick={() => {
+              setSaveError(null);
+              setEditDraft(edit);
+              setEditDirty(false);
+              setEditing(true);
+            }}
+          >
+            {copy.edit}
+          </button>
+        ) : null}
+      </div>
+    ) : toolbarMode === "edit-dirty" ? (
       <button
         type="button"
-        className="ops-btn-secondary"
-        onClick={() => setEditing(true)}
+        className="ops-btn-primary"
+        disabled={saving}
+        onClick={() => handleSave()}
       >
-        {copy.edit}
+        {saving ? copy.saving : copy.saveChanges}
       </button>
-    ) : null;
+    ) : null
+  ) : null;
 
   return (
     <OpsDetailPortal>
@@ -579,7 +611,7 @@ export function RecordDetailModal({
         >
           <div
             className={`ops-detail-toolbar${toolbarScrolled ? " is-scrolled" : ""}${
-              isReservation ? " is-reservation" : ""
+              isReservation ? " is-reservation" : " is-process"
             }`}
           >
             <div className="ops-detail-toolbar-start">
@@ -632,9 +664,14 @@ export function RecordDetailModal({
                   error={saveError}
                   onCancel={() => {
                     setSaveError(null);
+                    setEditDraft(edit);
+                    setEditDirty(false);
                     setEditing(false);
                   }}
-                  onSave={handleSave}
+                  onFormChange={(value, dirty) => {
+                    setEditDraft(value);
+                    setEditDirty(dirty);
+                  }}
                 />
               </div>
             ) : null}
@@ -644,6 +681,7 @@ export function RecordDetailModal({
                   locale={locale}
                   copy={copy}
                   detail={detail}
+                  showFooterPdf={false}
                   contactsVisible={isReservation ? contactsVisible : true}
                   onToggleContacts={
                     isReservation

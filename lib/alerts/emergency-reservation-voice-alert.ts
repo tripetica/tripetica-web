@@ -2,11 +2,6 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import {
-  readTwilioVoiceConfig,
-  startTwilioVoiceCall,
-  type TwilioVoiceConfig,
-} from "@/lib/alerts/twilio-voice";
-import {
   decideEmergencyVoiceAlert,
   isVoiceAlertsEnabled,
 } from "@/lib/alerts/voice-alert-policy";
@@ -52,51 +47,6 @@ async function loadReservationForVoiceAlert(reservationId: string) {
   return result.rows[0] ?? null;
 }
 
-async function claimVoiceAlert(reservationId: string) {
-  const result = await query<{ reservation_id: string }>(
-    `INSERT INTO reservation_voice_alerts (
-        reservation_id,
-        claimed_at,
-        attempt_count
-     ) VALUES ($1, NOW(), 1)
-     ON CONFLICT (reservation_id) DO UPDATE
-     SET claimed_at = NOW(),
-         attempt_count = reservation_voice_alerts.attempt_count + 1,
-         last_error = NULL
-     WHERE reservation_voice_alerts.started_at IS NULL
-       AND (
-         reservation_voice_alerts.claimed_at IS NULL
-         OR reservation_voice_alerts.claimed_at < NOW() - INTERVAL '2 minutes'
-       )
-     RETURNING reservation_id`,
-    [reservationId],
-  );
-  return result.rows[0]?.reservation_id ?? null;
-}
-
-async function markVoiceAlertStarted(reservationId: string, callSid: string) {
-  await query(
-    `UPDATE reservation_voice_alerts
-     SET started_at = NOW(),
-         twilio_call_sid = $2,
-         last_error = NULL
-     WHERE reservation_id = $1
-       AND started_at IS NULL`,
-    [reservationId, callSid],
-  );
-}
-
-async function releaseVoiceAlertClaim(reservationId: string, error: string) {
-  await query(
-    `UPDATE reservation_voice_alerts
-     SET claimed_at = NULL,
-         last_error = $2
-     WHERE reservation_id = $1
-       AND started_at IS NULL`,
-    [reservationId, error],
-  );
-}
-
 function logVoiceAlert(
   reservationId: string,
   extra: Record<string, string | boolean | undefined>,
@@ -105,17 +55,13 @@ function logVoiceAlert(
 }
 
 /**
- * Best-effort emergency ring. Never throws to the reservation flow.
- * Real Twilio calls happen only when TWILIO_VOICE_ALERTS_ENABLED=true.
+ * Retired reservation-created emergency ring. The assignment alarm scheduler
+ * owns operational phone reminders. This helper never places a Twilio call.
  */
 export async function maybeStartEmergencyReservationVoiceAlert(
   reservationId: string,
   options?: {
     env?: Record<string, string | undefined>;
-    startCall?: typeof startTwilioVoiceCall;
-    readConfig?: (
-      env: Record<string, string | undefined>,
-    ) => TwilioVoiceConfig | null;
   },
 ): Promise<EmergencyVoiceAlertOutcome> {
   const id = reservationId.trim();
@@ -140,35 +86,10 @@ export async function maybeStartEmergencyReservationVoiceAlert(
       deletedAt: row.deleted_at,
       alreadyStarted: row.already_started,
     });
-    if (decision.action === "skip") {
-      logVoiceAlert(id, { started: false, reason: decision.reason });
-      return { ok: true, started: false, reason: decision.reason };
-    }
-
-    const readConfig = options?.readConfig ?? readTwilioVoiceConfig;
-    const config = readConfig(env);
-    if (!config) {
-      logVoiceAlert(id, { started: false, reason: "missing_config" });
-      return { ok: true, started: false, reason: "missing_config" };
-    }
-
-    const claimed = await claimVoiceAlert(id);
-    if (!claimed) {
-      logVoiceAlert(id, { started: false, reason: "already_claimed" });
-      return { ok: true, started: false, reason: "already_claimed" };
-    }
-
-    const startCall = options?.startCall ?? startTwilioVoiceCall;
-    const result = await startCall(config);
-    if (!result.ok) {
-      await releaseVoiceAlertClaim(id, result.error);
-      logVoiceAlert(id, { started: false, reason: result.error });
-      return { ok: false, error: result.error };
-    }
-
-    await markVoiceAlertStarted(id, result.callSid);
-    logVoiceAlert(id, { started: true });
-    return { ok: true, started: true };
+    const reason =
+      decision.action === "skip" ? decision.reason : "creation_call_retired";
+    logVoiceAlert(id, { started: false, reason });
+    return { ok: true, started: false, reason };
   } catch (error) {
     console.error("[voice-alert] unexpected failure", {
       reservationId: id,

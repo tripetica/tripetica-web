@@ -32,4 +32,5 @@ export type ReservationListItem = {
   acceptedPartnerPriorityLevel: number | null;
   driverAssignment: import("@/lib/partner/job-assignment-view").JobDriverAssignmentView;
   vehicleAssignment: import("@/lib/partner/job-assignment-view").JobVehicleAssignmentView;
+  lastAssignmentCustomerNotification: import("@/lib/ops/assignment-customer-notification-view").AssignmentCustomerNotificationSent | null;
 };

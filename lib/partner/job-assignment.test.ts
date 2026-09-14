@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { STANDARD_MINIVAN_CODE } from "@/lib/booking/pricing/vehicle-quote";
 import { formatPartnerFleetPhone } from "@/lib/partner/fleet-view";
 import { positionFloatingLayer } from "@/lib/partner/floating-layer";
+import { shouldDismissFloatingPopoverOnOutsidePress } from "@/lib/partner/floating-popover-dismiss";
 import {
   assertAssignmentAccess,
   assertCanClearAssignment,
@@ -425,6 +426,9 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.doesNotMatch(store, /INSERT INTO partner_vehicles/);
   assert.doesNotMatch(store, /DELETE FROM partner_drivers/);
   assert.doesNotMatch(store, /DELETE FROM partner_vehicles/);
+  assert.doesNotMatch(store, /sendAssignmentCustomerNotification/);
+  assert.doesNotMatch(store, /sendReservationSmtpMail/);
+  assert.doesNotMatch(store, /assignment-customer-notification/);
   assert.match(store, /AND partner_id = \$2/);
 
   const ui = source("components/partner/job-assignment.tsx");
@@ -450,6 +454,7 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.doesNotMatch(ui, /name="vehicleClassCode"/);
   assert.doesNotMatch(ui, /name="passengerCapacity"/);
   assert.doesNotMatch(ui, /name="luggageCapacity"/);
+  assert.doesNotMatch(ui, /passengerNotify|opsSendAssignmentCustomerNotificationAction|Yolcuya Gönder/);
 
   const list = source("components/partner/job-list.tsx");
   assert.match(list, /JobDriverAssignmentCell/);
@@ -467,12 +472,22 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.match(cell, /partner-job-assign-chevron/);
   assert.match(cell, /menuInFlow/);
   assert.match(cell, /onDismiss/);
+  assert.match(cell, /dismissOnOutsidePress=\{mode !== "nontrp"\}/);
+  assert.equal((cell.match(/dismissOnOutsidePress=\{mode !== "nontrp"\}/g) ?? []).length, 2);
+  assert.match(cell, /NonTrpAssignPanelHeader/);
+  assert.match(cell, /closeLabel=\{copy\.close\}/);
 
   const popover = source("components/partner/floating-popover.tsx");
   assert.match(popover, /createPortal/);
   assert.match(popover, /document\.body/);
   assert.match(popover, /country-picker-panel/);
   assert.match(popover, /Escape/);
+  assert.match(popover, /dismissOnOutsidePress/);
+  assert.match(popover, /shouldDismissFloatingPopoverOnOutsidePress/);
+
+  const notify = source("components/ops/assignment-customer-notify-cell.tsx");
+  assert.doesNotMatch(notify, /dismissOnOutsidePress=\{false\}/);
+  assert.doesNotMatch(notify, /mode !== "nontrp"/);
 
   const fleetForm = source("components/partner/vehicle-fields.tsx");
   assert.match(fleetForm, /name="modelYear"/);
@@ -508,6 +523,9 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.match(copy, /jobAssignmentSection: "Operasyon Ataması"/);
   assert.match(copy, /jobUnassigned: "Atanmadı"/);
   assert.match(copy, /jobNonTrp: "NON TRP"/);
+  assert.match(copy, /close: "Kapat"/);
+  assert.match(copy, /close: "Close"/);
+  assert.match(copy, /close: "Закрыть"/);
   assert.match(copy, /jobClearDriver: "Şoför atamasını kaldır"/);
   assert.match(copy, /jobUnassigned: "Unassigned"/);
   assert.match(copy, /jobUnassigned: "Не назначен"/);
@@ -541,6 +559,54 @@ test("floating assignment layers flip above when there is no room below", () => 
   assert.equal(above.placement, "above");
   assert.ok(above.top < 720);
   assert.ok(above.top + Math.min(280, above.maxHeight) <= 720);
+});
+
+test("NON-TRP assignment popovers ignore outside press while registered menus still dismiss", () => {
+  assert.equal(
+    shouldDismissFloatingPopoverOnOutsidePress({
+      dismissOnOutsidePress: false,
+      targetInsideLayer: false,
+      targetInsideAnchor: false,
+      targetExempt: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldDismissFloatingPopoverOnOutsidePress({
+      dismissOnOutsidePress: true,
+      targetInsideLayer: false,
+      targetInsideAnchor: false,
+      targetExempt: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldDismissFloatingPopoverOnOutsidePress({
+      dismissOnOutsidePress: true,
+      targetInsideLayer: true,
+      targetInsideAnchor: false,
+      targetExempt: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldDismissFloatingPopoverOnOutsidePress({
+      dismissOnOutsidePress: true,
+      targetInsideLayer: false,
+      targetInsideAnchor: true,
+      targetExempt: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldDismissFloatingPopoverOnOutsidePress({
+      dismissOnOutsidePress: true,
+      targetInsideLayer: false,
+      targetInsideAnchor: false,
+      targetExempt: true,
+    }),
+    false,
+  );
 });
 
 void NON_TRP_SELECTION;

@@ -34,7 +34,21 @@ export function parseOpsAmount(value: string | number | null | undefined): numbe
   if (!text || text === "null" || text === "undefined") {
     return null;
   }
-  const n = Number(text);
+  const compact = text.replace(/\s/g, "");
+  const lastComma = compact.lastIndexOf(",");
+  const lastDot = compact.lastIndexOf(".");
+  let normalized = compact;
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized =
+      lastComma > lastDot
+        ? compact.replace(/\./g, "").replace(",", ".")
+        : compact.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    const fraction = compact.length - lastComma - 1;
+    normalized =
+      fraction === 3 ? compact.replace(/,/g, "") : compact.replace(",", ".");
+  }
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
 }
 

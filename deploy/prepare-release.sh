@@ -1,5 +1,13 @@
 #!/bin/bash
 # Prepare an immutable production release directory. Does not switch current.
+#
+# Release retention (do not run cleanup from this script):
+#   1. Record PREVIOUS_CURRENT now (today's live current = tomorrow's rollback).
+#   2. Build/test/env the candidate while A (old rollback) + B (current) + C stay.
+#   3. After successful cutover + health/smoke only, run:
+#        deploy/retain-production-releases-after-cutover.sh \
+#          --cutover-confirmed --expected-current <C>
+#      That keeps C + B and deletes older releases. Never call it on build/health failure.
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
@@ -37,7 +45,16 @@ rsync -a \
   --exclude '.env.production.local' \
   --exclude '.cursor/' \
   --exclude 'tmp/' \
+  --exclude '.deploy-previous-current' \
   "$SOURCE/" "$RELEASE/"
+
+PREVIOUS_CURRENT=$(readlink -f /srv/tripetica/current)
+if [[ ! -d "$PREVIOUS_CURRENT" ]]; then
+  echo "cannot record previous current: $PREVIOUS_CURRENT" >&2
+  exit 1
+fi
+printf '%s\n' "$PREVIOUS_CURRENT" >"$RELEASE/.deploy-previous-current"
+chmod 644 "$RELEASE/.deploy-previous-current"
 
 install -o tripetica-prod -g tripetica-prod -m 600 "$CURRENT_ENV" "$RELEASE/.env.production.local"
 "$ACL_SCRIPT" "$RELEASE/.env.production.local"
@@ -55,4 +72,5 @@ if [[ ! -f "$RELEASE/scripts/fx-scheduled-refresh.ts" ]]; then
   exit 1
 fi
 
+echo "previous_current $PREVIOUS_CURRENT"
 echo "release_prepared $RELEASE"

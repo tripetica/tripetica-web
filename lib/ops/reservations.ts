@@ -9,6 +9,7 @@ import {
 } from "@/lib/ops/driver-task";
 import { selectedStoredAmount } from "@/lib/ops/money";
 import { parseManualPriceTotals } from "@/lib/ops/price-override";
+import { loadLastSuccessfulAssignmentCustomerNotifications } from "@/lib/ops/assignment-customer-notification";
 import { type ReservationListItem } from "@/lib/ops/reservation-types";
 import {
   resolveDriverAssignment,
@@ -337,6 +338,7 @@ function mapList(row: ListRow): ReservationListItem {
     acceptedPartnerPriorityLevel: assignment.acceptedPartnerPriorityLevel,
     driverAssignment: assignment.driverAssignment,
     vehicleAssignment: assignment.vehicleAssignment,
+    lastAssignmentCustomerNotification: null,
   };
 }
 
@@ -490,6 +492,16 @@ export async function listReservations(input: {
     values,
   );
   const items = result.rows.map(mapList);
+  try {
+    const lastSent = await loadLastSuccessfulAssignmentCustomerNotifications(
+      items.map((item) => item.id),
+    );
+    for (const item of items) {
+      item.lastAssignmentCustomerNotification = lastSent.get(item.id) ?? null;
+    }
+  } catch {
+    // Notification table may be missing before DEV migration.
+  }
   const sbpIds = items
     .filter((item) => (item.paymentMethod ?? "").trim().toLowerCase() === "sbp")
     .map((item) => item.id);
@@ -728,6 +740,12 @@ export async function getReservation(id: string): Promise<ReservationDetail | nu
     })),
     driverTask: await getDriverTaskForOps(id),
   };
+  try {
+    const lastSent = await loadLastSuccessfulAssignmentCustomerNotifications([id]);
+    detail.lastAssignmentCustomerNotification = lastSent.get(id) ?? null;
+  } catch {
+    detail.lastAssignmentCustomerNotification = null;
+  }
 
   if ((detail.paymentMethod ?? "").trim().toLowerCase() === "sbp") {
     try {

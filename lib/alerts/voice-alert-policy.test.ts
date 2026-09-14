@@ -31,7 +31,7 @@ test("voice alerts stay off unless the flag is exactly true", () => {
   assert.equal(isVoiceAlertsEnabled("true"), true);
 });
 
-test("urgent rule is 120 minutes or less from create/confirm to pickup", () => {
+test("retired urgent window was 120 minutes or less from create/confirm to pickup", () => {
   const created = istanbul("2026-09-06T14:00");
   assert.equal(isUrgentVoiceAlert(istanbul("2026-09-06T15:30"), created), true);
   assert.equal(isUrgentVoiceAlert(istanbul("2026-09-06T16:00"), created), true);
@@ -50,7 +50,7 @@ test("urgent rule is 120 minutes or less from create/confirm to pickup", () => {
   assert.equal(isUrgentVoiceAlert(null, created), false);
 });
 
-test("overnight morning rule uses Istanbul 00:01-08:00 create and same-day pickup before 10:00", () => {
+test("retired overnight morning rule was Istanbul 00:01-08:00 create and same-day pickup before 10:00", () => {
   const midnight = istanbul("2026-09-06T00:00");
   assert.equal(
     isOvernightMorningVoiceAlert(istanbul("2026-09-06T09:00"), new Date(midnight.getTime() + 59_000)),
@@ -85,7 +85,7 @@ test("overnight morning rule uses Istanbul 00:01-08:00 create and same-day picku
   );
 });
 
-test("examples follow the OR of urgent and overnight-morning rules", () => {
+test("creation-time voice calls are retired for the old urgent and overnight windows", () => {
   const cases: Array<[string, string, boolean]> = [
     ["2026-09-06T14:00", "2026-09-06T15:30", true],
     ["2026-09-06T14:00", "2026-09-06T17:00", false],
@@ -97,11 +97,24 @@ test("examples follow the OR of urgent and overnight-morning rules", () => {
     ["2026-09-06T08:15", "2026-09-06T09:30", true],
     ["2026-09-06T08:15", "2026-09-06T11:00", false],
   ];
-  for (const [created, pickup, expected] of cases) {
+  for (const [created, pickup, historicallyWouldCall] of cases) {
+    const createdAt = istanbul(created);
+    const pickupAt = istanbul(pickup);
     assert.equal(
-      shouldPlaceVoiceAlert(istanbul(pickup), istanbul(created)),
-      expected,
-      `${created} / ${pickup}`,
+      isUrgentVoiceAlert(pickupAt, createdAt) ||
+        isOvernightMorningVoiceAlert(pickupAt, createdAt),
+      historicallyWouldCall,
+      `historical window ${created} / ${pickup}`,
+    );
+    assert.equal(shouldPlaceVoiceAlert(pickupAt, createdAt), false);
+    assert.deepEqual(
+      decideEmergencyVoiceAlert({
+        ...confirmed,
+        enabled: true,
+        decidedAt: createdAt,
+        pickupAt,
+      }),
+      { action: "skip", reason: "creation_call_retired" },
     );
   }
 });
@@ -112,9 +125,10 @@ test("overnight rule uses Istanbul calendar day, not UTC day", () => {
   const pickupUtc = new Date("2026-09-06T05:30:00.000Z"); // 08:30 Istanbul
   assert.equal(isOvernightMorningVoiceAlert(pickupUtc, createdUtc), true);
   assert.equal(createdUtc.getUTCDate() === pickupUtc.getUTCDate(), false);
+  assert.equal(shouldPlaceVoiceAlert(pickupUtc, createdUtc), false);
 });
 
-test("decision keeps enabled, confirmed, and one-call guards", () => {
+test("retired creation call never returns action call", () => {
   assert.deepEqual(
     decideEmergencyVoiceAlert({
       ...confirmed,
@@ -122,7 +136,7 @@ test("decision keeps enabled, confirmed, and one-call guards", () => {
       decidedAt: istanbul("2026-09-06T14:00"),
       pickupAt: istanbul("2026-09-06T15:30"),
     }),
-    { action: "call" },
+    { action: "skip", reason: "creation_call_retired" },
   );
   assert.deepEqual(
     decideEmergencyVoiceAlert({
@@ -131,7 +145,7 @@ test("decision keeps enabled, confirmed, and one-call guards", () => {
       decidedAt: istanbul("2026-09-06T14:00"),
       pickupAt: istanbul("2026-09-06T15:30"),
     }),
-    { action: "skip", reason: "disabled" },
+    { action: "skip", reason: "creation_call_retired" },
   );
   assert.deepEqual(
     decideEmergencyVoiceAlert({
@@ -140,7 +154,7 @@ test("decision keeps enabled, confirmed, and one-call guards", () => {
       decidedAt: istanbul("2026-09-06T14:00"),
       pickupAt: istanbul("2026-09-06T17:00"),
     }),
-    { action: "skip", reason: "outside_window" },
+    { action: "skip", reason: "creation_call_retired" },
   );
   assert.deepEqual(
     decideEmergencyVoiceAlert({
@@ -171,7 +185,7 @@ test("decision keeps enabled, confirmed, and one-call guards", () => {
       decidedAt: istanbul("2026-09-06T03:00"),
       pickupAt: istanbul("2026-09-06T09:45"),
     }),
-    { action: "call" },
+    { action: "skip", reason: "creation_call_retired" },
   );
 });
 

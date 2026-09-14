@@ -11,12 +11,14 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { shouldDismissFloatingPopoverOnOutsidePress } from "@/lib/partner/floating-popover-dismiss";
 import { positionFloatingLayer } from "@/lib/partner/floating-layer";
 
 type FloatingPopoverProps = {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   onDismiss: () => void;
+  dismissOnOutsidePress?: boolean;
   className?: string;
   minWidth?: number;
   maxWidth?: number;
@@ -39,6 +41,7 @@ export function FloatingPopover({
   open,
   anchorRef,
   onDismiss,
+  dismissOnOutsidePress = true,
   className,
   minWidth = 260,
   maxWidth = 380,
@@ -48,6 +51,8 @@ export function FloatingPopover({
   const layerRef = useRef<HTMLDivElement>(null);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
+  const dismissOnOutsidePressRef = useRef(dismissOnOutsidePress);
+  dismissOnOutsidePressRef.current = dismissOnOutsidePress;
   const [mounted, setMounted] = useState(false);
   const [style, setStyle] = useState<CSSProperties>();
 
@@ -124,10 +129,14 @@ export function FloatingPopover({
       if (!(target instanceof Node)) {
         return;
       }
-      if (layerRef.current?.contains(target) || anchorRef.current?.contains(target)) {
-        return;
-      }
-      if (isExemptOutsideTarget(event.target)) {
+      if (
+        !shouldDismissFloatingPopoverOnOutsidePress({
+          dismissOnOutsidePress: dismissOnOutsidePressRef.current,
+          targetInsideLayer: Boolean(layerRef.current?.contains(target)),
+          targetInsideAnchor: Boolean(anchorRef.current?.contains(target)),
+          targetExempt: isExemptOutsideTarget(event.target),
+        })
+      ) {
         return;
       }
       onDismissRef.current();

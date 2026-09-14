@@ -498,7 +498,9 @@ async function completeReservation(
     });
     const calculatedPrice = selectedStoredAmount({
       currency: draft.currency,
-      appliedVehicleTotal: draft.appliedVehicleTotal,
+      appliedVehicleTotal: draft.priceManuallyOverridden
+        ? null
+        : draft.appliedVehicleTotal,
       fxSnapshot: draft.appliedFxSnapshot,
     });
     const reservationCode = await allocateReservationCode(client);

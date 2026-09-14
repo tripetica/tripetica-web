@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DISPLAY_CURRENCIES,
   type DisplayCurrency,
@@ -10,6 +10,7 @@ import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { formatOpsSelectedPrice } from "@/lib/ops/money";
 import { type OpsRecordEditInput } from "@/lib/ops/record-edit";
+import { isOpsRecordEditDirty } from "@/lib/ops/record-edit-form";
 import { PriceEditModal } from "@/components/ops/price-edit-modal";
 
 type RecordDetailEditProps = {
@@ -19,7 +20,7 @@ type RecordDetailEditProps = {
   saving: boolean;
   error: string | null;
   onCancel: () => void;
-  onSave: (value: OpsRecordEditInput) => void;
+  onFormChange?: (value: OpsRecordEditInput, dirty: boolean) => void;
 };
 
 export function RecordDetailEdit({
@@ -29,7 +30,7 @@ export function RecordDetailEdit({
   saving,
   error,
   onCancel,
-  onSave,
+  onFormChange,
 }: RecordDetailEditProps) {
   const [form, setForm] = useState<OpsRecordEditInput>(initial);
   const [formSource, setFormSource] = useState(initial);
@@ -39,6 +40,10 @@ export function RecordDetailEdit({
     setFormSource(initial);
     setForm(initial);
   }
+
+  useEffect(() => {
+    onFormChange?.(form, isOpsRecordEditDirty(form, initial));
+  }, [form, initial, onFormChange]);
 
   const selectedPrice = formatOpsSelectedPrice(
     form.priceManuallyOverridden
@@ -349,14 +354,6 @@ export function RecordDetailEdit({
       <div className="ops-edit-actions">
         <button type="button" className="ops-btn-ghost" onClick={onCancel} disabled={saving}>
           {copy.cancelEdit}
-        </button>
-        <button
-          type="button"
-          className="ops-btn-primary"
-          onClick={() => onSave(form)}
-          disabled={saving}
-        >
-          {saving ? copy.savingChanges : copy.saveChanges}
         </button>
       </div>
 

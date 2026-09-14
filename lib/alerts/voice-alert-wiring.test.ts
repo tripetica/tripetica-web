@@ -6,14 +6,23 @@ function source(path: string) {
   return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 }
 
-test("confirmation hooks start the voice alert after commit, not inside the reservation transaction", () => {
+test("confirmation hooks do not start a creation-time voice alert", () => {
   const complete = source("app/api/booking/complete/route.ts");
   const callback = source("app/api/payments/turinvoice/callback/route.ts");
   const insert = source("lib/booking/complete-reservation.ts");
-  assert.match(complete, /maybeStartEmergencyReservationVoiceAlert/);
-  assert.match(callback, /maybeStartEmergencyReservationVoiceAlert/);
-  assert.match(complete, /after\(async \(\) => \{/);
+  assert.doesNotMatch(complete, /maybeStartEmergencyReservationVoiceAlert/);
+  assert.doesNotMatch(callback, /maybeStartEmergencyReservationVoiceAlert/);
   assert.doesNotMatch(insert, /maybeStartEmergencyReservationVoiceAlert/);
+});
+
+test("confirmation and operation emails stay on reservation complete and paid callback", () => {
+  const complete = source("app/api/booking/complete/route.ts");
+  const callback = source("app/api/payments/turinvoice/callback/route.ts");
+  assert.match(complete, /sendReservationConfirmationEmail/);
+  assert.match(complete, /sendOperationReservationNotification/);
+  assert.match(callback, /sendReservationConfirmationEmail/);
+  assert.match(callback, /sendOperationReservationNotification/);
+  assert.match(complete, /after\(async \(\) => \{/);
 });
 
 test("voice-alert migration is additive and does not rewrite reservations", () => {

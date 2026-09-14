@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   COMPLETION_CHECKOUT_STAGE,
   draftTripIsDirty,
@@ -260,4 +263,56 @@ test("vehicle and checkout stage are required", () => {
     validateDraftForCashCompletion(baseDraft({ currentStage: "vehicle_selection" })),
     "checkout-stage",
   );
+});
+
+test("ops price override is authoritative for completion even if calculated total differs", () => {
+  assert.equal(
+    validateDraftForCashCompletion(
+      baseDraft({
+        currency: "EUR",
+        appliedVehicleTotal: 104.75,
+        priceManuallyOverridden: true,
+        manualPriceTotals: { EUR: "100.00" },
+      }),
+    ),
+    null,
+  );
+  assert.equal(
+    validateDraftForCashCompletion(
+      baseDraft({
+        currency: "EUR",
+        appliedVehicleTotal: null,
+        priceManuallyOverridden: true,
+        manualPriceTotals: { EUR: "100.00" },
+      }),
+    ),
+    null,
+  );
+  assert.equal(
+    validateDraftForCashCompletion(
+      baseDraft({
+        currency: "EUR",
+        appliedVehicleTotal: null,
+        appliedFxSnapshot: null,
+      }),
+    ),
+    "price",
+  );
+});
+
+test("public completion does not accept a client-forged price", () => {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  const route = readFileSync(join(dir, "../../app/api/booking/complete/route.ts"), "utf8");
+  const completeModule = readFileSync(join(dir, "complete-reservation.ts"), "utf8");
+  const inputStart = completeModule.indexOf("export type CompleteReservationInput");
+  const inputEnd = completeModule.indexOf("export type CompleteReservationResult");
+  const inputBlock = completeModule.slice(inputStart, inputEnd);
+  assert.equal(inputBlock.includes("browserSessionId"), true);
+  assert.equal(inputBlock.includes("totalPrice"), false);
+  assert.equal(inputBlock.includes("manualPriceTotals"), false);
+  assert.equal(inputBlock.includes("appliedVehicleTotal"), false);
+  assert.equal(route.includes("record.amount"), false);
+  assert.equal(route.includes("record.totalPrice"), false);
+  assert.equal(route.includes("record.manualPriceTotals"), false);
+  assert.equal(route.includes("completeCashReservation"), true);
 });

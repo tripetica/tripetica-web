@@ -55,7 +55,7 @@ export function validateManualPriceTotals(
     }
     const amount = normalizeManualAmount(String(raw));
     if (amount === null) {
-      return null;
+      continue;
     }
     normalized[code] = amount;
   }
@@ -205,4 +205,35 @@ export function recalcManualTotalsFromCurrency(
     }
   }
   return next;
+}
+
+export function buildPriceEditApplyTotals(input: {
+  lastEditedCurrency: DisplayCurrency | null;
+  draftTotals: ManualPriceTotals;
+  fxSnapshot: unknown;
+}): ManualPriceTotals {
+  const edited = input.lastEditedCurrency;
+  const sourceAmount = edited ? input.draftTotals[edited] : undefined;
+  let next: ManualPriceTotals | null = null;
+  if (edited && sourceAmount) {
+    next = recalcManualTotalsFromCurrency(
+      edited,
+      sourceAmount,
+      input.fxSnapshot,
+      input.draftTotals,
+    );
+  }
+  const cleaned: ManualPriceTotals = {};
+  const source = next ?? input.draftTotals;
+  for (const code of DISPLAY_CURRENCIES) {
+    const value = source[code];
+    if (value == null || String(value).trim() === "") {
+      continue;
+    }
+    const normalized = normalizeManualAmount(String(value));
+    if (normalized) {
+      cleaned[code] = normalized;
+    }
+  }
+  return cleaned;
 }

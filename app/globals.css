@@ -9240,10 +9240,7 @@ body:has(.checkout-info-overlay) .contact-launcher {
 }
 
 .ops-price-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  display: block;
   margin-bottom: 0.75rem;
 }
 
@@ -9481,6 +9478,55 @@ body:has(.checkout-info-overlay) .contact-launcher {
   max-width: 9.75rem;
 }
 
+.ops-passenger-notify-idle {
+  display: block;
+  color: #5b6575;
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.ops-passenger-notify-form {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.35rem 0.15rem 0.15rem;
+}
+
+.ops-passenger-notify-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #142e5c;
+}
+
+.ops-passenger-notify-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: #172033;
+}
+
+.ops-passenger-notify-option.is-disabled {
+  color: #5b6575;
+}
+
+.ops-passenger-notify-error {
+  margin: 0;
+  color: #9b1c1c;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.ops-passenger-notify-submit {
+  width: fit-content;
+}
+
+.partner-job-assign-trigger.is-changed .partner-job-assign-trigger-label {
+  color: #9a3412;
+}
+
 .ops-assignment-line {
   display: block;
   overflow: hidden;
@@ -9635,7 +9681,8 @@ body:has(.checkout-info-overlay) .contact-launcher {
     box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06);
   }
 
-  .ops-detail-toolbar.is-reservation .ops-detail-toolbar-start {
+  .ops-detail-toolbar.is-reservation .ops-detail-toolbar-start,
+  .ops-detail-toolbar.is-process .ops-detail-toolbar-start {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
@@ -9643,14 +9690,16 @@ body:has(.checkout-info-overlay) .contact-launcher {
     min-width: 0;
   }
 
-  .ops-detail-toolbar.is-reservation .ops-detail-action-row {
+  .ops-detail-toolbar.is-reservation .ops-detail-action-row,
+  .ops-detail-toolbar.is-process .ops-detail-action-row {
     display: flex;
     flex-wrap: nowrap;
     gap: 0.4rem;
     width: 100%;
   }
 
-  .ops-detail-toolbar.is-reservation .ops-detail-action-row > * {
+  .ops-detail-toolbar.is-reservation .ops-detail-action-row > *,
+  .ops-detail-toolbar.is-process .ops-detail-action-row > * {
     flex: 1 1 0;
     min-width: 0;
     display: inline-flex;
@@ -12542,6 +12591,57 @@ body:has(.checkout-info-overlay) .contact-launcher {
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 12px 24px rgb(23 32 51 / 0.14);
+}
+
+.partner-job-assign-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.partner-job-assign-panel-head .partner-job-assign-kind {
+  margin: 0;
+  padding-top: 0.55rem;
+}
+
+.partner-job-assign-panel-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: -0.4rem -0.4rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #667085;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.partner-job-assign-panel-close:hover {
+  background: #eef2f7;
+  color: #172033;
+}
+
+.partner-job-assign-panel-close:active {
+  background: #e2e8f0;
+  color: #142e5c;
+}
+
+.partner-job-assign-panel-close:focus-visible {
+  outline: 2px solid #4a8fd4;
+  outline-offset: 2px;
+}
+
+.partner-job-assign-panel-close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .partner-job-assign-panel-actions {

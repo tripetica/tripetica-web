@@ -6,7 +6,6 @@ import {
   completeCashReservation,
   completeSbpReservation,
 } from "@/lib/booking/complete-reservation";
-import { maybeStartEmergencyReservationVoiceAlert } from "@/lib/alerts/emergency-reservation-voice-alert";
 import { notifyOpsReservationConfirmed } from "@/lib/ops/push/notify-reservation";
 import { scheduleOpsPush } from "@/lib/ops/push/schedule";
 import {
@@ -191,19 +190,6 @@ export async function POST(request: NextRequest) {
           await sendOperationReservationNotification(result.reservationId);
         } catch (error) {
           console.error("[operation-mail] notification hook failed", {
-            reservationId: result.reservationId,
-            error:
-              error instanceof Error
-                ? { name: error.name, message: error.message }
-                : error,
-          });
-        }
-      });
-      after(async () => {
-        try {
-          await maybeStartEmergencyReservationVoiceAlert(result.reservationId);
-        } catch (error) {
-          console.error("[voice-alert] confirmation hook failed", {
             reservationId: result.reservationId,
             error:
               error instanceof Error

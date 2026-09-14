@@ -18,6 +18,7 @@ import { type ReservationListItem } from "@/lib/ops/reservation-types";
 import { reservationStatusLabel, reservationStatusBadgeClass, serviceLabel, paymentLabel, paymentProviderLabel, paymentStatusLabel, paymentStatusBadgeClass, refundStatusBadgeClass, refundStatusLabel } from "@/lib/ops/record-detail";
 import { compactPaymentMovementLines } from "@/lib/ops/payment-history";
 import { OpsReservationAssignmentCells } from "@/components/ops/reservation-assignment-cells";
+import { OpsAssignmentCustomerNotifyCell } from "@/components/ops/assignment-customer-notify-cell";
 import { RecordDetailModal } from "@/components/ops/record-detail-modal";
 import { type OpsAssignmentFleet, type OpsAssignmentPartnerOption } from "@/lib/ops/reservation-assignment-view";
 
@@ -144,7 +145,7 @@ export function ReservationTable({
 
   function onRowClick(event: MouseEvent<HTMLTableRowElement>, id: string) {
     const target = event.target as HTMLElement;
-    if (target.closest("a, button, input, label, .partner-job-assign-cell")) {
+    if (target.closest("a, button, input, label, .partner-job-assign-cell, .ops-passenger-notify-cell")) {
       return;
     }
     toggleId(id);
@@ -211,6 +212,7 @@ export function ReservationTable({
               <th className="ops-col-assignment">{copy.assignmentPartner}</th>
               <th className="ops-col-assignment">{copy.assignmentDriver}</th>
               <th className="ops-col-assignment">{copy.assignmentVehicle}</th>
+              <th className="ops-col-assignment">{copy.passengerNotify}</th>
               <th className="ops-col-operation">{copy.operationStatus}</th>
               <th>{copy.total}</th>
               <th>{copy.currency}</th>
@@ -288,6 +290,19 @@ export function ReservationTable({
                     vehicles={item.acceptedPartnerId ? fleets[item.acceptedPartnerId]?.vehicles ?? [] : []}
                     canAssign={canAssign}
                   />
+                  <td className="ops-col-assignment">
+                    <OpsAssignmentCustomerNotifyCell
+                      locale={locale}
+                      copy={copy}
+                      reservationId={item.id}
+                      customerEmail={item.customerEmail}
+                      locked={item.assignmentLocked}
+                      canAssign={canAssign}
+                      driver={item.driverAssignment}
+                      vehicle={item.vehicleAssignment}
+                      lastSent={item.lastAssignmentCustomerNotification}
+                    />
+                  </td>
                   <td className="ops-col-operation">
                     {driverTaskStageLabel(item.driverTaskStage, copy)}
                   </td>

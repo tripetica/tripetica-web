@@ -1,22 +1,7 @@
 import "server-only";
 
 import { istanbulLocalToUtcMs, timestamptzToIstanbulLocal } from "@/lib/booking/istanbul-time";
-import { isKnownVehicleCode } from "@/lib/booking/fx/vehicle-totals";
-import {
-  BABY_SEAT_COUNT_MAX,
-  BABY_SEAT_COUNT_MIN,
-  LUGGAGE_COUNT_MAX,
-  LUGGAGE_COUNT_MIN,
-  PASSENGER_COUNT_MAX,
-  PASSENGER_COUNT_UNSET,
-} from "@/lib/booking/occupancy";
-import { PASSENGER_GENDERS } from "@/lib/booking/reservation-search";
-import {
-  DISPLAY_CURRENCIES,
-  isDisplayCurrency,
-  normalizeDisplayCurrency,
-  type DisplayCurrency,
-} from "@/lib/booking/pricing/format-eur";
+import { normalizeDisplayCurrency } from "@/lib/booking/pricing/format-eur";
 import { vehicleCardCopyFor } from "@/lib/booking/vehicles/copy";
 import { type Locale } from "@/lib/i18n/config";
 import { getPool } from "@/lib/db/postgres";
@@ -24,55 +9,23 @@ import { type ProcessDetail } from "@/lib/ops/processes";
 import { type ReservationDetail } from "@/lib/ops/reservations";
 import { diffAuditValues, writeOpsRecordAudits } from "@/lib/ops/record-audit";
 import {
+  type OpsRecordEditForm,
+  type OpsRecordEditInput,
+  type OpsRecordEditPassenger,
+  validateOpsRecordEditInput,
+} from "@/lib/ops/record-edit-form";
+import {
   buildCalculatedPriceTotals,
   parseManualPriceTotals,
-  type ManualPriceTotals,
-  validateManualPriceTotals,
   resolveStoredPriceAmount,
 } from "@/lib/ops/price-override";
 
-export type OpsRecordEditPassenger = {
-  sequenceNo: number;
-  firstName: string;
-  lastName: string;
-  countryCode: string;
-  identityNumber: string;
-  gender: "" | "female" | "male";
-  isPrimary: boolean;
+export {
+  type OpsRecordEditForm,
+  type OpsRecordEditInput,
+  type OpsRecordEditPassenger,
+  validateOpsRecordEditInput,
 };
-
-export type OpsRecordEditForm = {
-  kind: "process" | "reservation";
-  id: string;
-  passengers: OpsRecordEditPassenger[];
-  pickupDate: string;
-  pickupTime: string;
-  pickupName: string;
-  pickupAddress: string;
-  dropoffName: string;
-  dropoffAddress: string;
-  flightCode: string;
-  passengerCount: number;
-  luggageCount: number;
-  babySeatCount: number;
-  meetAndGreet: boolean;
-  customerFirstName: string;
-  customerLastName: string;
-  customerEmail: string;
-  customerPhone: string;
-  notes: string;
-  vehicleCode: string;
-  paymentMethod: string;
-  currency: DisplayCurrency;
-  priceManuallyOverridden: boolean;
-  manualPriceTotals: ManualPriceTotals;
-  calculatedPriceTotals: ManualPriceTotals;
-  fxSnapshot: unknown;
-};
-
-export type OpsRecordEditInput = OpsRecordEditForm;
-
-const PAYMENT_METHODS = ["cash", "sbp"] as const;
 
 function splitPickupAt(value: string | null | undefined) {
   const local = value ? timestamptzToIstanbulLocal(value) : "";
@@ -195,87 +148,6 @@ export function reservationToEditForm(item: ReservationDetail): OpsRecordEditFor
   };
 }
 
-function trimField(value: string, max = 500) {
-  return value.trim().slice(0, max);
-}
-
-function validateCount(value: number, min: number, max: number) {
-  return Number.isInteger(value) && value >= min && value <= max;
-}
-
-export function validateOpsRecordEditInput(
-  input: OpsRecordEditInput & { passengers: OpsRecordEditPassenger[] },
-):
-  | { ok: true; value: OpsRecordEditInput & { passengers: OpsRecordEditPassenger[] } }
-  | { ok: false; reason: string } {
-  if (!input.pickupDate || !input.pickupTime) {
-    return { ok: false, reason: "pickup-at" };
-  }
-  const pickupLocal = `${input.pickupDate}T${input.pickupTime}`;
-  if (!Number.isFinite(istanbulLocalToUtcMs(pickupLocal))) {
-    return { ok: false, reason: "pickup-at" };
-  }
-  if (!trimField(input.pickupName) || !trimField(input.dropoffName)) {
-    return { ok: false, reason: "places" };
-  }
-  if (
-    !validateCount(input.passengerCount, 1, PASSENGER_COUNT_MAX) ||
-    !validateCount(input.luggageCount, LUGGAGE_COUNT_MIN, LUGGAGE_COUNT_MAX) ||
-    !validateCount(input.babySeatCount, BABY_SEAT_COUNT_MIN, BABY_SEAT_COUNT_MAX)
-  ) {
-    return { ok: false, reason: "counts" };
-  }
-  if (!trimField(input.customerFirstName) || !trimField(input.customerLastName)) {
-    return { ok: false, reason: "customer" };
-  }
-  if (!trimField(input.customerEmail) || !trimField(input.customerPhone)) {
-    return { ok: false, reason: "contact" };
-  }
-  if (input.vehicleCode && !isKnownVehicleCode(input.vehicleCode)) {
-    return { ok: false, reason: "vehicle" };
-  }
-  if (input.paymentMethod && !PAYMENT_METHODS.includes(input.paymentMethod as (typeof PAYMENT_METHODS)[number])) {
-    return { ok: false, reason: "payment" };
-  }
-  const currency = normalizeDisplayCurrency(input.currency);
-  if (!isDisplayCurrency(currency)) {
-    return { ok: false, reason: "currency" };
-  }
-  let manualTotals: ManualPriceTotals | null = null;
-  if (input.priceManuallyOverridden) {
-    manualTotals = validateManualPriceTotals(input.manualPriceTotals);
-    if (!manualTotals || !manualTotals[currency]) {
-      return { ok: false, reason: "price" };
-    }
-  }
-  for (const passenger of input.passengers) {
-    if (!trimField(passenger.firstName) || !trimField(passenger.lastName)) {
-      return { ok: false, reason: "passenger" };
-    }
-    if (passenger.gender && !PASSENGER_GENDERS.includes(passenger.gender)) {
-      return { ok: false, reason: "passenger" };
-    }
-  }
-  return {
-    ok: true,
-    value: {
-      ...input,
-      currency,
-      manualPriceTotals: manualTotals ?? input.manualPriceTotals,
-      pickupName: trimField(input.pickupName, 300),
-      pickupAddress: trimField(input.pickupAddress, 500),
-      dropoffName: trimField(input.dropoffName, 300),
-      dropoffAddress: trimField(input.dropoffAddress, 500),
-      flightCode: trimField(input.flightCode, 32),
-      customerFirstName: trimField(input.customerFirstName, 120),
-      customerLastName: trimField(input.customerLastName, 120),
-      customerEmail: trimField(input.customerEmail, 320),
-      customerPhone: trimField(input.customerPhone, 40),
-      notes: trimField(input.notes, 2000),
-    },
-  };
-}
-
 function vehicleLabels(code: string, locale: Locale | null) {
   const copy = vehicleCardCopyFor(code, locale === "tr" ? "tr" : locale === "ru" ? "ru" : "en");
   return {
@@ -306,6 +178,10 @@ export async function updateProcessRecord(
   const appliedVehicleTotal = value.priceManuallyOverridden
     ? value.manualPriceTotals[value.currency] ?? selectedPrice.amount
     : before.appliedVehicleTotal;
+  const appliedVehicleTotalEur = value.priceManuallyOverridden
+    ? value.manualPriceTotals.EUR ??
+      (value.currency === "EUR" ? appliedVehicleTotal : before.appliedVehicleTotalEur)
+    : before.appliedVehicleTotalEur;
 
   const client = await getPool().connect();
   try {
@@ -377,6 +253,7 @@ export async function updateProcessRecord(
          price_manually_overridden = $22,
          manual_price_totals = $23,
          applied_vehicle_total = CASE WHEN $22 THEN $24 ELSE applied_vehicle_total END,
+         applied_vehicle_total_eur = CASE WHEN $22 THEN $25 ELSE applied_vehicle_total_eur END,
          updated_at = NOW()
        WHERE id = $1`,
       [
@@ -404,6 +281,7 @@ export async function updateProcessRecord(
         value.priceManuallyOverridden,
         value.priceManuallyOverridden ? JSON.stringify(value.manualPriceTotals) : null,
         appliedVehicleTotal,
+        appliedVehicleTotalEur,
       ],
     );
 

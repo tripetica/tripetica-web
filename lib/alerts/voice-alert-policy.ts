@@ -103,14 +103,18 @@ export function isOvernightMorningVoiceAlert(
   return inNightWindow && created.date === pickup.date && morningPickup;
 }
 
+/**
+ * Retired: creation-time emergency/night rings no longer fire.
+ * Historical windows remain in isUrgentVoiceAlert / isOvernightMorningVoiceAlert.
+ * Assignment reminders live in lib/ops/assignment-alarm*.
+ */
 export function shouldPlaceVoiceAlert(
   pickupAt: Date | string | number | null | undefined,
   decidedAt: Date | string | number | null | undefined,
 ) {
-  return (
-    isUrgentVoiceAlert(pickupAt, decidedAt) ||
-    isOvernightMorningVoiceAlert(pickupAt, decidedAt)
-  );
+  void pickupAt;
+  void decidedAt;
+  return false;
 }
 
 export function isConfirmedReservationForVoiceAlert(input: {
@@ -142,17 +146,14 @@ export function decideEmergencyVoiceAlert(input: {
   deletedAt?: Date | string | null;
   alreadyStarted: boolean;
 }): VoiceAlertDecision {
+  void input.enabled;
+  void input.pickupAt;
+  void input.decidedAt;
   if (input.alreadyStarted) {
     return { action: "skip", reason: "already_started" };
   }
   if (!isConfirmedReservationForVoiceAlert(input)) {
     return { action: "skip", reason: "not_confirmed" };
   }
-  if (!shouldPlaceVoiceAlert(input.pickupAt, input.decidedAt)) {
-    return { action: "skip", reason: "outside_window" };
-  }
-  if (!input.enabled) {
-    return { action: "skip", reason: "disabled" };
-  }
-  return { action: "call" };
+  return { action: "skip", reason: "creation_call_retired" };
 }

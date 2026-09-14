@@ -9,6 +9,7 @@ import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { formatOpsAmount } from "@/lib/ops/money";
 import {
+  buildPriceEditApplyTotals,
   recalcManualTotalsFromCurrency,
   type ManualPriceTotals,
 } from "@/lib/ops/price-override";
@@ -83,9 +84,6 @@ export function PriceEditModal({
       >
         <div className="ops-price-modal-header">
           <h3 id="ops-price-edit-title">{copy.editPriceTitle}</h3>
-          <button type="button" className="ops-btn-ghost" onClick={onClose}>
-            {copy.close}
-          </button>
         </div>
         <div className="ops-price-rows">
           {DISPLAY_CURRENCIES.map((code) => (
@@ -119,14 +117,14 @@ export function PriceEditModal({
             type="button"
             className="ops-btn-primary"
             onClick={() => {
-              const cleaned: ManualPriceTotals = {};
-              for (const code of DISPLAY_CURRENCIES) {
-                const value = draftTotals[code];
-                if (value != null && String(value).trim() !== "") {
-                  cleaned[code] = String(value).trim();
-                }
-              }
-              onApply(cleaned, true);
+              onApply(
+                buildPriceEditApplyTotals({
+                  lastEditedCurrency,
+                  draftTotals,
+                  fxSnapshot,
+                }),
+                true,
+              );
             }}
           >
             {copy.saveChanges}

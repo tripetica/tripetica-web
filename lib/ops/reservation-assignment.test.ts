@@ -61,6 +61,9 @@ test("ops assignment store keeps partner change atomic and scoped", () => {
   assert.doesNotMatch(store, /INSERT INTO partner_vehicles/);
   assert.doesNotMatch(store, /created_at\s*=/);
   assert.doesNotMatch(store, /pickup_at\s*=/);
+  assert.doesNotMatch(store, /sendAssignmentCustomerNotification/);
+  assert.doesNotMatch(store, /sendReservationSmtpMail/);
+  assert.doesNotMatch(store, /assignment-customer-notification/);
 });
 
 test("ops assignment actions require reservations.manage and revalidate partner jobs", () => {
@@ -106,12 +109,20 @@ test("ops reservation assignment UI uses existing popover language", () => {
   assert.match(cells, /defaultOpen/);
   assert.match(cells, /menuInFlow/);
   assert.match(cells, /onDismiss/);
+  assert.match(cells, /dismissOnOutsidePress=\{mode !== "nontrp"\}/);
+  assert.equal((cells.match(/dismissOnOutsidePress=\{mode !== "nontrp"\}/g) ?? []).length, 2);
+  assert.match(cells, /NonTrpAssignPanelHeader/);
+  assert.match(cells, /closeLabel=\{copy\.close\}/);
+  assert.doesNotMatch(cells, /dismissOnOutsidePress=\{false\}/);
   assert.match(cells, /router\.refresh\(\)/);
   assert.doesNotMatch(cells, /router\.(push|replace)/);
 
   const table = source("components/ops/reservation-table.tsx");
   assert.match(table, /OpsReservationAssignmentCells/);
+  assert.match(table, /OpsAssignmentCustomerNotifyCell/);
   assert.match(table, /partner-job-assign-cell/);
+  assert.match(table, /ops-passenger-notify-cell/);
+  assert.match(table, /copy.passengerNotify/);
 
   const page = source("app/[locale]/ops/(panel)/reservations/page.tsx");
   assert.match(page, /listActiveOpsAssignmentPartners/);
