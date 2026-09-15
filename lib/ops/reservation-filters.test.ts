@@ -11,6 +11,7 @@ import {
   parseReservationDatePreset,
   parseReservationListFilters,
   pickupAtBounds,
+  reservationOperationWhereSql,
   reservationOrderBy,
   reservationQueryRecord,
 } from "@/lib/ops/reservation-filters";
@@ -127,7 +128,7 @@ test("combined reservation filters keep search, status, payment, and date", () =
   assert.equal(parseIsoDate(filters.to), "2026-08-28");
   assert.equal(filters.sort, "");
   assert.equal(filters.dir, "");
-  assert.equal(filters.operation, "");
+  assert.equal(filters.operation, "active");
 });
 
 test("completed operation filter is independent of date search", () => {
@@ -143,6 +144,31 @@ test("completed operation filter is independent of date search", () => {
   const record = reservationQueryRecord(filters);
   assert.equal(record.operation, "completed");
   assert.equal(record.date, "today");
+});
+
+test("default reservation list view is active and omits operation from the query string", () => {
+  const filters = parseReservationListFilters({});
+  assert.equal(filters.operation, "active");
+  assert.equal(hasActiveReservationFilters(filters), false);
+  assert.equal(reservationQueryRecord(filters).operation, "");
+});
+
+test("cancelled and all views stay independent of date search", () => {
+  const cancelled = parseReservationListFilters({
+    date: "month",
+    operation: "cancelled",
+  });
+  assert.equal(cancelled.date, "month");
+  assert.equal(cancelled.operation, "cancelled");
+  assert.equal(reservationQueryRecord(cancelled).operation, "cancelled");
+  const all = parseReservationListFilters({
+    date: "today",
+    operation: "all",
+  });
+  assert.equal(all.date, "today");
+  assert.equal(all.operation, "all");
+  assert.equal(reservationQueryRecord(all).operation, "all");
+  assert.equal(hasActiveReservationFilters(all), true);
 });
 
 test("sort params parse and default dir to asc when sort is set", () => {
@@ -281,13 +307,20 @@ test("reservation list applies the same deterministic order after partner joins"
   assert.doesNotMatch(list, /ORDER BY[^\n]*assignment_updated_at/);
 });
 
-test("reservation filters keep search, filter and refresh on one toolbar", () => {
+test("reservation filters keep live search and refresh on one toolbar", () => {
   const filters = readFileSync(
     new URL("../../components/ops/reservation-filters.tsx", import.meta.url),
     "utf8",
   );
   assert.match(filters, /OpsRefreshButton/);
-  assert.match(filters, /ops-reservation-search[\s\S]*copy\.filter[\s\S]*OpsRefreshButton/);
+  assert.match(filters, /RESERVATION_SEARCH_DEBOUNCE_MS/);
+  assert.match(filters, /ops-reservation-search[\s\S]*OpsRefreshButton/);
+  assert.doesNotMatch(filters, /copy\.filter/);
+  assert.doesNotMatch(filters, /type="submit"/);
+  assert.match(filters, /operationActive/);
+  assert.match(filters, /operationCompleted/);
+  assert.match(filters, /operationCancelled/);
+  assert.match(filters, /operationAll/);
   assert.match(
     readFileSync(new URL("../../components/ops/refresh-button.tsx", import.meta.url), "utf8"),
     /router\.refresh\(\)/,
@@ -297,3 +330,25 @@ test("reservation filters keep search, filter and refresh on one toolbar", () =>
     /OpsRefreshButton/,
   );
 });
+
+test("operation views map to driver-task completed and reservation cancelled status", () => {
+  assert.match(reservationOperationWhereSql("completed") ?? "", /current_stage = 'completed'/);
+  assert.equal(reservationOperationWhereSql("cancelled"), "status = 'cancelled'");
+  assert.equal(reservationOperationWhereSql("all"), null);
+  assert.match(reservationOperationWhereSql("active") ?? "", /NOT EXISTS/);
+  assert.match(reservationOperationWhereSql("active") ?? "", /status <> 'cancelled'/);
+  assert.match(reservationOperationWhereSql("") ?? "", /status <> 'cancelled'/);
+  const list = readFileSync(
+    new URL("../../lib/ops/reservations.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(list, /reservationOperationWhereSql\(input\.filters\.operation\)/);
+  assert.doesNotMatch(sourceProcessesPage(), /operationActive/);
+});
+
+function sourceProcessesPage() {
+  return readFileSync(
+    new URL("../../app/[locale]/ops/(panel)/processes/page.tsx", import.meta.url),
+    "utf8",
+  );
+}

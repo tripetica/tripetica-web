@@ -24,6 +24,7 @@ import {
 } from "@/lib/ops/processes";
 import { getReservation } from "@/lib/ops/reservations";
 import { softDeleteReservation } from "@/lib/ops/reservation-delete";
+import { maybeScheduleCancellationCustomerNotification } from "@/lib/ops/cancellation-customer-notification";
 import { setReservationOpsStatus } from "@/lib/ops/reservation-status";
 import { requestOpsTurinvoiceRefund, requestOpsPaymentTransactionRefund } from "@/lib/ops/reservation-refund";
 import { requestOpsPaymentTransactionCancel } from "@/lib/ops/reservation-payment-cancel";
@@ -505,6 +506,7 @@ export async function setReservationStatusAction(
       canDelete: canDeleteOpsReservations(actor.role),
     };
   }
+  maybeScheduleCancellationCustomerNotification(result, id);
   revalidatePath(localizedPath(locale, "/ops/reservations"));
   const refreshed = await getReservation(id);
   if (!refreshed) {

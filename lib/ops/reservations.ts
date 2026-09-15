@@ -1,7 +1,12 @@
 import "server-only";
 
 import { query } from "@/lib/db/postgres";
-import { pickupAtBounds, reservationOrderBy, type ReservationListFilters } from "@/lib/ops/reservation-filters";
+import {
+  pickupAtBounds,
+  reservationOperationWhereSql,
+  reservationOrderBy,
+  type ReservationListFilters,
+} from "@/lib/ops/reservation-filters";
 import {
   ensureDriverTaskForReservation,
   getDriverTaskForOps,
@@ -374,22 +379,9 @@ export async function listReservations(input: {
     values.push(input.filters.payment);
     filters.push(`payment_method = $${values.length}`);
   }
-  if ((input.filters.operation ?? "") === "completed") {
-    filters.push(
-      `EXISTS (
-         SELECT 1 FROM reservation_driver_tasks driver_task
-         WHERE driver_task.reservation_id = reservations.id
-           AND driver_task.current_stage = 'completed'
-       )`,
-    );
-  } else {
-    filters.push(
-      `NOT EXISTS (
-         SELECT 1 FROM reservation_driver_tasks driver_task
-         WHERE driver_task.reservation_id = reservations.id
-           AND driver_task.current_stage = 'completed'
-       )`,
-    );
+  const operationSql = reservationOperationWhereSql(input.filters.operation);
+  if (operationSql) {
+    filters.push(operationSql);
   }
   const pickupBounds = pickupAtBounds(
     input.filters.date,

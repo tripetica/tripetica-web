@@ -311,8 +311,10 @@ test("ops reservation list and detail expose driver task status", () => {
   assert.match(list, /ensureDriverTaskForReservation/);
   const complete = source("lib/booking/complete-reservation.ts");
   assert.match(complete, /ensureDriverTaskForReservation/);
-  assert.match(list, /NOT EXISTS \(/);
-  assert.match(list, /current_stage = 'completed'/);
+  assert.match(list, /reservationOperationWhereSql/);
+  const filterSql = source("lib/ops/reservation-filters.ts");
+  assert.match(filterSql, /NOT \$\{DRIVER_TASK_COMPLETED_EXISTS_SQL\}/);
+  assert.match(filterSql, /current_stage = 'completed'/);
   assert.match(table, /copy\.operationStatus/);
   assert.match(table, /driverTaskStageLabel/);
   assert.match(filters, /copy\.operationCompleted/);

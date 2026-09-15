@@ -10,6 +10,7 @@ import {
 import { type OpsCopy } from "@/lib/ops/copy";
 import {
   isOpsContactRow,
+  opsTransferRowsForDisplay,
   reservationStatusLabel,
   type OpsRecordDetail,
 } from "@/lib/ops/record-detail";
@@ -28,15 +29,23 @@ const CONTENT_BOTTOM = PAGE_HEIGHT - MARGIN;
 export async function buildOpsRecordPdf(
   detail: OpsRecordDetail,
   copy: OpsCopy,
-  options?: { includeContact?: boolean },
+  options?: { includeContact?: boolean; includePricing?: boolean },
 ) {
   const includeContact = options?.includeContact !== false;
+  const includePricing = options?.includePricing !== false;
   const isReservation = detail.kind === "reservation";
   const customer = isReservation
     ? includeContact
       ? detail.customer.filter((item) => isOpsContactRow(item.label, copy))
       : []
     : detail.customer;
+  const transfer = opsTransferRowsForDisplay(
+    detail.pickupIsAirport
+      ? detail.transfer
+      : detail.transfer.filter((item) => item.label !== copy.meetAndGreet),
+    copy,
+    includePricing,
+  );
   const doc = new PDFDocument({
     size: "A4",
     margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
@@ -65,16 +74,13 @@ export async function buildOpsRecordPdf(
   drawRows(doc, detail.service);
   drawPlacesAsRows(doc, detail.places);
   drawRows(doc, detail.vehicle);
-  drawRows(
-    doc,
-    detail.pickupIsAirport
-      ? detail.transfer
-      : detail.transfer.filter((item) => item.label !== copy.meetAndGreet),
-  );
-  if (!isReservation && detail.selectedPrice) {
+  drawRows(doc, transfer);
+  if (includePricing && !isReservation && detail.selectedPrice) {
     drawRows(doc, [{ label: copy.selectedPrice, value: detail.selectedPrice }]);
   }
-  drawAlternateCurrencies(doc, copy, detail, isReservation);
+  if (includePricing) {
+    drawAlternateCurrencies(doc, copy, detail, isReservation);
+  }
   if (customer.length > 0) {
     drawSection(doc, isReservation ? copy.contactInfo : copy.customer, customer);
   }

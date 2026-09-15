@@ -4,6 +4,8 @@ import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import {
   isOpsContactRow,
+  isOpsPricingRow,
+  opsTransferRowsForDisplay,
   type OpsDetailPlace,
   type OpsRecordDetail,
 } from "@/lib/ops/record-detail";
@@ -16,6 +18,8 @@ type RecordDetailProps = {
   detail: OpsRecordDetail;
   contactsVisible?: boolean;
   onToggleContacts?: () => void;
+  pricingVisible?: boolean;
+  onTogglePricing?: () => void;
   onPaymentHistoryUpdated?: (detail: OpsRecordDetail) => void;
   showFooterPdf?: boolean;
 };
@@ -51,16 +55,23 @@ export function RecordDetail({
   detail,
   contactsVisible = true,
   onToggleContacts,
+  pricingVisible = true,
+  onTogglePricing,
   onPaymentHistoryUpdated,
   showFooterPdf = true,
 }: RecordDetailProps) {
   const isReservation = detail.kind === "reservation";
+  const showReservationPricing = !isReservation || pricingVisible;
 
   const reservationMainRows = isReservation
     ? [
         ...detail.vehicle,
-        ...detail.transfer,
+        ...opsTransferRowsForDisplay(detail.transfer, copy, false),
       ]
+    : [];
+
+  const reservationPricingRows = isReservation
+    ? detail.transfer.filter((item) => isOpsPricingRow(item.label, copy))
     : [];
 
   const processVehiclePriceRows = isReservation
@@ -110,35 +121,58 @@ export function RecordDetail({
             </section>
           </>
         )}
-        {detail.otherCurrencies.length > 0 ? (
-          isReservation ? (
-            <div className="ops-alt-amounts">
-              <p className="ops-alt-amounts-label">{copy.alternatePaymentHint}</p>
-              <p className="ops-alt-amounts-line">
-                {detail.otherCurrencies.map((item, index) => (
-                  <span key={item} className="ops-alt-amount-group">
-                    {index > 0 ? (
-                      <span className="ops-alt-sep" aria-hidden="true">
-                        {" · "}
-                      </span>
-                    ) : null}
-                    <span className="ops-alt-amount">{item}</span>
-                  </span>
-                ))}
-              </p>
-            </div>
-          ) : (
-            <div className="ops-other-currencies">
-              <p className="ops-other-currencies-label">{copy.otherCurrencies}</p>
-              <ul>
-                {detail.otherCurrencies.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )
+        {!isReservation && detail.otherCurrencies.length > 0 ? (
+          <div className="ops-other-currencies">
+            <p className="ops-other-currencies-label">{copy.otherCurrencies}</p>
+            <ul>
+              {detail.otherCurrencies.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
         ) : null}
       </section>
+
+      {isReservation ? (
+        <section className="ops-contact-section">
+          <div className="ops-customer-heading">
+            <h3>{copy.pricingInfo}</h3>
+          </div>
+          {showReservationPricing ? (
+            <>
+              <DetailRows rows={reservationPricingRows} />
+              {detail.otherCurrencies.length > 0 ? (
+                <div className="ops-alt-amounts">
+                  <p className="ops-alt-amounts-label">{copy.alternatePaymentHint}</p>
+                  <p className="ops-alt-amounts-line">
+                    {detail.otherCurrencies.map((item, index) => (
+                      <span key={item} className="ops-alt-amount-group">
+                        {index > 0 ? (
+                          <span className="ops-alt-sep" aria-hidden="true">
+                            {" · "}
+                          </span>
+                        ) : null}
+                        <span className="ops-alt-amount">{item}</span>
+                      </span>
+                    ))}
+                  </p>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          {onTogglePricing ? (
+            <div className="ops-contact-toggle-wrap">
+              <button
+                type="button"
+                className="ops-btn-secondary ops-contact-toggle"
+                onClick={onTogglePricing}
+              >
+                {pricingVisible ? copy.hidePricing : copy.showPricing}
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {isReservation ? (
         <section className="ops-contact-section">

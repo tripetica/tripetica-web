@@ -8695,13 +8695,13 @@ body:has(.checkout-info-overlay) .contact-launcher {
 
 .ops-reservation-filters .ops-reservation-search-input {
   box-sizing: border-box;
-  flex: 1 1 16rem;
+  flex: 1 1 18rem;
   width: auto;
-  max-width: 32rem;
+  max-width: 36rem;
   min-width: 0;
 }
 
-.ops-reservation-search .ops-btn-secondary {
+.ops-reservation-search .ops-refresh-btn {
   flex: 0 0 auto;
   width: auto;
 }
@@ -8775,6 +8775,8 @@ body:has(.checkout-info-overlay) .contact-launcher {
 }
 
 .ops-date-chip {
+  display: inline-flex;
+  align-items: center;
   min-height: 2.2rem;
   padding: 0.3rem 0.75rem;
   border: 1px solid #c5cedb;
@@ -8783,6 +8785,7 @@ body:has(.checkout-info-overlay) .contact-launcher {
   color: #172033;
   font-size: 0.84rem;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
 }
 

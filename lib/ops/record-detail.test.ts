@@ -8,8 +8,10 @@ import {
   firstText,
   genderLabel,
   isOpsContactRow,
+  isOpsPricingRow,
   isReservationCancelled,
   localeLabel,
+  opsTransferRowsForDisplay,
   opsVehicleLabelFor,
   passengerNoteText,
   paymentLabel,
@@ -70,6 +72,86 @@ test("ops contact rows are identified by email and phone labels", () => {
   assert.equal(isOpsContactRow(copy.firstName, copy), false);
   assert.equal(isOpsContactRow(copy.passengerNote, copy), false);
   assert.equal(isOpsContactRow(copy.notes, copy), false);
+});
+
+test("ops pricing rows are identified by selected price label and can be omitted from display", () => {
+  assert.equal(isOpsPricingRow(copy.selectedPrice, copy), true);
+  assert.equal(isOpsPricingRow(copy.flight, copy), false);
+  assert.equal(isOpsPricingRow(copy.passengerCount, copy), false);
+  const rows = [
+    { label: copy.flight, value: "TK1925" },
+    { label: copy.selectedPrice, value: "5.393,85 ₺" },
+    { label: copy.passengerCount, value: "3" },
+  ];
+  assert.deepEqual(opsTransferRowsForDisplay(rows, copy, true), rows);
+  assert.deepEqual(opsTransferRowsForDisplay(rows, copy, false), [
+    { label: copy.flight, value: "TK1925" },
+    { label: copy.passengerCount, value: "3" },
+  ]);
+});
+
+test("reservation detail modal resets price visibility independently of contact visibility", () => {
+  const modal = readFileSync(
+    new URL("../../components/ops/record-detail-modal.tsx", import.meta.url),
+    "utf8",
+  );
+  const ui = readFileSync(
+    new URL("../../components/ops/record-detail.tsx", import.meta.url),
+    "utf8",
+  );
+  const opsPdfRoute = readFileSync(
+    new URL("../../app/[locale]/ops/(panel)/reservations/[id]/pdf/route.ts", import.meta.url),
+    "utf8",
+  );
+  const voucherRoute = readFileSync(
+    new URL("../../app/[locale]/ops/(panel)/reservations/[id]/voucher-pdf/route.ts", import.meta.url),
+    "utf8",
+  );
+  const voucherPdf = readFileSync(
+    new URL("../booking/reservation-voucher-pdf.ts", import.meta.url),
+    "utf8",
+  );
+  const cancellationMail = readFileSync(
+    new URL("./cancellation-customer-notification.ts", import.meta.url),
+    "utf8",
+  );
+  const operationMail = readFileSync(
+    new URL("../mail/send-operation-reservation-notification.ts", import.meta.url),
+    "utf8",
+  );
+  const processPdfRoute = readFileSync(
+    new URL("../../app/[locale]/ops/(panel)/processes/[id]/pdf/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(modal, /const \[pricingVisible, setPricingVisible\] = useState\(false\)/);
+  assert.match(modal, /setPricingVisible\(false\)/);
+  assert.match(modal, /setContactsVisible\(false\)/);
+  assert.match(modal, /includePricing: pricingVisible/);
+  assert.match(modal, /includeContact: contactsVisible/);
+  assert.match(modal, /opsReservationPdfHref/);
+  assert.doesNotMatch(modal, /voucherPdfHref.*includePricing|includePricing.*voucherPdf/);
+  assert.match(ui, /copy\.showPricing/);
+  assert.match(ui, /copy\.hidePricing/);
+  assert.match(ui, /copy\.pricingInfo/);
+  assert.match(ui, /ops-customer-heading/);
+  assert.match(ui, /opsTransferRowsForDisplay\(detail\.transfer, copy, false\)/);
+  assert.doesNotMatch(ui, /opsTransferRowsForDisplay\(detail\.transfer, copy, showReservationPricing\)/);
+  assert.match(opsPdfRoute, /includePricing/);
+  assert.match(opsPdfRoute, /parseOpsReservationPdfFlags/);
+  assert.doesNotMatch(voucherRoute, /includePricing|pricingVisible|opsReservationPdfHref/);
+  assert.doesNotMatch(voucherPdf, /includePricing|pricingVisible/);
+  assert.doesNotMatch(cancellationMail, /includePricing|pricingVisible/);
+  assert.match(operationMail, /includeContact:\s*true/);
+  assert.doesNotMatch(operationMail, /includePricing:\s*false/);
+  assert.doesNotMatch(processPdfRoute, /includePricing/);
+  assert.equal(copy.showPricing, "Ücret bilgilerini göster");
+  assert.equal(copy.hidePricing, "Ücret bilgilerini gizle");
+  assert.equal(copy.pricingInfo, "Ücret Bilgileri");
+  assert.equal(copy.contactInfo, "İletişim Bilgileri");
+  assert.equal(opsCopy.en.showPricing, "Show price details");
+  assert.equal(opsCopy.ru.showPricing, "Показать данные о стоимости");
+  assert.equal(opsCopy.en.pricingInfo, "Price details");
+  assert.equal(opsCopy.ru.pricingInfo, "Данные о стоимости");
 });
 
 test("passenger note is separate from driver/assignment notes", () => {

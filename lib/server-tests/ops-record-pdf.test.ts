@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import test from "node:test";
 import { shapeArabicLine } from "@/lib/booking/voucher-pdf-arabic";
 import { opsCopy } from "@/lib/ops/copy";
@@ -24,6 +26,7 @@ function sampleOpsDetail(): OpsRecordDetail {
     transfer: [
       { label: copy.meetAndGreet, value: copy.no },
       { label: "Uçuş kodu", value: "TK1925" },
+      { label: copy.selectedPrice, value: "5.393,85 ₺", emphasizeValue: true, strongAmount: true },
     ],
     places: [
       {
@@ -39,8 +42,8 @@ function sampleOpsDetail(): OpsRecordDetail {
     ],
     pickupIsAirport: true,
     vehicle: [],
-    selectedPrice: null,
-    otherCurrencies: [],
+    selectedPrice: "5.393,85 ₺",
+    otherCurrencies: ["111,02 $", "95,68 €", "9.934,97 ₽", "82,09 £"],
     pricing: [],
     customer: [
       { label: copy.firstName, value: "أحمد" },
@@ -81,4 +84,67 @@ test("Ops mixed Arabic reservation values keep LTR airport and flight codes", ()
   assert.match(shapeArabicLine("مطار إسطنبول (IST)", "ltr"), /\(IST\)$/);
   assert.match(shapeArabicLine("مطار صبيحة كوكجن (SAW)", "ltr"), /\(SAW\)$/);
   assert.match(shapeArabicLine("رقم الرحلة TK1925", "ltr"), /TK1925$/);
+});
+
+function pdfToUnicodeCodes(pdf: Buffer) {
+  const latin1 = pdf.toString("binary");
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const codes = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(latin1))) {
+    let inflated = "";
+    try {
+      inflated = inflateSync(Buffer.from(match[1], "binary")).toString("latin1");
+    } catch {
+      continue;
+    }
+    if (!inflated.includes("begincmap")) {
+      continue;
+    }
+    for (const hex of inflated.matchAll(/<([0-9a-fA-F]{4})>/g)) {
+      codes.add(hex[1].toUpperCase());
+    }
+  }
+  return codes;
+}
+
+function pdfHasUnicode(pdf: Buffer, char: string) {
+  const code = char
+    .codePointAt(0)
+    ?.toString(16)
+    .toUpperCase()
+    .padStart(4, "0");
+  return Boolean(code && pdfToUnicodeCodes(pdf).has(code));
+}
+
+test("Ops PDF includes reservation pricing by default and when includePricing is true", async () => {
+  const withDefault = await buildOpsRecordPdf(sampleOpsDetail(), copy);
+  const withFlag = await buildOpsRecordPdf(sampleOpsDetail(), copy, {
+    includeContact: false,
+    includePricing: true,
+  });
+  for (const pdf of [withDefault, withFlag]) {
+    assert.equal(pdfHasUnicode(pdf, "₺"), true);
+    assert.equal(pdfHasUnicode(pdf, "$"), true);
+    assert.equal(pdfHasUnicode(pdf, "€"), true);
+    assert.match(pdf.toString("latin1"), /T\x00R\x00P\x00-\x002\x000\x002\x006\x000\x009\x001\x003\x00-\x000\x000\x000\x003/);
+  }
+});
+
+test("Ops PDF omits pricing presentation entirely when includePricing is false", async () => {
+  const pdf = await buildOpsRecordPdf(sampleOpsDetail(), copy, {
+    includeContact: true,
+    includePricing: false,
+  });
+  assert.equal(pdfHasUnicode(pdf, "₺"), false);
+  assert.equal(pdfHasUnicode(pdf, "$"), false);
+  assert.equal(pdfHasUnicode(pdf, "€"), false);
+  assert.equal(pdfHasUnicode(pdf, "₽"), false);
+  assert.equal(pdfHasUnicode(pdf, "£"), false);
+  assert.doesNotMatch(pdf.toString("latin1"), /display:none|visibility:hidden/);
+  assert.match(pdf.toString("latin1"), /T\x00R\x00P\x00-\x002\x000\x002\x006\x000\x009\x001\x003\x00-\x000\x000\x000\x003/);
+  const source = readFileSync(new URL("../ops/pdf.ts", import.meta.url), "utf8");
+  assert.match(source, /includePricing/);
+  assert.match(source, /opsTransferRowsForDisplay/);
+  assert.doesNotMatch(source, /display:\s*none|visibility:\s*hidden/);
 });

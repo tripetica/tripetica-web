@@ -94,8 +94,9 @@ test("partner accepted filters reuse Ops date preset and pickup_at bounds", () =
 });
 
 test("partner completed filter uses the same driver-task EXISTS as Ops", () => {
-  const ops = source("lib/ops/reservations.ts");
+  const ops = source("lib/ops/reservation-filters.ts");
   assert.match(ops, /current_stage = 'completed'/);
+  assert.match(source("lib/ops/reservations.ts"), /reservationOperationWhereSql/);
   assert.equal(
     partnerAcceptedJobCompletedClause(""),
     `NOT ${PARTNER_ACCEPTED_COMPLETED_EXISTS_SQL}`,

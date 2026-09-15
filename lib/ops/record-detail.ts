@@ -980,6 +980,21 @@ export function isOpsContactRow(label: string, copy: OpsCopy) {
   return label === copy.email || label === copy.phone;
 }
 
+export function isOpsPricingRow(label: string, copy: OpsCopy) {
+  return label === copy.selectedPrice;
+}
+
+export function opsTransferRowsForDisplay(
+  rows: OpsRecordDetail["transfer"],
+  copy: OpsCopy,
+  includePricing: boolean,
+) {
+  if (includePricing) {
+    return rows;
+  }
+  return rows.filter((item) => !isOpsPricingRow(item.label, copy));
+}
+
 export { reservationPriceDisplay };
 
 export function toProcessRecordDetail(

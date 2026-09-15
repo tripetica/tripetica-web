@@ -21,6 +21,7 @@ import {
 } from "@/lib/ops/actions";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
+import { opsReservationPdfHref } from "@/lib/ops/ops-pdf-query";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { type OpsRecordEditInput } from "@/lib/ops/record-edit";
 import { opsDetailToolbarMode } from "@/lib/ops/record-edit-form";
@@ -160,6 +161,7 @@ export function RecordDetailModal({
   const [editDraft, setEditDraft] = useState<OpsRecordEditInput | null>(null);
   const [editDirty, setEditDirty] = useState(false);
   const [contactsVisible, setContactsVisible] = useState(false);
+  const [pricingVisible, setPricingVisible] = useState(false);
   const [toolbarScrolled, setToolbarScrolled] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -180,6 +182,7 @@ export function RecordDetailModal({
       setEditDraft(null);
       setEditDirty(false);
       setContactsVisible(false);
+      setPricingVisible(false);
       setToolbarScrolled(false);
       if (!id) {
         setCanEdit(false);
@@ -482,7 +485,10 @@ export function RecordDetailModal({
   const busy = deleting || statusPending || refundPending;
   const opsPdfHref =
     detail && isReservation
-      ? `${detail.pdfHref}?includeContact=${contactsVisible ? "1" : "0"}`
+      ? opsReservationPdfHref(detail.pdfHref, {
+          includeContact: contactsVisible,
+          includePricing: pricingVisible,
+        })
       : detail?.pdfHref ?? "#";
 
   const pdfActions =
@@ -686,6 +692,12 @@ export function RecordDetailModal({
                   onToggleContacts={
                     isReservation
                       ? () => setContactsVisible((value) => !value)
+                      : undefined
+                  }
+                  pricingVisible={isReservation ? pricingVisible : true}
+                  onTogglePricing={
+                    isReservation
+                      ? () => setPricingVisible((value) => !value)
                       : undefined
                   }
                   onPaymentHistoryUpdated={(next) => {

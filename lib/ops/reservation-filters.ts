@@ -31,6 +31,21 @@ export const RESERVATION_STATUSES = ["confirmed", "cancelled", "payment_pending"
 export const RESERVATION_PAYMENT_METHODS = ["cash", "sbp"] as const;
 export const RESERVATION_OPERATION_FILTERS = ["completed"] as const;
 export type ReservationOperationFilter = (typeof RESERVATION_OPERATION_FILTERS)[number];
+export const RESERVATION_LIST_VIEWS = [
+  "active",
+  "completed",
+  "cancelled",
+  "all",
+] as const;
+export type ReservationListView = (typeof RESERVATION_LIST_VIEWS)[number];
+export const DEFAULT_RESERVATION_LIST_VIEW: ReservationListView = "active";
+export const RESERVATION_SEARCH_DEBOUNCE_MS = 250;
+
+export const DRIVER_TASK_COMPLETED_EXISTS_SQL = `EXISTS (
+         SELECT 1 FROM reservation_driver_tasks driver_task
+         WHERE driver_task.reservation_id = reservations.id
+           AND driver_task.current_stage = 'completed'
+       )`;
 
 const OPERATION_TOLERANCE_MS = 6 * 60 * 60 * 1000;
 
@@ -43,7 +58,7 @@ export type ReservationListFilters = {
   to: string;
   sort: ReservationSortField | "";
   dir: ReservationSortDir | "";
-  operation?: ReservationOperationFilter | "";
+  operation?: ReservationListView | ReservationOperationFilter | "";
 };
 
 export type PickupAtBounds =
@@ -82,6 +97,35 @@ export function parseReservationOperation(value: string) {
   return (RESERVATION_OPERATION_FILTERS as readonly string[]).includes(value)
     ? (value as ReservationOperationFilter)
     : "";
+}
+
+export function parseReservationListView(value: string): ReservationListView {
+  return (RESERVATION_LIST_VIEWS as readonly string[]).includes(value)
+    ? (value as ReservationListView)
+    : DEFAULT_RESERVATION_LIST_VIEW;
+}
+
+export function normalizeReservationListView(
+  value: ReservationListView | ReservationOperationFilter | "" | undefined,
+): ReservationListView {
+  return parseReservationListView(value ?? "");
+}
+
+/** SQL fragment for the Ops list operation view. Null means no extra clause. */
+export function reservationOperationWhereSql(
+  view: ReservationListView | ReservationOperationFilter | "" | undefined,
+) {
+  const normalized = normalizeReservationListView(view);
+  if (normalized === "all") {
+    return null;
+  }
+  if (normalized === "completed") {
+    return DRIVER_TASK_COMPLETED_EXISTS_SQL;
+  }
+  if (normalized === "cancelled") {
+    return "status = 'cancelled'";
+  }
+  return `NOT ${DRIVER_TASK_COMPLETED_EXISTS_SQL} AND status <> 'cancelled'`;
 }
 
 export function pickupAtBounds(
@@ -222,7 +266,10 @@ export function reservationQueryRecord(
     to: filters.date === "range" ? filters.to : "",
     sort: filters.sort,
     dir: filters.sort ? filters.dir || "asc" : "",
-    operation: filters.operation ?? "",
+    operation:
+      normalizeReservationListView(filters.operation) === DEFAULT_RESERVATION_LIST_VIEW
+        ? ""
+        : normalizeReservationListView(filters.operation),
   };
 }
 
@@ -232,7 +279,7 @@ export function hasActiveReservationFilters(filters: ReservationListFilters) {
       filters.status ||
       filters.payment ||
       filters.date ||
-      filters.operation,
+      normalizeReservationListView(filters.operation) !== DEFAULT_RESERVATION_LIST_VIEW,
   );
 }
 
@@ -263,6 +310,6 @@ export function parseReservationListFilters(input: {
     to: date === "range" ? to : "",
     sort,
     dir,
-    operation: parseReservationOperation(input.operation ?? ""),
+    operation: parseReservationListView(input.operation ?? ""),
   };
 }

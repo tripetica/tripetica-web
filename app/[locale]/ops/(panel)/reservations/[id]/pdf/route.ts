@@ -5,6 +5,7 @@ import { actorCan, getOpsActor } from "@/lib/ops/session";
 import { opsCopy } from "@/lib/ops/copy";
 import { isUuid } from "@/lib/ops/process-filters";
 import { getReservation } from "@/lib/ops/reservations";
+import { parseOpsReservationPdfFlags } from "@/lib/ops/ops-pdf-query";
 import { buildOpsRecordPdf } from "@/lib/ops/pdf";
 import { toReservationRecordDetail } from "@/lib/ops/record-detail";
 
@@ -32,11 +33,12 @@ export async function GET(
   if (!item) {
     return new Response(null, { status: 404 });
   }
-  const includeContact =
-    new URL(request.url).searchParams.get("includeContact") === "1";
+  const { includeContact, includePricing } = parseOpsReservationPdfFlags(
+    new URL(request.url).searchParams,
+  );
   const copy = opsCopy[asPanelLocale(locale)];
   const detail = toReservationRecordDetail(item, locale, copy);
-  const pdf = await buildOpsRecordPdf(detail, copy, { includeContact });
+  const pdf = await buildOpsRecordPdf(detail, copy, { includeContact, includePricing });
   return new Response(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",
