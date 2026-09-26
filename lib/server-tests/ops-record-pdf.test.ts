@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import test from "node:test";
+import PDFDocument from "pdfkit";
 import { shapeArabicLine } from "@/lib/booking/voucher-pdf-arabic";
 import { opsCopy } from "@/lib/ops/copy";
 import { buildOpsRecordPdf } from "@/lib/ops/pdf";
@@ -68,6 +69,7 @@ function sampleOpsDetail(): OpsRecordDetail {
     paymentHistory: null,
     operationAssignment: null,
     driverTask: null,
+    noShowReport: null,
   };
 }
 
@@ -147,4 +149,30 @@ test("Ops PDF omits pricing presentation entirely when includePricing is false",
   assert.match(source, /includePricing/);
   assert.match(source, /opsTransferRowsForDisplay/);
   assert.doesNotMatch(source, /display:\s*none|visibility:\s*hidden/);
+});
+
+
+test("reservation operation PDF masks passport and national ID without changing process PDFs", async (t) => {
+  const rendered: string[] = [];
+  const original = PDFDocument.prototype.text;
+  t.mock.method(PDFDocument.prototype, "text", function (this: PDFKit.PDFDocument, ...args: Parameters<typeof original>) {
+    rendered.push(String(args[0]));
+    return original.apply(this, args);
+  });
+  for (const identity of ["FIXTURE-PASSPORT-987", "12345678901", "111"]) {
+    const detail = sampleOpsDetail();
+    detail.passengers[0].identity = identity;
+    rendered.length = 0;
+    const pdf = await buildOpsRecordPdf(detail, copy);
+    assert.ok(pdf.length > 0);
+    assert.ok(rendered.includes("11111111111"));
+    assert.ok(!rendered.includes(identity));
+    assert.equal(detail.passengers[0].identity, identity);
+  }
+  const process = sampleOpsDetail();
+  process.kind = "process";
+  process.passengers[0].identity = "PROCESS-FIXTURE";
+  rendered.length = 0;
+  await buildOpsRecordPdf(process, copy);
+  assert.ok(rendered.includes("PROCESS-FIXTURE"));
 });

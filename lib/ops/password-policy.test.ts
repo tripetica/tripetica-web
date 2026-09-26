@@ -80,6 +80,7 @@ test("ops nav includes Bilgilerim for every user and keeps Panel Kullanıcılar�
       "partners",
       "drivers",
       "vehicles",
+      "uetds",
       "users",
       "myAccount",
     ],
@@ -93,10 +94,16 @@ test("ops nav includes Bilgilerim for every user and keeps Panel Kullanıcılar�
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/partners")?.permission, "partners.view");
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/drivers")?.permission, "partners.view");
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/vehicles")?.permission, "partners.view");
+  assert.equal(OPS_NAV.find((item) => item.href === "/ops/uetds")?.permission, "uetds.view");
   assert.equal(opsCopy.tr.drivers, "Sürücüler");
   assert.equal(opsCopy.tr.vehicles, "Araçlar");
+  assert.equal(opsCopy.tr.uetds, "U-ETDS");
+  assert.equal(opsCopy.tr.uetdsTitle, "U-ETDS Bildirim İşlemleri");
   assert.equal(permissionsForRole("owner", []).includes("partners.view"), true);
   assert.equal(permissionsForRole("owner", []).includes("partners.manage"), true);
   assert.equal(OPS_PERMISSIONS.includes("partners.view"), true);
   assert.equal(OPS_PERMISSIONS.includes("partners.manage"), true);
+  assert.equal(OPS_PERMISSIONS.includes("uetds.view"), true);
+  assert.equal(OPS_PERMISSIONS.includes("uetds.manage"), true);
+  assert.equal(permissionsForRole("owner", []).includes("uetds.manage"), true);
 });

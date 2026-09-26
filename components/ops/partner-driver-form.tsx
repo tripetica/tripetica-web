@@ -4,6 +4,8 @@ import { useActionState, useState } from "react";
 import { PhoneField } from "@/components/booking/phone-field";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
+import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { useOpsStickyOffset } from "@/components/ops/use-ops-sticky-offset";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { type Locale } from "@/lib/i18n/config";
@@ -25,6 +27,7 @@ type PartnerDriverFormProps = {
   locale: Locale;
   copy: OpsCopy;
   driver: PartnerDriverRecord;
+  activeUetdsCompanies: readonly UetdsCompanyRef[];
   canManage: boolean;
   linkedPartner?: { id: string; name: string; code: string };
   backHref?: string;
@@ -59,6 +62,9 @@ function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: 
   if (error === "in-use") {
     return copy.fleetInUse;
   }
+  if (error === "invalid-uetds-company") {
+    return copy.invalidUetdsCompany;
+  }
   return fallback;
 }
 
@@ -72,6 +78,7 @@ function driverStamp(driver: PartnerDriverRecord) {
     driver.nationalId,
     driver.email,
     driver.languageCodes.join(","),
+    driver.uetdsCompanyId ?? "",
   ].join(":");
 }
 
@@ -83,6 +90,7 @@ function PartnerDriverFormEditor({
   locale,
   copy,
   driver,
+  activeUetdsCompanies,
   canManage,
   linkedPartner,
   backHref,
@@ -96,6 +104,7 @@ function PartnerDriverFormEditor({
     phoneCountry: storedPhone.iso2 ?? PARTNER_DEFAULT_COUNTRY_CODE,
     phoneNational: storedPhone.national,
     languages: driver.languageCodes,
+    uetdsCompanyId: driver.uetdsCompanyId ?? "",
   };
   const [values, setValues] = useState(initial);
   const [baseline] = useState(initial);
@@ -125,7 +134,8 @@ function PartnerDriverFormEditor({
     values.phoneCountry !== baseline.phoneCountry ||
     values.phoneNational.replace(/[\s-]+/g, "") !==
       baseline.phoneNational.replace(/[\s-]+/g, "") ||
-    values.languages.join(",") !== baseline.languages.join(",");
+    values.languages.join(",") !== baseline.languages.join(",") ||
+    values.uetdsCompanyId !== baseline.uetdsCompanyId;
   const resolvedBackHref =
     backHref ?? `${localizedPath(locale, `/ops/partners/${driver.partnerId}`)}?tab=drivers`;
 
@@ -296,6 +306,19 @@ function PartnerDriverFormEditor({
               </p>
             )}
           </div>
+          <UetdsCompanySelect
+            value={values.uetdsCompanyId}
+            activeCompanies={activeUetdsCompanies}
+            currentCompany={driver.uetdsCompany ?? null}
+            fieldLabel={copy.uetdsNotifyCompany}
+            noneLabel={copy.uetdsNotifyNone}
+            searchPlaceholder={copy.uetdsCompanySearch}
+            emptyLabel={copy.uetdsCompanyEmpty}
+            disabled={!canManage}
+            onChange={(uetdsCompanyId) =>
+              setValues((current) => ({ ...current, uetdsCompanyId }))
+            }
+          />
         </div>
       </form>
 

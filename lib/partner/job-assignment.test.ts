@@ -504,7 +504,13 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.match(select, /onDismiss/);
   assert.match(select, /closeMenu\(false\)/);
   assert.match(select, /menuInFlow/);
+  assert.match(select, /filterSearchableSelectOptions/);
+  assert.match(select, /shouldPreventDefaultOnOptionPointerDown/);
   assert.doesNotMatch(select, /onChange\(\s*""/);
+  assert.doesNotMatch(
+    select,
+    /onPointerDown=\{\(event\) => \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*selectOption/,
+  );
 
   const opsTable = source("components/ops/reservation-table.tsx");
   assert.match(opsTable, /OpsReservationAssignmentCells/);

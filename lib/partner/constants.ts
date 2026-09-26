@@ -1,7 +1,13 @@
 export { MIN_PASSWORD_LENGTH as PARTNER_MIN_PASSWORD_LENGTH } from "@/lib/security/password-policy";
 
 export const PARTNER_SESSION_COOKIE = "tripetica_partner_session";
-export const PARTNER_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
+/** Absolute idle window after login or last successful sliding renewal. */
+export const PARTNER_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+/**
+ * When remaining life falls below this threshold, extend expires_at (and cookie)
+ * to now + PARTNER_SESSION_MAX_AGE_SECONDS. Avoids writing on every request.
+ */
+export const PARTNER_SESSION_RENEW_WITHIN_SECONDS = 60 * 60 * 24 * 7;
 
 export const PARTNER_CODE_PREFIX = "PTR";
 export const PARTNER_CODE_MAX_SEQ = 9999;

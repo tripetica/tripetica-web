@@ -8,6 +8,7 @@ const ALLOWED_ROOTS = new Set([
   "accepted",
   "drivers",
   "vehicles",
+  "uetds",
   "profile",
   "password",
   "employer-billing",
@@ -38,7 +39,7 @@ export function safePartnerReturnPath(
   }
   const [pathOnly] = decoded.split(/[?#]/);
   const parts = pathOnly.split("/").filter(Boolean);
-  if (parts.length < 2 || parts.length > 4) {
+  if (parts.length < 2 || parts.length > 5) {
     return null;
   }
   const pathLocale = parts[0];
@@ -55,8 +56,22 @@ export function safePartnerReturnPath(
   if (parts.length === 3) {
     return `/${pathLocale}/partner/${section}`;
   }
+  if (section === "uetds") {
+    if (parts.length === 4 && parts[3] === "notifications") {
+      return `/${pathLocale}/partner/uetds/notifications`;
+    }
+    if (
+      parts.length === 5 &&
+      parts[3] === "notifications" &&
+      (parts[4] === "new" || UUID_RE.test(parts[4]))
+    ) {
+      return `/${pathLocale}/partner/uetds/notifications/${parts[4]}`;
+    }
+    return null;
+  }
   const id = parts[3];
   if (
+    parts.length === 4 &&
     (section === "jobs" ||
       section === "accepted" ||
       section === "drivers" ||

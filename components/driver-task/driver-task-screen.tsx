@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   advanceDriverTaskAction,
   inspectDriverTaskPublicAccessAction,
+  refreshDriverTaskPublicAction,
+  reportDriverNoShowAction,
 } from "@/lib/ops/driver-task-actions";
 import {
   driverTaskActionLabel,
@@ -41,7 +43,42 @@ export function DriverTaskScreen({
 }) {
   const [view, setView] = useState(initial);
   const [pending, startTransition] = useTransition();
+  const [confirmNoShow, setConfirmNoShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+
+  useEffect(() => {
+    setView(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (embedded || view.completed) {
+      return;
+    }
+    let cancelled = false;
+    async function refresh() {
+      const result = await refreshDriverTaskPublicAction(token);
+      if (cancelled) {
+        return;
+      }
+      if (!result.valid) {
+        window.location.reload();
+        return;
+      }
+      setView(result);
+    }
+    const intervalId = window.setInterval(() => {
+      if (pendingRef.current) {
+        return;
+      }
+      void refresh();
+    }, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [embedded, token, view.completed]);
 
   useEffect(() => {
     if (embedded || !view.completed) {
@@ -66,7 +103,7 @@ export function DriverTaskScreen({
 
   function advance() {
     const requested = view.nextStage;
-    if (!view.actionLabel || !requested || view.completed || pending) {
+    if (!view.actionLabel || !requested || view.completed || view.closedOutcome || pending) {
       return;
     }
     startTransition(async () => {
@@ -96,6 +133,57 @@ export function DriverTaskScreen({
         nextStage: nextDriverTaskStage(result.stage),
         actionLabel: driverTaskActionLabel(result.stage),
         completed: result.stage === "completed",
+        noShow: current.noShow
+          ? {
+              ...current.noShow,
+              canReport: result.stage === "arrived" && !current.noShow.reported,
+            }
+          : current.noShow,
+      }));
+    });
+  }
+
+  function openNoShowConfirm() {
+    if (!view.noShow?.canReport || view.completed || view.closedOutcome || pending) {
+      return;
+    }
+    setConfirmNoShow(true);
+  }
+
+  function cancelNoShowConfirm() {
+    if (pending) {
+      return;
+    }
+    setConfirmNoShow(false);
+  }
+
+  function reportNoShow() {
+    if (
+      !confirmNoShow ||
+      !view.noShow?.canReport ||
+      view.completed ||
+      view.closedOutcome ||
+      pending
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const result = await reportDriverNoShowAction(token);
+      if (!result.ok) {
+        if (result.reason === "revoked") {
+          window.location.reload();
+          return;
+        }
+        setError("Bu işlem şu anda yapılamıyor. Lütfen tekrar deneyin.");
+        return;
+      }
+      setError(null);
+      setConfirmNoShow(false);
+      setView((current) => ({
+        ...current,
+        noShow: current.noShow
+          ? { ...current.noShow, canReport: false, reported: true }
+          : current.noShow,
       }));
     });
   }
@@ -114,19 +202,92 @@ export function DriverTaskScreen({
         })}
       </section>
 
-      {view.completed ? (
+      {view.closedOutcome ? (
+        <p
+          className={
+            view.closedOutcome === "service_failed"
+              ? "driver-task-closed is-failed"
+              : "driver-task-closed is-no-show"
+          }
+        >
+          {view.closedOutcome === "no_show"
+            ? "Bu görev No Show olarak kapatıldı."
+            : "Bu görev Hizmet Gerçekleşmedi olarak kapatıldı."}
+        </p>
+      ) : view.completed ? (
         <p className="driver-task-done">GÖREV TAMAMLANDI</p>
       ) : view.actionLabel ? (
-        <button
-          type="button"
-          className="driver-task-action"
-          disabled={pending}
-          onClick={advance}
-        >
-          {pending ? "Kaydediliyor…" : view.actionLabel}
-        </button>
+        <div className="driver-task-actions">
+          <button
+            type="button"
+            className="driver-task-action"
+            disabled={pending}
+            onClick={advance}
+          >
+            {pending ? "Kaydediliyor…" : view.actionLabel}
+          </button>
+          {view.noShow?.canReport ? (
+            <>
+              <button
+                type="button"
+                className="driver-task-action driver-task-action-noshow"
+                disabled={pending}
+                onClick={openNoShowConfirm}
+              >
+                NO SHOW BİLDİR
+              </button>
+              <p className="driver-task-noshow-hint">
+                {view.noShow.airportPickup
+                  ? "Ücretsiz bekleme süresi, uçağın gerçek iniş saatinden 30 dakika sonra başlar ve 90 dakikadır. No Show bildirimi bu süre tamamlandıktan sonra yapılmalıdır."
+                  : "Ücretsiz bekleme süresi 30 dakikadır. No Show bildirimi bu süre tamamlandıktan sonra yapılmalıdır."}
+              </p>
+            </>
+          ) : null}
+          {view.noShow?.reported ? (
+            <p className="driver-task-noshow-sent">No Show bildirimi operasyona iletildi.</p>
+          ) : null}
+        </div>
       ) : null}
       {error ? <p className="driver-task-error">{error}</p> : null}
+      {confirmNoShow && view.noShow?.canReport ? (
+        <div
+          className="driver-task-confirm-backdrop"
+          role="presentation"
+          onClick={() => {
+            cancelNoShowConfirm();
+          }}
+        >
+          <div
+            className="driver-task-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="driver-task-noshow-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p id="driver-task-noshow-confirm-title">
+              Bu rezervasyonu No Show olarak bildirmek istediğinizden emin misiniz?
+            </p>
+            <div className="driver-task-confirm-actions">
+              <button
+                type="button"
+                className="driver-task-action driver-task-action-cancel"
+                disabled={pending}
+                onClick={cancelNoShowConfirm}
+              >
+                VAZGEÇ
+              </button>
+              <button
+                type="button"
+                className="driver-task-action driver-task-action-noshow"
+                disabled={pending}
+                onClick={reportNoShow}
+              >
+                {pending ? "Kaydediliyor…" : "NO SHOW BİLDİR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="driver-task-card">
         <h2>Rezervasyon</h2>
@@ -138,7 +299,24 @@ export function DriverTaskScreen({
           {view.fields.map((field) => (
             <div key={field.label}>
               <dt>{field.label}</dt>
-              <dd>{field.value}</dd>
+              <dd>
+                {field.label === "Tarih / Saat" && view.flightStatus ? (
+                  <span className="driver-task-datetime-flight">
+                    <span>{field.value}</span>
+                    <span className="driver-task-flight-arrow" aria-hidden="true">
+                      →
+                    </span>
+                    <span className={`ops-flight-status is-${view.flightStatus.tone}`}>
+                      {view.flightStatus.arrowLabel}
+                    </span>
+                  </span>
+                ) : (
+                  field.value
+                )}
+              </dd>
+              {field.label === "Tarih / Saat" && view.flightStatus?.flightCode ? (
+                <p className="driver-task-flight-code">Uçuş: {view.flightStatus.flightCode}</p>
+              ) : null}
               {field.address ? (
                 <p className="driver-task-location-address">{field.address}</p>
               ) : null}

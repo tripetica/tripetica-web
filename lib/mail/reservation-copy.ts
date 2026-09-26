@@ -84,9 +84,9 @@ export const reservationMailCopy: Record<Locale, ReservationMailCopy> = {
     meetingSectionTitle: "Buluşma noktası",
     meetingPointLabel: "Buluşma noktası",
     meetingPointValue:
-      "13 numaralı çıkış kapısının hemen sol tarafında bulunan BYRIDES işaretinin olduğu alan",
+      "13 numaralı çıkış kapısının hemen sol tarafında bulunan SR25 işaretinin olduğu alan",
     meetingInstructions:
-      "İstanbul Havalimanı’nda 13 numaralı çıkış kapısından çıktıktan sonra hemen sol taraftaki BYRIDES işaretini takip ederek buluşma alanına geliniz. Karşılama görevlimiz sizi bu noktada karşılayacaktır.",
+      "İstanbul Havalimanı’nda 13 numaralı çıkış kapısından çıktıktan sonra hemen sol taraftaki SR25 işaretini takip ederek buluşma alanına geliniz. Karşılama görevlimiz sizi bu noktada karşılayacaktır.",
     meetingPhotoAlt: "İstanbul Havalimanı buluşma noktası",
     meetingVideoIntro:
       "Buluşma alanını daha kolay bulmak için kısa videoyu izleyebilirsiniz.",
@@ -201,9 +201,9 @@ export const reservationMailCopy: Record<Locale, ReservationMailCopy> = {
     meetingSectionTitle: "Meeting point",
     meetingPointLabel: "Meeting point",
     meetingPointValue:
-      "The area with the BYRIDES sign immediately to the left of Exit Gate 13",
+      "The area with the SR25 sign immediately to the left of Exit Gate 13",
     meetingInstructions:
-      "After exiting through Gate 13 at Istanbul Airport, follow the BYRIDES sign on your immediate left to the meeting area. Our meet-and-greet representative will meet you there.",
+      "After exiting through Gate 13 at Istanbul Airport, follow the SR25 sign on your immediate left to the meeting area. Our meet-and-greet representative will meet you there.",
     meetingPhotoAlt: "Istanbul Airport meeting point",
     meetingVideoIntro:
       "You can watch the short video to find the meeting area more easily.",
@@ -318,9 +318,9 @@ export const reservationMailCopy: Record<Locale, ReservationMailCopy> = {
     meetingSectionTitle: "Место встречи",
     meetingPointLabel: "Место встречи",
     meetingPointValue:
-      "Зона с указателем BYRIDES сразу слева от выхода №13",
+      "Зона с указателем SR25 сразу слева от выхода №13",
     meetingInstructions:
-      "После выхода через выход №13 в аэропорту Стамбула пройдите сразу налево к указателю BYRIDES. Вас встретит наш представитель службы встречи.",
+      "После выхода через выход №13 в аэропорту Стамбула пройдите сразу налево к указателю SR25. Вас встретит наш представитель службы встречи.",
     meetingPhotoAlt: "Место встречи в аэропорту Стамбула",
     meetingVideoIntro:
       "Короткое видео поможет быстрее найти место встречи.",
@@ -438,9 +438,9 @@ export const reservationMailCopy: Record<Locale, ReservationMailCopy> = {
     meetingSectionTitle: "نقطة اللقاء",
     meetingPointLabel: "نقطة اللقاء",
     meetingPointValue:
-      "المنطقة التي تحمل لافتة BYRIDES مباشرة إلى يسار بوابة الخروج 13",
+      "المنطقة التي تحمل لافتة SR25 مباشرة إلى يسار بوابة الخروج 13",
     meetingInstructions:
-      "بعد الخروج من بوابة 13 في مطار إسطنبول، اتبع لافتة BYRIDES الموجودة مباشرة إلى يسارك للوصول إلى منطقة اللقاء. سيستقبلك ممثل خدمة الاستقبال في هذه النقطة.",
+      "بعد الخروج من بوابة 13 في مطار إسطنبول، اتبع لافتة SR25 الموجودة مباشرة إلى يسارك للوصول إلى منطقة اللقاء. سيستقبلك ممثل خدمة الاستقبال في هذه النقطة.",
     meetingPhotoAlt: "نقطة اللقاء في مطار إسطنبول",
     meetingVideoIntro: "يمكنك مشاهدة الفيديو القصير للوصول إلى منطقة اللقاء بسهولة أكبر.",
     meetingVideoCta: "مشاهدة فيديو نقطة اللقاء",

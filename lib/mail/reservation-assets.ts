@@ -2,7 +2,7 @@
  * Exact filenames under /public (moved from repo root; not renamed).
  * Uses the on-disk Unicode form (s + combining cedilla).
  */
-export const IST_MEET_PHOTO_FILENAME = "ist kars\u0327\u0131lama evet foto.png";
+export const IST_MEET_PHOTO_FILENAME = "ist kars\u0327\u0131lama evet foto.jpeg";
 export const IST_MEET_VIDEO_FILENAME = "ist kars\u0327\u0131lama evet video.mp4";
 export const SAW_MEET_PHOTO_FILENAME = "saw kars\u0327\u0131lama evet foto.jpeg";
 export const SAW_MEET_VIDEO_FILENAME = "saw kars\u0327\u0131lama evet video.mp4";

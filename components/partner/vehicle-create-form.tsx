@@ -1,11 +1,13 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
 import {
   emptyVehicleDraft,
   VehicleFields,
   type VehicleDraft,
 } from "@/components/partner/vehicle-fields";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { type PartnerCopy } from "@/lib/partner/copy";
@@ -22,6 +24,7 @@ import {
 type PartnerVehicleCreateFormProps = {
   locale: Locale;
   copy: PartnerCopy;
+  activeUetdsCompanies: readonly UetdsCompanyRef[];
 };
 
 const ERROR_COPY: Record<
@@ -41,16 +44,22 @@ const ERROR_COPY: Record<
   "needs-approval": "vehicleNeedsApproval",
   "not-found": "vehicleSaveFailed",
   "in-use": "vehicleSaveFailed",
+  "invalid-uetds-company": "invalidUetdsCompany",
   failed: "vehicleSaveFailed",
 };
 
-export function PartnerVehicleCreateForm({ locale, copy }: PartnerVehicleCreateFormProps) {
+export function PartnerVehicleCreateForm({
+  locale,
+  copy,
+  activeUetdsCompanies,
+}: PartnerVehicleCreateFormProps) {
   const [state, action, pending] = useActionState<PartnerVehicleFormState, FormData>(
     partnerCreateVehicleAction,
     { error: null, ok: false },
   );
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<VehicleDraft>(emptyVehicleDraft);
+  const [uetdsCompanyId, setUetdsCompanyId] = useState("");
   const [clientErrors, setClientErrors] = useState<Partial<Record<PartnerVehicleField, string>>>({});
   const [cleared, setCleared] = useState<Partial<Record<PartnerVehicleField, true>>>({});
   const [ignoreServer, setIgnoreServer] = useState(false);
@@ -122,6 +131,15 @@ export function PartnerVehicleCreateForm({ locale, copy }: PartnerVehicleCreateF
             return next;
           });
         }}
+      />
+      <UetdsCompanySelect
+        value={uetdsCompanyId}
+        activeCompanies={activeUetdsCompanies}
+        fieldLabel={copy.uetdsNotifyCompany}
+        noneLabel={copy.uetdsNotifyNone}
+        searchPlaceholder={copy.uetdsCompanySearch}
+        emptyLabel={copy.uetdsCompanyEmpty}
+        onChange={setUetdsCompanyId}
       />
       {state.error && !partnerVehicleErrorField(state.error) ? (
         <p className="ops-form-error" role="alert">

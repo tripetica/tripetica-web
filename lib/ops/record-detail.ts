@@ -1,4 +1,10 @@
 import { isAirportPickup } from "@/lib/booking/occupancy";
+import { formatIstanbulClock, shouldTrackAirportPickupFlight } from "@/lib/ops/flight-tracking";
+import {
+  isReservationNoShowStatus,
+  isReservationOpsFinalStatus,
+  isReservationServiceFailedStatus,
+} from "@/lib/ops/no-show";
 import {
   formatHourlyPackageCoverage,
   formatHourlyPackageOverrunNote,
@@ -151,6 +157,7 @@ export type OpsRecordDetail = {
     showPriceInfo: boolean;
     showPassengerContact: boolean;
   } | null;
+  noShowReport: import("@/lib/ops/no-show").DriverNoShowReport | null;
 };
 
 export type OpsCancelDialogKind =
@@ -287,6 +294,8 @@ export type ReservationDetailSource = {
   luggageCount: number | null;
   babySeatCount: number | null;
   flightCode: string | null;
+  flightTracking?: import("@/lib/ops/flight-tracking").FlightTrackingSnapshot | null;
+  noShowReport?: import("@/lib/ops/no-show").DriverNoShowReport | null;
   meetAndGreet: boolean | null;
   durationHours: string | null;
   bursaRoute: string | null;
@@ -538,7 +547,13 @@ export function reservationStatusLabel(
   if (raw === "cancelled") {
     return copy.reservationStatusCancelled;
   }
-  // confirmed, payment_pending, and other non-cancelled reservation states → Active
+  if (isReservationNoShowStatus(raw)) {
+    return copy.reservationStatusNoShow;
+  }
+  if (isReservationServiceFailedStatus(raw)) {
+    return copy.reservationStatusServiceFailed;
+  }
+  // confirmed, payment_pending, and other non-final reservation states → Active
   if (raw === "confirmed" || raw === "payment_pending" || raw) {
     return copy.reservationStatusActive;
   }
@@ -546,12 +561,24 @@ export function reservationStatusLabel(
 }
 
 export function reservationStatusBadgeClass(status: string | null | undefined) {
-  return displayText(status) === "cancelled" ? "is-cancelled" : "is-active";
+  const raw = displayText(status);
+  if (raw === "cancelled") {
+    return "is-cancelled";
+  }
+  if (isReservationNoShowStatus(raw)) {
+    return "is-no-show";
+  }
+  if (isReservationServiceFailedStatus(raw)) {
+    return "is-service-failed";
+  }
+  return "is-active";
 }
 
 export function isReservationCancelled(status: string | null | undefined) {
   return displayText(status) === "cancelled";
 }
+
+export { isReservationOpsFinalStatus };
 
 export function buildReservationActionContext(
   item: {
@@ -1195,6 +1222,7 @@ export function toProcessRecordDetail(
     paymentHistory: null,
     operationAssignment: null,
     driverTask: null,
+    noShowReport: null,
   };
 }
 
@@ -1331,6 +1359,41 @@ export function toReservationRecordDetail(
           bosphorus ? null : row(copy.luggage, countText(item.luggageCount)),
           bosphorus ? null : row(copy.babySeat, countText(item.babySeatCount)),
           row(copy.flight, displayText(item.flightCode)),
+          ...(shouldTrackAirportPickupFlight({
+            airportCode: item.pickupAirportCode,
+            locationType: item.pickupLocationType,
+            placeId: item.pickupPlaceId,
+            flightCode: item.flightCode,
+            status: item.status,
+          })
+            ? [
+                row(
+                  copy.flightScheduled,
+                  formatIstanbulClock(item.flightTracking?.scheduledArrival ?? null) ||
+                    copy.flightAwaitingData,
+                ),
+                row(
+                  copy.flightEstimated,
+                  formatIstanbulClock(item.flightTracking?.estimatedArrival ?? null) ||
+                    copy.flightAwaitingData,
+                ),
+                row(
+                  copy.flightActual,
+                  formatIstanbulClock(item.flightTracking?.actualArrival ?? null) || "—",
+                ),
+                row(
+                  copy.flightStatus,
+                  item.flightTracking?.statusText?.trim() ||
+                    (item.flightTracking?.lastError
+                      ? copy.flightDataUnavailable
+                      : copy.flightAwaitingData),
+                ),
+                row(
+                  copy.flightLastChecked,
+                  dateText(item.flightTracking?.lastCheckedAt ?? null, locale),
+                ),
+              ]
+            : []),
           bosphorus ? null : row(copy.meetAndGreet, yn(item.meetAndGreet, copy)),
           pricing.selectedPrice
             ? {
@@ -1354,6 +1417,7 @@ export function toReservationRecordDetail(
     paymentHistory: item.paymentHistory ?? null,
     operationAssignment: reservationOperationAssignment(item, locale, copy),
     driverTask: item.driverTask ?? null,
+    noShowReport: item.noShowReport ?? null,
     actionContext: buildReservationActionContext({
       status: item.status,
       serviceType: item.serviceType,

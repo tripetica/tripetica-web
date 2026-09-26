@@ -320,6 +320,8 @@ test("reservation filters keep live search and refresh on one toolbar", () => {
   assert.match(filters, /operationActive/);
   assert.match(filters, /operationCompleted/);
   assert.match(filters, /operationCancelled/);
+  assert.match(filters, /operationNoShow/);
+  assert.match(filters, /operationServiceFailed/);
   assert.match(filters, /operationAll/);
   assert.match(
     readFileSync(new URL("../../components/ops/refresh-button.tsx", import.meta.url), "utf8"),
@@ -333,11 +335,17 @@ test("reservation filters keep live search and refresh on one toolbar", () => {
 
 test("operation views map to driver-task completed and reservation cancelled status", () => {
   assert.match(reservationOperationWhereSql("completed") ?? "", /current_stage = 'completed'/);
+  assert.match(reservationOperationWhereSql("completed") ?? "", /no_show/);
+  assert.match(reservationOperationWhereSql("completed") ?? "", /service_failed/);
+  assert.doesNotMatch(reservationOperationWhereSql("completed") ?? "", /cancelled/);
   assert.equal(reservationOperationWhereSql("cancelled"), "status = 'cancelled'");
+  assert.equal(reservationOperationWhereSql("no_show"), "status = 'no_show'");
+  assert.doesNotMatch(reservationOperationWhereSql("no_show") ?? "", /review_status|pending/);
+  assert.equal(reservationOperationWhereSql("service_failed"), "status = 'service_failed'");
   assert.equal(reservationOperationWhereSql("all"), null);
   assert.match(reservationOperationWhereSql("active") ?? "", /NOT EXISTS/);
-  assert.match(reservationOperationWhereSql("active") ?? "", /status <> 'cancelled'/);
-  assert.match(reservationOperationWhereSql("") ?? "", /status <> 'cancelled'/);
+  assert.match(reservationOperationWhereSql("active") ?? "", /status NOT IN \('cancelled', 'no_show', 'service_failed'\)/);
+  assert.match(reservationOperationWhereSql("") ?? "", /status NOT IN \('cancelled', 'no_show', 'service_failed'\)/);
   const list = readFileSync(
     new URL("../../lib/ops/reservations.ts", import.meta.url),
     "utf8",

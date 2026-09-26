@@ -19,6 +19,16 @@ import {
   type DriverTaskPublicResult,
 } from "@/lib/ops/driver-task-fields";
 import { reservationPriceDisplay } from "@/lib/ops/reservation-price-display";
+import { canReportDriverNoShow, loadDriverNoShowReport } from "@/lib/ops/driver-no-show";
+import { driverTaskClosedOutcome, isReservationOpsFinalStatus, isTransferNoShowService } from "@/lib/ops/no-show";
+import {
+  flightStatusBadge,
+  shouldTrackAirportPickupFlight,
+  trackingPickupIsAirport,
+  type FlightTrackingSnapshot,
+} from "@/lib/ops/flight-tracking";
+import { snapshotFromTrackingRow } from "@/lib/ops/flight-tracking-poll";
+import { scheduleFlightTrackingCheck } from "@/lib/ops/flight-tracking-schedule";
 import {
   driverAssignmentFingerprint,
   driverTaskPath,
@@ -237,6 +247,7 @@ export async function getDriverTaskForOps(
 
 type PublicReservationRow = {
   reservation_code: string;
+  status: string;
   service_type: string | null;
   tour_code: string | null;
   pickup_at: Date | null;
@@ -349,7 +360,7 @@ export async function loadDriverTaskByToken(
         t.reservation_id, t.access_token, t.current_stage, t.driver_fingerprint,
         t.show_price_info, t.show_passenger_contact,
         ${COMPLETED_AT_SQL} AS completed_at,
-        r.reservation_code, r.service_type, r.tour_code, r.pickup_at,
+        r.reservation_code, r.status, r.service_type, r.tour_code, r.pickup_at,
         r.pickup_name_tr, r.pickup_name_customer,
         r.pickup_address_tr, r.pickup_address_customer,
         r.pickup_latitude, r.pickup_longitude,
@@ -400,11 +411,69 @@ export async function loadDriverTaskByToken(
         hour12: false,
       }).format(row.pickup_at)
     : null;
+  const airportPickup = trackingPickupIsAirport({
+    airportCode: row.pickup_airport_code,
+    locationType: row.pickup_location_type,
+    placeId: row.pickup_place_id,
+  });
+  const trackable = shouldTrackAirportPickupFlight({
+    airportCode: row.pickup_airport_code,
+    locationType: row.pickup_location_type,
+    placeId: row.pickup_place_id,
+    flightCode: row.flight_code,
+    status: "confirmed",
+    driverTaskStage: row.current_stage,
+  });
+  let trackingSnapshot: FlightTrackingSnapshot | null = null;
+  let noShowReported = false;
+  try {
+    const tracking = await query<{
+      scheduled_arrival: Date | null;
+      estimated_arrival: Date | null;
+      actual_arrival: Date | null;
+      status_text: string | null;
+      status_id: number | null;
+      source: string | null;
+      last_checked_at: Date | null;
+      last_success_at: Date | null;
+      last_error: string | null;
+    }>(
+      `SELECT scheduled_arrival, estimated_arrival, actual_arrival,
+              status_text, status_id, source,
+              last_checked_at, last_success_at, last_error
+       FROM reservation_flight_tracking
+       WHERE reservation_id = $1
+       LIMIT 1`,
+      [row.reservation_id],
+    );
+    trackingSnapshot = snapshotFromTrackingRow(tracking.rows[0] ?? null);
+    noShowReported = Boolean(await loadDriverNoShowReport(row.reservation_id));
+  } catch {
+    trackingSnapshot = null;
+    noShowReported = false;
+  }
+  if (trackable) {
+    scheduleFlightTrackingCheck(row.reservation_id);
+  }
+  const badge = flightStatusBadge({
+    trackable,
+    snapshot: trackingSnapshot,
+  });
+  const closedOutcome = driverTaskClosedOutcome(row.status);
+  const noShow = isTransferNoShowService(row.service_type)
+    ? {
+        canReport:
+          canReportDriverNoShow(row.current_stage, noShowReported, row.service_type) &&
+          !closedOutcome,
+        reported: noShowReported,
+        airportPickup,
+      }
+    : null;
   return {
     valid: true,
     stage: row.current_stage,
-    nextStage: nextDriverTaskStage(row.current_stage),
-    actionLabel: driverTaskActionLabel(row.current_stage),
+    nextStage: closedOutcome ? null : nextDriverTaskStage(row.current_stage),
+    actionLabel: closedOutcome ? null : driverTaskActionLabel(row.current_stage),
     completed: row.current_stage === "completed",
     reservationCode: row.reservation_code,
     fields: buildDriverTaskPublicFields({
@@ -457,6 +526,16 @@ export async function loadDriverTaskByToken(
       gender: genderLabel(passenger.gender),
       identityNumber: passenger.identity_number?.trim() || null,
     })),
+    flightStatus:
+      trackable && badge && badge.label !== "—"
+        ? {
+            arrowLabel: badge.label,
+            tone: badge.tone,
+            flightCode: row.flight_code?.trim() || null,
+          }
+        : null,
+    noShow,
+    closedOutcome,
   };
 }
 
@@ -492,6 +571,7 @@ export async function advanceDriverTaskByToken(
     await client.query("BEGIN");
     const locked = await client.query<
       TaskRow & {
+        status: string;
         assigned_driver_kind: string | null;
         assigned_driver_id: string | null;
         assigned_driver_snapshot: unknown;
@@ -500,7 +580,7 @@ export async function advanceDriverTaskByToken(
       `SELECT
           t.reservation_id, t.access_token, t.current_stage, t.driver_fingerprint,
           ${COMPLETED_AT_SQL} AS completed_at,
-          r.assigned_driver_kind, r.assigned_driver_id, r.assigned_driver_snapshot
+          r.status, r.assigned_driver_kind, r.assigned_driver_id, r.assigned_driver_snapshot
        FROM reservation_driver_tasks t
        JOIN reservations r ON r.id = t.reservation_id
        WHERE t.access_token = $1
@@ -516,6 +596,10 @@ export async function advanceDriverTaskByToken(
     if (!publicAccessOpen(row.current_stage, row.completed_at)) {
       await client.query("ROLLBACK");
       return { ok: false, reason: "revoked" };
+    }
+    if (isReservationOpsFinalStatus(row.status)) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "conflict" };
     }
     if (row.current_stage === requestedStage) {
       await client.query("COMMIT");

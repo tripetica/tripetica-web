@@ -67,6 +67,9 @@ const EMAIL_ERROR_COPY: Record<
   "current-invalid": "currentPasswordInvalid",
   mismatch: "emailConfirmMismatch",
   "same-email": "emailUnchanged",
+  "not-found": "passwordResetNotFound",
+  pending: "pendingLogin",
+  inactive: "inactiveLogin",
   failed: "verificationFailed",
 };
 

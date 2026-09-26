@@ -12,6 +12,7 @@ import { actorCan, getOpsActor } from "@/lib/ops/session";
 export type OpsAssignmentNotifyFormState = {
   error: AssignmentNotifyError | "forbidden" | null;
   ok: boolean;
+  reservationId: string;
 };
 
 function localeFromForm(formData: FormData): Locale {
@@ -28,12 +29,12 @@ export async function opsSendAssignmentCustomerNotificationAction(
   _prev: OpsAssignmentNotifyFormState,
   formData: FormData,
 ): Promise<OpsAssignmentNotifyFormState> {
-  const actor = await getOpsActor();
-  if (!actor || !actorCan(actor, "reservations.manage")) {
-    return { error: "forbidden", ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const actor = await getOpsActor();
+  if (!actor || !actorCan(actor, "reservations.manage")) {
+    return { error: "forbidden", ok: false, reservationId };
+  }
   const includeDriver = String(formData.get("includeDriver") ?? "") === "1";
   const scope = includeDriver ? "vehicle_and_driver" : "vehicle_only";
   try {
@@ -43,11 +44,11 @@ export async function opsSendAssignmentCustomerNotificationAction(
       scope,
     });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshNotify(locale, reservationId);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }

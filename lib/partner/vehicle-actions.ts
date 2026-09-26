@@ -14,6 +14,7 @@ import {
   getPartnerVehicle,
   updatePartnerVehicle,
 } from "@/lib/partner/fleet";
+import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerVehicleFormState = {
@@ -31,6 +32,7 @@ export type PartnerVehicleFormState = {
     | "needs-approval"
     | "not-found"
     | "in-use"
+    | "invalid-uetds-company"
     | "failed"
     | null;
   ok: boolean;
@@ -94,12 +96,17 @@ export async function partnerCreateVehicleAction(
 ): Promise<PartnerVehicleFormState> {
   const locale = localeFromForm(formData);
   const actor = await requirePartnerActor(locale);
+  const resolved = await resolveUetdsCompanyIdFromForm(formData, null);
+  if (!resolved.ok) {
+    return { error: "invalid-uetds-company", ok: false };
+  }
   let result: Awaited<ReturnType<typeof createPartnerVehicle>>;
   try {
     result = await createPartnerVehicle({
       partnerId: actor.partnerId,
       editor: { source: "partner", userId: actor.userId },
       ...vehicleFieldsFromForm(formData),
+      uetdsCompanyId: resolved.companyId,
     });
   } catch {
     return { error: "failed", ok: false };
@@ -128,11 +135,19 @@ export async function partnerUpdateVehicleAction(
     return { error: "not-found", ok: false };
   }
   try {
+    const resolved = await resolveUetdsCompanyIdFromForm(
+      formData,
+      owned.uetdsCompanyId ?? null,
+    );
+    if (!resolved.ok) {
+      return { error: "invalid-uetds-company", ok: false };
+    }
     const result = await updatePartnerVehicle({
       partnerId: actor.partnerId,
       vehicleId,
       editor: { source: "partner", userId: actor.userId },
       ...vehicleFieldsFromForm(formData),
+      uetdsCompanyId: resolved.companyId,
     });
     if (!result.ok) {
       return { error: result.error, ok: false };

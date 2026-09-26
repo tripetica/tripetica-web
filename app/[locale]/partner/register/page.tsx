@@ -24,6 +24,7 @@ export async function generateMetadata({
 
 export default async function PartnerRegisterPage({
   params,
+  searchParams,
 }: PageProps<"/[locale]/partner/register">) {
   const { locale } = await params;
   if (!isLocale(locale)) {
@@ -33,6 +34,9 @@ export default async function PartnerRegisterPage({
   if (actor) {
     redirect(partnerHomePath(locale, actor));
   }
+  const query = await searchParams;
+  const emailRaw = Array.isArray(query.email) ? query.email[0] : query.email;
+  const initialEmail = emailRaw ? String(emailRaw).trim() : "";
   const copy = partnerCopy[asPanelLocale(locale)];
 
   return (
@@ -43,7 +47,7 @@ export default async function PartnerRegisterPage({
           <h1>{copy.registerTitle}</h1>
           <p className="ops-login-lead">{copy.registerLead}</p>
         </div>
-        <PartnerRegisterForm locale={locale} copy={copy} />
+        <PartnerRegisterForm locale={locale} copy={copy} initialEmail={initialEmail} />
         <OpsLanguageSwitcher
           locale={locale}
           pathWithoutLocale="/partner/register"

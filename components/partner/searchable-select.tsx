@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  filterSearchableSelectOptions,
+  pointerGestureExceededSlop,
+  shouldPreventDefaultOnOptionPointerDown,
+} from "@/lib/partner/searchable-select";
 
 type SearchableSelectOption = {
   value: string;
@@ -22,6 +27,13 @@ type SearchableSelectProps = {
   onDismiss?: () => void;
 };
 
+type OptionGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  moved: boolean;
+};
+
 export function SearchableSelect({
   name,
   value,
@@ -37,18 +49,18 @@ export function SearchableSelect({
   onDismiss,
 }: SearchableSelectProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const ignoreNextFocusRef = useRef(false);
+  const gestureRef = useRef<OptionGesture | null>(null);
+  const selectedByPointerRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(defaultOpen);
   const selected = options.find((option) => option.value === value) ?? null;
-  const visible = useMemo(() => {
-    const folded = query.trim().toLocaleLowerCase("tr");
-    if (!folded) {
-      return options;
-    }
-    return options.filter((option) => option.label.toLocaleLowerCase("tr").includes(folded));
-  }, [options, query]);
+  const visible = useMemo(
+    () => filterSearchableSelectOptions(options, query),
+    [options, query],
+  );
 
   function closeMenu(dismissed = false) {
     setOpen(false);
@@ -56,6 +68,12 @@ export function SearchableSelect({
     if (dismissed) {
       onDismissRef.current?.();
     }
+  }
+
+  function selectOption(nextValue: string) {
+    ignoreNextFocusRef.current = true;
+    onChange(nextValue);
+    closeMenu(false);
   }
 
   useEffect(() => {
@@ -101,6 +119,10 @@ export function SearchableSelect({
           if (disabled) {
             return;
           }
+          if (ignoreNextFocusRef.current) {
+            ignoreNextFocusRef.current = false;
+            return;
+          }
           setQuery("");
           setOpen(true);
         }}
@@ -126,9 +148,61 @@ export function SearchableSelect({
                 key={option.value}
                 type="button"
                 className="partner-language-option"
-                onClick={() => {
-                  onChange(option.value);
-                  closeMenu(false);
+                onPointerDown={(event) => {
+                  // Keep outside-dismiss listeners from closing the menu.
+                  event.stopPropagation();
+                  // Mouse/pen: preventDefault keeps the search input focused so click lands.
+                  // Touch: never preventDefault — that blocks native list scrolling.
+                  if (shouldPreventDefaultOnOptionPointerDown(event.pointerType)) {
+                    event.preventDefault();
+                  }
+                  gestureRef.current = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    moved: false,
+                  };
+                  selectedByPointerRef.current = false;
+                }}
+                onPointerMove={(event) => {
+                  const gesture = gestureRef.current;
+                  if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
+                    return;
+                  }
+                  if (
+                    pointerGestureExceededSlop({
+                      startX: gesture.startX,
+                      startY: gesture.startY,
+                      x: event.clientX,
+                      y: event.clientY,
+                    })
+                  ) {
+                    gesture.moved = true;
+                  }
+                }}
+                onPointerUp={(event) => {
+                  const gesture = gestureRef.current;
+                  gestureRef.current = null;
+                  if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
+                    return;
+                  }
+                  selectedByPointerRef.current = true;
+                  selectOption(option.value);
+                }}
+                onPointerCancel={() => {
+                  gestureRef.current = null;
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  // Keyboard activation (and any missed pointerup) still selects once.
+                  if (selectedByPointerRef.current) {
+                    selectedByPointerRef.current = false;
+                    return;
+                  }
+                  if (open) {
+                    selectOption(option.value);
+                  }
                 }}
               >
                 {option.label}

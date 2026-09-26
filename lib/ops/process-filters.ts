@@ -1,4 +1,15 @@
 import { getIstanbulClock, istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
+import {
+  asPanelLocale,
+  intlLocaleTag,
+  isLocale,
+  locales,
+  type Locale,
+} from "@/lib/i18n/config";
+import {
+  isPartnerDriverLanguageCode,
+  partnerDriverLanguageLabel,
+} from "@/lib/partner/driver-languages";
 
 export const PROCESS_DATE_PRESETS = [
   "today",
@@ -12,8 +23,10 @@ export const PROCESS_DATE_PRESETS = [
 export type ProcessDatePreset = (typeof PROCESS_DATE_PRESETS)[number];
 
 export const PROCESS_STATUSES = ["draft", "completed", "expired"] as const;
-export const PROCESS_LOCALES = ["tr", "en", "ru"] as const;
 export const PROCESS_CONVERSIONS = ["converted", "open"] as const;
+export const PROCESS_SEARCH_DEBOUNCE_MS = 350;
+const PROCESS_LANGUAGE_CODE = /^[a-z]{2}$/;
+const PROCESS_LANGUAGE_DISPLAY_ORDER = ["tr", "en", "ru", "ar"] as const;
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const UUID =
@@ -43,8 +56,98 @@ export function parseProcessStatus(value: string) {
   return (PROCESS_STATUSES as readonly string[]).includes(value) ? value : "";
 }
 
+export function isProcessLanguageCode(value: string) {
+  return PROCESS_LANGUAGE_CODE.test(value);
+}
+
+export function parseProcessLanguageCodes(value: string) {
+  const seen = new Set<string>();
+  const codes: string[] = [];
+  for (const part of value.split(/[,\s]+/)) {
+    const code = part.trim().toLowerCase();
+    if (!isProcessLanguageCode(code) || seen.has(code)) {
+      continue;
+    }
+    seen.add(code);
+    codes.push(code);
+  }
+  return codes.sort();
+}
+
 export function parseProcessLocaleFilter(value: string) {
-  return (PROCESS_LOCALES as readonly string[]).includes(value) ? value : "";
+  return parseProcessLanguageCodes(value).join(",");
+}
+
+export function processPublicLanguageCodes(): string[] {
+  const allowed: readonly string[] = locales;
+  const ordered: string[] = PROCESS_LANGUAGE_DISPLAY_ORDER.filter((code) =>
+    allowed.includes(code),
+  );
+  for (const code of allowed) {
+    if (!ordered.includes(code)) {
+      ordered.push(code);
+    }
+  }
+  return ordered;
+}
+
+export function processLanguageFilterOptions(observed: readonly string[] = []) {
+  const publicCodes = processPublicLanguageCodes();
+  const seen = new Set(publicCodes);
+  const extra: string[] = [];
+  for (const raw of observed) {
+    const code = raw.trim().toLowerCase();
+    if (!isLocale(code) || seen.has(code)) {
+      continue;
+    }
+    seen.add(code);
+    extra.push(code);
+  }
+  return extra.length > 0 ? [...publicCodes, ...extra] : publicCodes;
+}
+
+export function normalizeProcessLanguageSelection(
+  codes: readonly string[],
+  publicCodes: readonly string[] = processPublicLanguageCodes(),
+) {
+  const allowed = new Set(publicCodes);
+  const selected = parseProcessLanguageCodes(codes.join(",")).filter((code) =>
+    allowed.has(code),
+  );
+  if (selected.length === 0) {
+    return "";
+  }
+  if (publicCodes.length > 0 && publicCodes.every((code) => selected.includes(code))) {
+    return "";
+  }
+  return selected.join(",");
+}
+
+export function processLanguageDraftFromApplied(
+  applied: readonly string[],
+  publicCodes: readonly string[],
+) {
+  if (normalizeProcessLanguageSelection(applied, publicCodes) === "") {
+    return [...publicCodes];
+  }
+  return parseProcessLanguageCodes(applied.join(",")).filter((code) =>
+    publicCodes.includes(code),
+  );
+}
+
+export function processLanguageLabel(code: string, locale: Locale) {
+  if (isPartnerDriverLanguageCode(code)) {
+    return partnerDriverLanguageLabel(code, locale);
+  }
+  try {
+    return (
+      new Intl.DisplayNames([intlLocaleTag(asPanelLocale(locale))], {
+        type: "language",
+      }).of(code) ?? code
+    );
+  } catch {
+    return code;
+  }
 }
 
 export function parseProcessConversion(value: string) {

@@ -8,6 +8,7 @@ import { searchOpsVehiclesAction } from "@/lib/ops/vehicle-actions";
 import { type OpsVehicleListItem } from "@/lib/ops/vehicles";
 import { pageCount } from "@/lib/ops/format";
 import {
+  formatUetdsCompanyListLabel,
   partnerVehicleBrandModel,
   partnerVehicleCapacityLabel,
   vehicleStatusBadgeClass,
@@ -102,6 +103,7 @@ export function OpsVehicleTable({
                 <th>{copy.vehicleModelYear}</th>
                 <th>{copy.vehicleClass}</th>
                 <th>{copy.vehicleCapacity}</th>
+                <th>{copy.uetdsCompanyColumn}</th>
                 <th>{copy.status}</th>
                 <th>{copy.linkedPartner}</th>
                 <th>{copy.details}</th>
@@ -120,6 +122,7 @@ export function OpsVehicleTable({
                       : "—"}
                   </td>
                   <td>{partnerVehicleCapacityLabel(vehicle, copy)}</td>
+                  <td>{formatUetdsCompanyListLabel(vehicle.uetdsCompany, copy.uetdsCompanyExternal)}</td>
                   <td>
                     <span className={`ops-status-badge ${vehicleStatusBadgeClass(vehicle.status)}`}>
                       {vehicleStatusLabel(vehicle.status, copy)}

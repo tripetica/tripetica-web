@@ -2,7 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { PhoneField } from "@/components/booking/phone-field";
+import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import {
@@ -15,6 +17,7 @@ import { type PartnerCopy } from "@/lib/partner/copy";
 type PartnerDriverCreateFormProps = {
   locale: Locale;
   copy: PartnerCopy;
+  activeUetdsCompanies: readonly UetdsCompanyRef[];
 };
 
 const ERROR_COPY: Record<
@@ -30,10 +33,15 @@ const ERROR_COPY: Record<
   "duplicate-email": "duplicateDriverEmail",
   "not-found": "driverSaveFailed",
   "in-use": "driverSaveFailed",
+  "invalid-uetds-company": "invalidUetdsCompany",
   failed: "driverSaveFailed",
 };
 
-export function PartnerDriverCreateForm({ locale, copy }: PartnerDriverCreateFormProps) {
+export function PartnerDriverCreateForm({
+  locale,
+  copy,
+  activeUetdsCompanies,
+}: PartnerDriverCreateFormProps) {
   const [state, action, pending] = useActionState<PartnerDriverFormState, FormData>(
     partnerCreateDriverAction,
     { error: null, ok: false },
@@ -41,6 +49,7 @@ export function PartnerDriverCreateForm({ locale, copy }: PartnerDriverCreateFor
   const [phoneCountry, setPhoneCountry] = useState(PARTNER_DEFAULT_COUNTRY_CODE);
   const [phoneNational, setPhoneNational] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
+  const [uetdsCompanyId, setUetdsCompanyId] = useState("");
 
   return (
     <form action={action} className="partner-profile-form">
@@ -84,6 +93,15 @@ export function PartnerDriverCreateForm({ locale, copy }: PartnerDriverCreateFor
           onChange={setLanguages}
         />
       </div>
+      <UetdsCompanySelect
+        value={uetdsCompanyId}
+        activeCompanies={activeUetdsCompanies}
+        fieldLabel={copy.uetdsNotifyCompany}
+        noneLabel={copy.uetdsNotifyNone}
+        searchPlaceholder={copy.uetdsCompanySearch}
+        emptyLabel={copy.uetdsCompanyEmpty}
+        onChange={setUetdsCompanyId}
+      />
       {state.error ? (
         <p className="ops-form-error" role="alert">
           {copy[ERROR_COPY[state.error]]}

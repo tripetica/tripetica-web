@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
+import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { useOpsStickyOffset } from "@/components/ops/use-ops-sticky-offset";
 import { VehicleFields, type VehicleDraft } from "@/components/partner/vehicle-fields";
 import { type Locale } from "@/lib/i18n/config";
@@ -24,6 +26,7 @@ type PartnerVehicleFormProps = {
   locale: Locale;
   copy: OpsCopy;
   vehicle: PartnerVehicleRecord;
+  activeUetdsCompanies: readonly UetdsCompanyRef[];
   canManage: boolean;
   linkedPartner?: { id: string; name: string; code: string };
   backHref?: string;
@@ -42,6 +45,9 @@ function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: 
   }
   if (error === "in-use") {
     return copy.fleetInUse;
+  }
+  if (error === "invalid-uetds-company") {
+    return copy.invalidUetdsCompany;
   }
   return fallback;
 }
@@ -63,7 +69,14 @@ function draftFromVehicle(vehicle: PartnerVehicleRecord): VehicleDraft {
 }
 
 function vehicleStamp(vehicle: PartnerVehicleRecord) {
-  return [vehicle.id, vehicle.updatedAt, vehicle.status, vehicle.plate, vehicle.vehicleClassCode].join(":");
+  return [
+    vehicle.id,
+    vehicle.updatedAt,
+    vehicle.status,
+    vehicle.plate,
+    vehicle.vehicleClassCode,
+    vehicle.uetdsCompanyId ?? "",
+  ].join(":");
 }
 
 export function PartnerVehicleForm(props: PartnerVehicleFormProps) {
@@ -74,6 +87,7 @@ function PartnerVehicleFormEditor({
   locale,
   copy,
   vehicle,
+  activeUetdsCompanies,
   canManage,
   linkedPartner,
   backHref,
@@ -82,6 +96,8 @@ function PartnerVehicleFormEditor({
   const initial = draftFromVehicle(vehicle);
   const [values, setValues] = useState(initial);
   const [baseline] = useState(initial);
+  const [uetdsCompanyId, setUetdsCompanyId] = useState(vehicle.uetdsCompanyId ?? "");
+  const [baselineUetdsCompanyId] = useState(vehicle.uetdsCompanyId ?? "");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const scrolled = useOpsStickyOffset();
   const [saveState, saveAction, savePending] = useActionState<OpsFleetFormState, FormData>(
@@ -109,7 +125,9 @@ function PartnerVehicleFormEditor({
     { error: null, ok: false },
   );
 
-  const dirty = JSON.stringify(values) !== JSON.stringify(baseline);
+  const dirty =
+    JSON.stringify(values) !== JSON.stringify(baseline) ||
+    uetdsCompanyId !== baselineUetdsCompanyId;
   const resolvedBack =
     backHref ?? `${localizedPath(locale, `/ops/partners/${vehicle.partnerId}`)}?tab=vehicles`;
 
@@ -240,6 +258,17 @@ function PartnerVehicleFormEditor({
             values={values}
             disabled={!canManage}
             onChange={(patch) => setValues((current) => ({ ...current, ...patch }))}
+          />
+          <UetdsCompanySelect
+            value={uetdsCompanyId}
+            activeCompanies={activeUetdsCompanies}
+            currentCompany={vehicle.uetdsCompany ?? null}
+            fieldLabel={copy.uetdsNotifyCompany}
+            noneLabel={copy.uetdsNotifyNone}
+            searchPlaceholder={copy.uetdsCompanySearch}
+            emptyLabel={copy.uetdsCompanyEmpty}
+            disabled={!canManage}
+            onChange={setUetdsCompanyId}
           />
         </div>
       </form>

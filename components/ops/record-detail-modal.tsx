@@ -27,6 +27,7 @@ import { type OpsRecordEditInput } from "@/lib/ops/record-edit";
 import { opsDetailToolbarMode } from "@/lib/ops/record-edit-form";
 import {
   isReservationCancelled,
+  isReservationOpsFinalStatus,
   type OpsCancelDialogKind,
   type OpsRecordDetail,
   type OpsRefundDialogKind,
@@ -474,6 +475,7 @@ export function RecordDetailModal({
   const toolbarMode = opsDetailToolbarMode({ editing, dirty: editDirty });
   const isReservation = kind === "reservation";
   const cancelled = isReservationCancelled(detail?.status);
+  const opsFinal = isReservationOpsFinalStatus(detail?.status);
   const actionContext = detail?.actionContext ?? null;
   const cancelCopy = cancelDialogCopy(copy, actionContext?.cancelDialog ?? "generic");
   const refundCopy = refundBlockedCopy(
@@ -524,7 +526,7 @@ export function RecordDetailModal({
             {copy.edit}
           </button>
         ) : null}
-        {isReservation && canEdit ? (
+        {isReservation && canEdit && !opsFinal ? (
           cancelled ? (
             <button
               type="button"

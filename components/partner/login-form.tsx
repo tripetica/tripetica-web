@@ -12,6 +12,8 @@ type PartnerLoginFormProps = {
   locale: Locale;
   copy: PartnerCopy;
   nextPath?: string | null;
+  initialEmail?: string;
+  resetSuccess?: boolean;
 };
 
 function WhatsAppSupport({ label }: { label: string }) {
@@ -33,7 +35,13 @@ function WhatsAppSupport({ label }: { label: string }) {
   );
 }
 
-export function PartnerLoginForm({ locale, copy, nextPath }: PartnerLoginFormProps) {
+export function PartnerLoginForm({
+  locale,
+  copy,
+  nextPath,
+  initialEmail = "",
+  resetSuccess = false,
+}: PartnerLoginFormProps) {
   const [state, action, pending] = useActionState<PartnerLoginState, FormData>(
     partnerLoginAction,
     { error: null },
@@ -44,6 +52,11 @@ export function PartnerLoginForm({ locale, copy, nextPath }: PartnerLoginFormPro
     <form action={action} className="ops-login-form">
       <input type="hidden" name="locale" value={locale} />
       {nextPath ? <input type="hidden" name="next" value={nextPath} /> : null}
+      {resetSuccess ? (
+        <p className="partner-reset-success" role="status">
+          {copy.passwordResetSuccess}
+        </p>
+      ) : null}
       <label className="ops-field">
         <span>{copy.email}</span>
         <input
@@ -51,7 +64,8 @@ export function PartnerLoginForm({ locale, copy, nextPath }: PartnerLoginFormPro
           name="email"
           autoComplete="username"
           required
-          autoFocus
+          autoFocus={!initialEmail}
+          defaultValue={initialEmail}
         />
       </label>
       <PartnerPasswordField
@@ -61,7 +75,11 @@ export function PartnerLoginForm({ locale, copy, nextPath }: PartnerLoginFormPro
         required
         showPasswordLabel={copy.showPassword}
         hidePasswordLabel={copy.hidePassword}
+        autoFocus={Boolean(initialEmail)}
       />
+      <p className="partner-forgot-row">
+        <a href={localizedPath(locale, "/partner/forgot-password")}>{copy.forgotPassword}</a>
+      </p>
       {state.error === "throttled" ? (
         <p className="ops-form-error" role="alert">
           {copy.throttledLogin}

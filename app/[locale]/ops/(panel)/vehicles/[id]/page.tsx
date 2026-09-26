@@ -4,6 +4,7 @@ import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
+import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getOpsVehicle } from "@/lib/ops/vehicles";
 import { actorCan } from "@/lib/ops/session";
 
@@ -17,7 +18,10 @@ export default async function OpsVehicleDetailPage({
     notFound();
   }
   const actor = await requireOpsPage(locale, "partners.view");
-  const vehicle = await getOpsVehicle(id);
+  const [vehicle, activeUetdsCompanies] = await Promise.all([
+    getOpsVehicle(id),
+    listActiveUetdsCompanyOptions(),
+  ]);
   if (!vehicle) {
     notFound();
   }
@@ -27,6 +31,7 @@ export default async function OpsVehicleDetailPage({
       locale={locale}
       copy={opsCopy[asPanelLocale(locale)]}
       vehicle={vehicle}
+      activeUetdsCompanies={activeUetdsCompanies}
       canManage={actorCan(actor, "partners.manage")}
       linkedPartner={{
         id: vehicle.partnerId,

@@ -6,11 +6,17 @@ import {
   isOpsContactRow,
   isOpsPricingRow,
   opsTransferRowsForDisplay,
+  reservationStatusBadgeClass,
+  reservationStatusLabel,
   type OpsDetailPlace,
   type OpsRecordDetail,
 } from "@/lib/ops/record-detail";
 import { DriverTaskSection } from "@/components/ops/driver-task-section";
+import { NoShowReviewSection } from "@/components/ops/no-show-review-section";
 import { PaymentHistorySection } from "@/components/ops/payment-history-section";
+import { UetdsNotifyButton } from "@/components/uetds/uetds-notify-button";
+import { uetdsFormCopyFor } from "@/lib/uetds/copy";
+import { type UetdsEligibility } from "@/lib/uetds/eligibility";
 
 type RecordDetailProps = {
   locale: Locale;
@@ -22,10 +28,12 @@ type RecordDetailProps = {
   onTogglePricing?: () => void;
   onPaymentHistoryUpdated?: (detail: OpsRecordDetail) => void;
   showFooterPdf?: boolean;
+  uetdsNotify?: { href: string; eligibility: UetdsEligibility; label?: string } | null;
 };
 
 type DetailRowView = OpsRecordDetail["transfer"][number] & {
   statusBadge?: "active" | "cancelled";
+  statusBadgeClass?: string;
   strongAmount?: boolean;
 };
 
@@ -38,11 +46,11 @@ function reservationLeadingRows(
   }
   const rows: DetailRowView[] = [];
   if (detail.status) {
-    const cancelled = detail.status === "cancelled";
     rows.push({
       label: copy.status,
-      value: cancelled ? copy.reservationStatusCancelled : copy.reservationStatusActive,
-      statusBadge: cancelled ? "cancelled" : "active",
+      value: reservationStatusLabel(detail.status, copy),
+      statusBadge: detail.status === "cancelled" ? "cancelled" : "active",
+      statusBadgeClass: reservationStatusBadgeClass(detail.status),
     });
   }
   rows.push(...detail.summary, ...detail.service);
@@ -59,6 +67,7 @@ export function RecordDetail({
   onTogglePricing,
   onPaymentHistoryUpdated,
   showFooterPdf = true,
+  uetdsNotify = null,
 }: RecordDetailProps) {
   const isReservation = detail.kind === "reservation";
   const showReservationPricing = !isReservation || pricingVisible;
@@ -260,11 +269,42 @@ export function RecordDetail({
         </section>
       ) : null}
 
+      {isReservation && uetdsNotify ? (
+        <section className="uetds-notify-section">
+          <UetdsNotifyButton
+            href={uetdsNotify.href}
+            eligibility={uetdsNotify.eligibility}
+            copy={uetdsFormCopyFor(locale)}
+            label={uetdsNotify.label}
+          />
+        </section>
+      ) : null}
+
       {detail.driverTask ? (
         <DriverTaskSection
           copy={copy}
           reservationId={detail.id}
           driverTask={detail.driverTask}
+        />
+      ) : null}
+
+      {detail.noShowReport ? (
+        <NoShowReviewSection
+          locale={locale}
+          copy={copy}
+          reservationId={detail.id}
+          reservationCode={detail.code}
+          report={detail.noShowReport}
+          pickupName={detail.places[0]?.name ?? null}
+          dropoffName={
+            detail.places.find((place) => place.label === copy.dropoff)?.name ?? null
+          }
+          vehicleSummary={
+            detail.operationAssignment?.vehicle
+              .map((row) => row.value.trim())
+              .filter((value) => value && value !== copy.assignmentUnassigned)
+              .join(" · ") || null
+          }
         />
       ) : null}
 
@@ -311,8 +351,9 @@ function DetailRows({ rows }: { rows: DetailRowView[] }) {
           <dd>
             {item.statusBadge ? (
               <span
-                className={`ops-status-badge${
-                  item.statusBadge === "cancelled" ? " is-cancelled" : " is-active"
+                className={`ops-status-badge ${
+                  item.statusBadgeClass ??
+                  (item.statusBadge === "cancelled" ? "is-cancelled" : "is-active")
                 }`}
               >
                 {item.value}

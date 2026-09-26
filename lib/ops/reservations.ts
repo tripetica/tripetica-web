@@ -15,6 +15,11 @@ import {
 import { selectedStoredAmount } from "@/lib/ops/money";
 import { parseManualPriceTotals } from "@/lib/ops/price-override";
 import { loadLastSuccessfulAssignmentCustomerNotifications } from "@/lib/ops/assignment-customer-notification";
+import { snapshotFromTrackingRow } from "@/lib/ops/flight-tracking-poll";
+import {
+  loadDriverNoShowReport,
+} from "@/lib/ops/driver-no-show";
+import { scheduleFlightTrackingCheck } from "@/lib/ops/flight-tracking-schedule";
 import { type ReservationListItem } from "@/lib/ops/reservation-types";
 import {
   resolveDriverAssignment,
@@ -79,6 +84,7 @@ export type ReservationDetail = ReservationListItem & {
   paymentHistory: import("@/lib/ops/payment-history").OpsPaymentHistorySection | null;
   passengers: ReservationPassenger[];
   driverTask: import("@/lib/ops/driver-task").DriverTaskOpsView | null;
+  noShowReport: import("@/lib/ops/no-show").DriverNoShowReport | null;
 };
 
 export type ReservationPassenger = {
@@ -103,11 +109,27 @@ type ListRow = {
   dropoff_name_customer: string | null;
   dropoff_name_tr: string | null;
   flight_code: string | null;
+  pickup_airport_code: string | null;
+  pickup_location_type: string | null;
+  pickup_place_id: string | null;
+  flight_scheduled_arrival: Date | null;
+  flight_estimated_arrival: Date | null;
+  flight_actual_arrival: Date | null;
+  flight_status_text: string | null;
+  flight_status_id: number | null;
+  flight_source: string | null;
+  flight_last_checked_at: Date | null;
+  flight_last_success_at: Date | null;
+  flight_last_error: string | null;
+  no_show_reported_at: Date | null;
+  no_show_review_status: string | null;
   customer_first_name: string | null;
   customer_last_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
   passenger_count: number | null;
+  luggage_count: number | null;
+  baby_seat_count: number | null;
   vehicle_label_customer: string | null;
   vehicle_label_tr: string | null;
   total_price: string | null;
@@ -147,6 +169,7 @@ type ListRow = {
   assigned_vehicle_luggage: number | null;
   assigned_vehicle_color: string | null;
   assigned_vehicle_features: string | null;
+  assignment_updated_at: Date | null;
   driver_task_stage: string | null;
 };
 
@@ -284,7 +307,10 @@ function mapAssignment(row: ListRow): {
     acceptedPartnerCode: row.accepted_partner_code?.trim() || null,
     acceptedPartnerIsPrimary: Boolean(row.accepted_partner_is_primary),
     acceptedPartnerPriorityLevel: row.accepted_partner_priority_level,
-    assignmentLocked: row.status === "cancelled",
+    assignmentLocked:
+      row.status === "cancelled" ||
+      row.status === "no_show" ||
+      row.status === "service_failed",
     driverAssignment: resolveDriverAssignment({
       kind: row.assigned_driver_kind,
       driverId: row.assigned_driver_id,
@@ -312,10 +338,30 @@ function mapList(row: ListRow): ReservationListItem {
     pickupName: displayName(row.pickup_name_customer, row.pickup_name_tr),
     dropoffName: displayName(row.dropoff_name_customer, row.dropoff_name_tr),
     flightCode: row.flight_code?.trim() || null,
+    pickupAirportCode: row.pickup_airport_code?.trim() || null,
+    pickupLocationType: row.pickup_location_type?.trim() || null,
+    pickupPlaceId: row.pickup_place_id?.trim() || null,
+    flightTracking: snapshotFromTrackingRow({
+      scheduled_arrival: row.flight_scheduled_arrival,
+      estimated_arrival: row.flight_estimated_arrival,
+      actual_arrival: row.flight_actual_arrival,
+      status_text: row.flight_status_text,
+      status_id: row.flight_status_id,
+      source: row.flight_source,
+      last_checked_at: row.flight_last_checked_at,
+      last_success_at: row.flight_last_success_at,
+      last_error: row.flight_last_error,
+    }),
+    noShowReportedAt: row.no_show_reported_at
+      ? row.no_show_reported_at.toISOString()
+      : null,
+    noShowReviewStatus: row.no_show_review_status?.trim() || null,
     customerName: personName(row.customer_first_name, row.customer_last_name),
     customerEmail: row.customer_email?.trim() || null,
     customerPhone: row.customer_phone?.trim() || null,
     passengerCount: row.passenger_count,
+    luggageCount: row.luggage_count,
+    babySeatCount: row.baby_seat_count,
     vehicleLabel: displayName(row.vehicle_label_customer, row.vehicle_label_tr),
     totalPrice: selectedStoredAmount({
       currency: row.currency,
@@ -343,6 +389,9 @@ function mapList(row: ListRow): ReservationListItem {
     acceptedPartnerPriorityLevel: assignment.acceptedPartnerPriorityLevel,
     driverAssignment: assignment.driverAssignment,
     vehicleAssignment: assignment.vehicleAssignment,
+    assignmentUpdatedAt: row.assignment_updated_at
+      ? row.assignment_updated_at.toISOString()
+      : null,
     lastAssignmentCustomerNotification: null,
   };
 }
@@ -419,9 +468,16 @@ export async function listReservations(input: {
         jobs.pickup_name_customer, jobs.pickup_name_tr,
         jobs.dropoff_name_customer, jobs.dropoff_name_tr,
         jobs.flight_code,
+        jobs.pickup_airport_code, jobs.pickup_location_type, jobs.pickup_place_id,
+        jobs.flight_scheduled_arrival, jobs.flight_estimated_arrival, jobs.flight_actual_arrival,
+        jobs.flight_status_text, jobs.flight_status_id, jobs.flight_source,
+        jobs.flight_last_checked_at, jobs.flight_last_success_at, jobs.flight_last_error,
+        jobs.no_show_reported_at,
+        jobs.no_show_review_status,
         jobs.customer_first_name, jobs.customer_last_name,
         jobs.customer_email, jobs.customer_phone,
-        jobs.passenger_count, jobs.vehicle_label_customer, jobs.vehicle_label_tr,
+        jobs.passenger_count, jobs.luggage_count, jobs.baby_seat_count,
+        jobs.vehicle_label_customer, jobs.vehicle_label_tr,
         jobs.total_price, jobs.currency, jobs.payment_method, jobs.payment_provider,
         jobs.payment_status, jobs.refund_status, jobs.meet_and_greet,
         jobs.price_manually_overridden, jobs.manual_price_totals,
@@ -429,6 +485,7 @@ export async function listReservations(input: {
         jobs.accepted_partner_id,
         jobs.assigned_driver_kind, jobs.assigned_driver_id, jobs.assigned_driver_snapshot,
         jobs.assigned_vehicle_kind, jobs.assigned_vehicle_id, jobs.assigned_vehicle_snapshot,
+        jobs.assignment_updated_at,
         accepted_partner.name AS accepted_partner_name,
         accepted_partner.partner_code AS accepted_partner_code,
         accepted_partner.is_primary_partner AS accepted_partner_is_primary,
@@ -456,9 +513,55 @@ export async function listReservations(input: {
           pickup_name_customer, pickup_name_tr,
           dropoff_name_customer, dropoff_name_tr,
           flight_code,
+          pickup_airport_code, pickup_location_type, pickup_place_id,
+          (
+            SELECT scheduled_arrival FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_scheduled_arrival,
+          (
+            SELECT estimated_arrival FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_estimated_arrival,
+          (
+            SELECT actual_arrival FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_actual_arrival,
+          (
+            SELECT status_text FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_status_text,
+          (
+            SELECT status_id FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_status_id,
+          (
+            SELECT source FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_source,
+          (
+            SELECT last_checked_at FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_last_checked_at,
+          (
+            SELECT last_success_at FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_last_success_at,
+          (
+            SELECT last_error FROM reservation_flight_tracking
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS flight_last_error,
+          (
+            SELECT reported_at FROM reservation_driver_no_show_reports
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS no_show_reported_at,
+          (
+            SELECT review_status FROM reservation_driver_no_show_reports
+            WHERE reservation_id = reservations.id LIMIT 1
+          ) AS no_show_review_status,
           customer_first_name, customer_last_name,
           customer_email, customer_phone,
-          passenger_count, vehicle_label_customer, vehicle_label_tr,
+          passenger_count, luggage_count, baby_seat_count,
+          vehicle_label_customer, vehicle_label_tr,
           total_price::text AS total_price, currency, payment_method, payment_provider,
           payment_status, refund_status, meet_and_greet,
           price_manually_overridden, manual_price_totals,
@@ -466,6 +569,7 @@ export async function listReservations(input: {
           accepted_partner_id,
           assigned_driver_kind, assigned_driver_id, assigned_driver_snapshot,
           assigned_vehicle_kind, assigned_vehicle_id, assigned_vehicle_snapshot,
+          assignment_updated_at,
           (
             SELECT current_stage
             FROM reservation_driver_tasks
@@ -622,6 +726,7 @@ export async function getReservation(id: string): Promise<ReservationDetail | nu
         r.accepted_partner_id,
         r.assigned_driver_kind, r.assigned_driver_id, r.assigned_driver_snapshot,
         r.assigned_vehicle_kind, r.assigned_vehicle_id, r.assigned_vehicle_snapshot,
+        r.assignment_updated_at,
         accepted_partner.name AS accepted_partner_name,
         accepted_partner.partner_code AS accepted_partner_code,
         accepted_partner.is_primary_partner AS accepted_partner_is_primary,
@@ -646,11 +751,24 @@ export async function getReservation(id: string): Promise<ReservationDetail | nu
           FROM reservation_driver_tasks
           WHERE reservation_id = r.id
           LIMIT 1
-        ) AS driver_task_stage
+        ) AS driver_task_stage,
+        ft.scheduled_arrival AS flight_scheduled_arrival,
+        ft.estimated_arrival AS flight_estimated_arrival,
+        ft.actual_arrival AS flight_actual_arrival,
+        ft.status_text AS flight_status_text,
+        ft.status_id AS flight_status_id,
+        ft.source AS flight_source,
+        ft.last_checked_at AS flight_last_checked_at,
+        ft.last_success_at AS flight_last_success_at,
+        ft.last_error AS flight_last_error,
+        ns.reported_at AS no_show_reported_at,
+        ns.review_status AS no_show_review_status
      FROM reservations r
      LEFT JOIN partners accepted_partner ON accepted_partner.id = r.accepted_partner_id
      LEFT JOIN partner_drivers assigned_driver ON assigned_driver.id = r.assigned_driver_id
      LEFT JOIN partner_vehicles assigned_vehicle ON assigned_vehicle.id = r.assigned_vehicle_id
+     LEFT JOIN reservation_flight_tracking ft ON ft.reservation_id = r.id
+     LEFT JOIN reservation_driver_no_show_reports ns ON ns.reservation_id = r.id
      WHERE r.id = $1
        AND r.deleted_at IS NULL
      LIMIT 1`,
@@ -731,7 +849,9 @@ export async function getReservation(id: string): Promise<ReservationDetail | nu
       isPrimary: item.is_primary_passenger,
     })),
     driverTask: await getDriverTaskForOps(id),
+    noShowReport: await loadDriverNoShowReport(id).catch(() => null),
   };
+  scheduleFlightTrackingCheck(id);
   try {
     const lastSent = await loadLastSuccessfulAssignmentCustomerNotifications([id]);
     detail.lastAssignmentCustomerNotification = lastSent.get(id) ?? null;

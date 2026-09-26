@@ -7,12 +7,27 @@ import { query } from "@/lib/db/postgres";
 import {
   PARTNER_SESSION_COOKIE,
   PARTNER_SESSION_MAX_AGE_SECONDS,
+  PARTNER_SESSION_RENEW_WITHIN_SECONDS,
   type PartnerStatus,
   type PartnerUserRole,
 } from "@/lib/partner/constants";
 import { isPartnerAccountLoginEligible } from "@/lib/partner/policy";
+import {
+  nextPartnerSessionExpiry,
+  partnerSessionCookieOptions,
+  partnerSessionNeedsRenewal,
+} from "@/lib/partner/session-expiry";
 
-export { PARTNER_SESSION_COOKIE, PARTNER_SESSION_MAX_AGE_SECONDS };
+export {
+  PARTNER_SESSION_COOKIE,
+  PARTNER_SESSION_MAX_AGE_SECONDS,
+  PARTNER_SESSION_RENEW_WITHIN_SECONDS,
+};
+export {
+  nextPartnerSessionExpiry,
+  partnerSessionCookieOptions,
+  partnerSessionNeedsRenewal,
+} from "@/lib/partner/session-expiry";
 
 export type PartnerActor = {
   userId: string;
@@ -27,6 +42,7 @@ export type PartnerActor = {
 
 type SessionRow = {
   session_id: string;
+  expires_at: Date;
   user_id: string;
   email: string;
   role: string;
@@ -50,7 +66,7 @@ export function createPartnerSessionToken() {
 export async function createPartnerSession(userId: string) {
   const token = createPartnerSessionToken();
   const tokenHash = hashPartnerSessionToken(token);
-  const expiresAt = new Date(Date.now() + PARTNER_SESSION_MAX_AGE_SECONDS * 1000);
+  const expiresAt = nextPartnerSessionExpiry();
   await query(
     `INSERT INTO partner_sessions (user_id, token_hash, expires_at)
      VALUES ($1, $2, $3)`,
@@ -79,11 +95,7 @@ export async function writePartnerSessionCookie(token: string, expiresAt: Date) 
   jar.set({
     name: PARTNER_SESSION_COOKIE,
     value: token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: await cookieSecure(),
-    path: "/",
-    expires: expiresAt,
+    ...partnerSessionCookieOptions(expiresAt, await cookieSecure()),
   });
 }
 
@@ -100,6 +112,47 @@ export async function clearPartnerSessionCookie() {
   });
 }
 
+/**
+ * Atomically extend a still-valid session when remaining life is under the
+ * renew threshold. Expired rows are never revived (expires_at > NOW() required).
+ * Returns the new expiry when a renewal happened; otherwise null.
+ */
+export async function renewPartnerSessionIfNeeded(token: string): Promise<Date | null> {
+  const result = await query<{ expires_at: Date }>(
+    `UPDATE partner_sessions
+     SET expires_at = NOW() + ($2 * INTERVAL '1 second'),
+         last_seen_at = NOW()
+     WHERE token_hash = $1
+       AND expires_at > NOW()
+       AND expires_at < NOW() + ($3 * INTERVAL '1 second')
+     RETURNING expires_at`,
+    [
+      hashPartnerSessionToken(token),
+      PARTNER_SESSION_MAX_AGE_SECONDS,
+      PARTNER_SESSION_RENEW_WITHIN_SECONDS,
+    ],
+  );
+  return result.rows[0]?.expires_at ?? null;
+}
+
+async function touchPartnerSessionLastSeen(sessionId: string) {
+  await query(`UPDATE partner_sessions SET last_seen_at = NOW() WHERE id = $1`, [
+    sessionId,
+  ]);
+}
+
+/**
+ * When cookies() is mutable (Server Action / Route Handler), rewrite the
+ * browser expiry to match a DB renewal. RSC render contexts throw — ignore.
+ */
+async function tryWriteRenewedPartnerSessionCookie(token: string, expiresAt: Date) {
+  try {
+    await writePartnerSessionCookie(token, expiresAt);
+  } catch {
+    // Cookie rewrite must happen via proxy on page navigations.
+  }
+}
+
 export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
   const token = (await cookies()).get(PARTNER_SESSION_COOKIE)?.value;
   if (!token) {
@@ -108,6 +161,7 @@ export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
   const result = await query<SessionRow>(
     `SELECT
         s.id AS session_id,
+        s.expires_at,
         u.id AS user_id,
         u.email,
         u.role,
@@ -138,9 +192,18 @@ export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
   ) {
     return null;
   }
-  await query(`UPDATE partner_sessions SET last_seen_at = NOW() WHERE id = $1`, [
-    row.session_id,
-  ]);
+
+  if (partnerSessionNeedsRenewal(row.expires_at)) {
+    const renewedExpiresAt = await renewPartnerSessionIfNeeded(token);
+    if (renewedExpiresAt) {
+      await tryWriteRenewedPartnerSessionCookie(token, renewedExpiresAt);
+    } else {
+      await touchPartnerSessionLastSeen(row.session_id);
+    }
+  } else {
+    await touchPartnerSessionLastSeen(row.session_id);
+  }
+
   return {
     userId: row.user_id,
     partnerId: row.partner_id,

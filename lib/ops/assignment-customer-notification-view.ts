@@ -28,6 +28,7 @@ export type AssignmentNotifyUiKind =
 
 export type AssignmentCustomerNotificationSent = {
   id: string;
+  reservationId: string;
   sentAt: string;
   sentByUserId: string | null;
   scope: AssignmentNotifyScope;
@@ -87,6 +88,16 @@ export function isAssignmentNotifyScope(
   value: string,
 ): value is AssignmentNotifyScope {
   return (ASSIGNMENT_NOTIFY_SCOPES as readonly string[]).includes(value);
+}
+
+export function scopedAssignmentCustomerNotification(
+  lastSent: AssignmentCustomerNotificationSent | null,
+  reservationId: string,
+): AssignmentCustomerNotificationSent | null {
+  if (!lastSent || lastSent.reservationId !== reservationId) {
+    return null;
+  }
+  return lastSent;
 }
 
 export function assignmentVehicleDisplayName(vehicle: JobVehicleAssignmentView) {
@@ -253,6 +264,40 @@ function sameDriver(
   );
 }
 
+function toUtcMillis(value: string | Date | null | undefined) {
+  if (value == null || value === "") {
+    return null;
+  }
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const parsed = Date.parse(value);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+  const fallback = Date.parse(value.trim().replace(" ", "T"));
+  return Number.isFinite(fallback) ? fallback : null;
+}
+
+export function assignmentUnchangedSinceNotifySend(
+  assignmentUpdatedAt: string | Date | null | undefined,
+  sentAt: string | Date,
+) {
+  const updatedMs = toUtcMillis(assignmentUpdatedAt);
+  const sentMs = toUtcMillis(sentAt);
+  if (updatedMs == null || sentMs == null) {
+    return false;
+  }
+  return updatedMs <= sentMs;
+}
+
+export function assignmentNotifyDefaultIncludeDriver(
+  driver: JobDriverAssignmentView,
+) {
+  return isAssignmentDriverSendable(driver);
+}
+
 export function isAssignmentNotifyNoChange(
   last: AssignmentCustomerNotificationSent | null,
   outgoing: AssignmentNotifyOutgoing,
@@ -307,6 +352,7 @@ export function assignmentNotifyUiState(input: {
   vehicle: JobVehicleAssignmentView;
   driver: JobDriverAssignmentView;
   lastSent: AssignmentCustomerNotificationSent | null;
+  assignmentUpdatedAt?: string | Date | null;
   customerEmail: string | null;
   locked: boolean;
   canAssign: boolean;
@@ -350,6 +396,29 @@ export function assignmentNotifyUiState(input: {
       driverReady,
     };
   }
+  const lastSent = input.lastSent;
+  const vehicleOnlyOutgoing = buildAssignmentNotifyOutgoing({
+    vehicle: input.vehicle,
+    driver: input.driver,
+    scope: "vehicle_only",
+  });
+  const sameSentVehicle =
+    lastSent != null &&
+    !("error" in vehicleOnlyOutgoing) &&
+    isAssignmentNotifyNoChange(lastSent, vehicleOnlyOutgoing);
+  if (
+    lastSent?.scope === "vehicle_only" &&
+    sameSentVehicle &&
+    assignmentUnchangedSinceNotifySend(input.assignmentUpdatedAt, lastSent.sentAt)
+  ) {
+    return {
+      kind: "sent",
+      canOpen: false,
+      canSubmit: false,
+      vehicleReady,
+      driverReady,
+    };
+  }
   const hasChange = assignmentNotifyAllowedScopes(input).some((scope) => {
     const outgoing = buildAssignmentNotifyOutgoing({
       vehicle: input.vehicle,
@@ -359,7 +428,7 @@ export function assignmentNotifyUiState(input: {
     if ("error" in outgoing) {
       return false;
     }
-    return !isAssignmentNotifyNoChange(input.lastSent, outgoing);
+    return !isAssignmentNotifyNoChange(lastSent, outgoing);
   });
   if (!hasChange) {
     return {
@@ -381,6 +450,7 @@ export function assignmentNotifyUiState(input: {
 
 export function mapAssignmentCustomerNotificationRow(row: {
   id: string;
+  reservation_id: string;
   sent_at: Date | string;
   sent_by_ops_user_id: string | null;
   notification_scope: string;
@@ -396,6 +466,10 @@ export function mapAssignmentCustomerNotificationRow(row: {
   fingerprint?: string | null;
 }): AssignmentCustomerNotificationSent | null {
   if (!isAssignmentNotifyScope(row.notification_scope) || !isLocale(row.reservation_locale)) {
+    return null;
+  }
+  const reservationId = row.reservation_id.trim();
+  if (!reservationId) {
     return null;
   }
   const sentAt =
@@ -415,6 +489,7 @@ export function mapAssignmentCustomerNotificationRow(row: {
     });
   return {
     id: row.id,
+    reservationId,
     sentAt,
     sentByUserId: row.sent_by_ops_user_id,
     scope: row.notification_scope,

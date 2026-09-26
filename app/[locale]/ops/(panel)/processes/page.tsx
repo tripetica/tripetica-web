@@ -4,7 +4,7 @@ import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { parsePage, parseQuery } from "@/lib/ops/format";
 import { parseProcessListFilters, processQueryRecord } from "@/lib/ops/process-filters";
-import { listProcesses } from "@/lib/ops/processes";
+import { listProcessLanguageCodes, listProcesses } from "@/lib/ops/processes";
 import { actorCan } from "@/lib/ops/session";
 import { OpsPagination } from "@/components/ops/pagination";
 import { ProcessFilters } from "@/components/ops/process-filters";
@@ -33,16 +33,24 @@ export default async function OpsProcessesPage({
   });
   const page = parsePage(query.page);
   const copy = opsCopy[asPanelLocale(locale)];
-  const { items, total, pageSize } = await listProcesses({
-    ...filters,
-    page,
-  });
+  const [{ items, total, pageSize }, languageCodes] = await Promise.all([
+    listProcesses({
+      ...filters,
+      page,
+    }),
+    listProcessLanguageCodes(),
+  ]);
   const canDelete = actorCan(actor, "processes.delete");
 
   return (
     <section className="ops-page">
       <h1>{copy.processes}</h1>
-      <ProcessFilters locale={locale} copy={copy} filters={filters} />
+      <ProcessFilters
+        locale={locale}
+        copy={copy}
+        filters={filters}
+        languageCodes={languageCodes}
+      />
       <ProcessTable
         locale={locale}
         copy={copy}

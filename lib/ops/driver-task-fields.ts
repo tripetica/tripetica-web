@@ -12,6 +12,7 @@ import {
   type DriverTaskProgressStage,
   type DriverTaskStage,
 } from "@/lib/ops/driver-task-stages";
+import { type FlightTrackingTone } from "@/lib/ops/flight-tracking";
 
 export type DriverTaskEventView = {
   stage: DriverTaskProgressStage;
@@ -66,6 +67,17 @@ export type DriverTaskPublicView = {
   contact: DriverTaskContactView | null;
   price: DriverTaskPriceView | null;
   passengers: DriverTaskPassengerView[];
+  flightStatus: {
+    arrowLabel: string;
+    tone: FlightTrackingTone;
+    flightCode: string | null;
+  } | null;
+  noShow: {
+    canReport: boolean;
+    reported: boolean;
+    airportPickup: boolean;
+  } | null;
+  closedOutcome: "no_show" | "service_failed" | null;
 };
 
 export type DriverTaskPublicResult =

@@ -25,10 +25,13 @@ import {
 } from "@/lib/ops/assignment-customer-notification-core";
 import {
   assignmentNotifyChangeKind,
+  assignmentNotifyDefaultIncludeDriver,
   assignmentNotifyUiState,
+  assignmentUnchangedSinceNotifySend,
   buildAssignmentNotifyOutgoing,
   isAssignmentNotifyNoChange,
   mapAssignmentCustomerNotificationRow,
+  scopedAssignmentCustomerNotification,
   type AssignmentCustomerNotificationSent,
   type AssignmentNotifyOutgoing,
 } from "@/lib/ops/assignment-customer-notification-view";
@@ -90,6 +93,7 @@ function sentFromOutgoing(
 ): AssignmentCustomerNotificationSent {
   return {
     id: extras.id ?? "sent-1",
+    reservationId: extras.reservationId ?? RESERVATION,
     sentAt: extras.sentAt ?? new Date().toISOString(),
     sentByUserId: extras.sentByUserId ?? ACTOR,
     scope: outgoing.scope,
@@ -191,6 +195,7 @@ function createMemory(row: AssignmentNotifyReservationRow) {
           id: input.id,
           sentByUserId: input.sentByUserId,
           locale: input.locale as AssignmentCustomerNotificationSent["locale"],
+          reservationId: input.reservationId,
         });
       }
     },
@@ -331,6 +336,7 @@ test("UI needs vehicle, then allows vehicle_only or both, and blocks no-change",
 
 test("previously vehicle_only becomes resend when driver is later assigned", () => {
   const vehicle = vehicleView();
+  const sentAt = "2026-09-16T23:10:56.255Z";
   const vehicleOnly = buildAssignmentNotifyOutgoing({
     vehicle,
     driver: emptyDriverAssignment(),
@@ -340,7 +346,8 @@ test("previously vehicle_only becomes resend when driver is later assigned", () 
   const afterDriver = assignmentNotifyUiState({
     vehicle,
     driver: driverView(),
-    lastSent: sentFromOutgoing(vehicleOnly),
+    lastSent: sentFromOutgoing(vehicleOnly, { sentAt }),
+    assignmentUpdatedAt: "2026-09-16T23:12:00.000Z",
     customerEmail: "guest@example.com",
     locked: false,
     canAssign: true,
@@ -353,6 +360,156 @@ test("previously vehicle_only becomes resend when driver is later assigned", () 
   });
   assert.ok(!("error" in sameVehicleOnly));
   assert.equal(isAssignmentNotifyNoChange(sentFromOutgoing(vehicleOnly), sameVehicleOnly), true);
+});
+
+test("vehicle_only send with already-assigned NON-TRP driver stays sent when assignment is unchanged", () => {
+  const vehicle = resolveVehicleAssignment({
+    kind: "non_trp",
+    vehicleId: null,
+    snapshot: { plate: "07 NON 12", brandModel: "Mercedes Vito" },
+    live: null,
+  });
+  const driver = resolveDriverAssignment({
+    kind: "non_trp",
+    driverId: null,
+    snapshot: {
+      firstName: "Ahmet",
+      lastName: "Kaya",
+      phone: "+905559998877",
+      phoneCountryCode: "TR",
+      languageCodes: ["tr"],
+    },
+    live: null,
+  });
+  const outgoing = buildAssignmentNotifyOutgoing({
+    vehicle,
+    driver,
+    scope: "vehicle_only",
+  });
+  assert.ok(!("error" in outgoing));
+  const ui = assignmentNotifyUiState({
+    vehicle,
+    driver,
+    lastSent: sentFromOutgoing(outgoing, { sentAt: "2026-09-16T23:10:56.255Z" }),
+    assignmentUpdatedAt: "2026-09-16T23:10:29.545Z",
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  });
+  assert.equal(ui.kind, "sent");
+  assert.equal(opsCopy.tr.passengerNotifySent, "Gönderildi");
+});
+
+test("vehicle_only send with already-assigned registered driver stays sent when assignment is unchanged", () => {
+  const vehicle = vehicleView();
+  const driver = driverView();
+  const outgoing = buildAssignmentNotifyOutgoing({
+    vehicle,
+    driver,
+    scope: "vehicle_only",
+  });
+  assert.ok(!("error" in outgoing));
+  const ui = assignmentNotifyUiState({
+    vehicle,
+    driver,
+    lastSent: sentFromOutgoing(outgoing, { sentAt: "2026-09-16T23:10:56.255Z" }),
+    assignmentUpdatedAt: "2026-09-16T23:10:29.545Z",
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  });
+  assert.equal(ui.kind, "sent");
+});
+
+test("vehicle_only send without driver becomes resend after a later driver assignment", () => {
+  const vehicle = vehicleView();
+  const vehicleOnly = buildAssignmentNotifyOutgoing({
+    vehicle,
+    driver: emptyDriverAssignment(),
+    scope: "vehicle_only",
+  });
+  assert.ok(!("error" in vehicleOnly));
+  const ui = assignmentNotifyUiState({
+    vehicle,
+    driver: driverView(),
+    lastSent: sentFromOutgoing(vehicleOnly, { sentAt: "2026-09-16T23:10:56.255Z" }),
+    assignmentUpdatedAt: "2026-09-16T23:12:00.000Z",
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  });
+  assert.equal(ui.kind, "resend");
+  assert.match(opsCopy.tr.passengerNotifyResend, /Bilgiler değişti/);
+});
+
+test("vehicle_only send becomes resend when the vehicle later changes", () => {
+  const vehicle = vehicleView();
+  const vehicleOnly = buildAssignmentNotifyOutgoing({
+    vehicle,
+    driver: driverView(),
+    scope: "vehicle_only",
+  });
+  assert.ok(!("error" in vehicleOnly));
+  const ui = assignmentNotifyUiState({
+    vehicle: vehicleView({ vehicleId: VEHICLE_B, plate: "34 ABC 123", selection: VEHICLE_B }),
+    driver: driverView(),
+    lastSent: sentFromOutgoing(vehicleOnly, { sentAt: "2026-09-16T23:10:56.255Z" }),
+    assignmentUpdatedAt: "2026-09-16T23:12:00.000Z",
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  });
+  assert.equal(ui.kind, "resend");
+});
+
+test("vehicle_and_driver send stays sent when assignment is unchanged", () => {
+  const vehicle = vehicleView();
+  const driver = driverView();
+  const outgoing = buildAssignmentNotifyOutgoing({
+    vehicle,
+    driver,
+    scope: "vehicle_and_driver",
+  });
+  assert.ok(!("error" in outgoing));
+  const ui = assignmentNotifyUiState({
+    vehicle,
+    driver,
+    lastSent: sentFromOutgoing(outgoing, { sentAt: "2026-09-16T23:10:56.255Z" }),
+    assignmentUpdatedAt: "2026-09-16T23:10:29.545Z",
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  });
+  assert.equal(ui.kind, "sent");
+});
+
+test("includeDriver defaults to checked only when a sendable driver is already assigned", () => {
+  assert.equal(assignmentNotifyDefaultIncludeDriver(driverView()), true);
+  assert.equal(assignmentNotifyDefaultIncludeDriver(emptyDriverAssignment()), false);
+  const noDriver = assignmentNotifyUiState({
+    vehicle: vehicleView(),
+    driver: emptyDriverAssignment(),
+    lastSent: null,
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  });
+  assert.equal(noDriver.kind, "send");
+  assert.equal(noDriver.driverReady, false);
+  assert.equal(noDriver.canOpen, true);
+});
+
+test("assignment_updated_at comparison uses UTC instant equality across offsets", () => {
+  const sentAt = "2026-09-16T23:10:56.255Z";
+  assert.equal(
+    assignmentUnchangedSinceNotifySend("2026-09-17T02:10:29.545+03:00", sentAt),
+    true,
+  );
+  assert.equal(
+    assignmentUnchangedSinceNotifySend("2026-09-17T02:12:00.000+03:00", sentAt),
+    false,
+  );
+  assert.equal(assignmentUnchangedSinceNotifySend(null, sentAt), false);
 });
 
 test("partner-style assignment change flips Ops resend against last sent snapshot", () => {
@@ -377,6 +534,168 @@ test("partner-style assignment change flips Ops resend against last sent snapsho
     canAssign: true,
   });
   assert.equal(ui.kind, "resend");
+});
+
+test("assigning a different reservation does not flip a sent row to resend", () => {
+  const reservationA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const reservationB = RESERVATION;
+  const vehicleB = vehicleView();
+  const driverB = driverView();
+  const outgoingB = buildAssignmentNotifyOutgoing({
+    vehicle: vehicleB,
+    driver: driverB,
+    scope: "vehicle_and_driver",
+  });
+  assert.ok(!("error" in outgoingB));
+  const lastSentB = sentFromOutgoing(outgoingB, { reservationId: reservationB });
+  const base = {
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  } as const;
+
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleB,
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "sent",
+  );
+
+  const vehicleA = vehicleView({
+    vehicleId: VEHICLE_B,
+    plate: "34 ABC 123",
+    selection: VEHICLE_B,
+  });
+  const driverA = driverView({
+    driverId: DRIVER_B,
+    fullName: "Ali Yılmaz",
+    firstName: "Ali",
+    lastName: "Yılmaz",
+    phone: "+905559990011",
+    selection: DRIVER_B,
+  });
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleA,
+      driver: driverA,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationA),
+      ...base,
+    }).kind,
+    "send",
+  );
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleB,
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "sent",
+  );
+  assert.equal(lastSentB.reservationId, reservationB);
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleB,
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(
+        sentFromOutgoing(outgoingB, { reservationId: reservationA }),
+        reservationB,
+      ),
+      ...base,
+    }).kind,
+    "send",
+  );
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleView({
+        vehicleId: VEHICLE_B,
+        plate: "34 ABC 123",
+        selection: VEHICLE_B,
+      }),
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "resend",
+  );
+});
+
+test("NON TRP sent snapshot stays sent until that same reservation changes", () => {
+  const reservationB = RESERVATION;
+  const vehicleB = resolveVehicleAssignment({
+    kind: "non_trp",
+    vehicleId: null,
+    snapshot: { plate: "07 NON 12", brandModel: "Mercedes Vito" },
+    live: null,
+  });
+  const driverB = resolveDriverAssignment({
+    kind: "non_trp",
+    driverId: null,
+    snapshot: {
+      firstName: "Ahmet",
+      lastName: "Kaya",
+      phone: "+905559998877",
+      phoneCountryCode: "TR",
+      languageCodes: ["tr"],
+    },
+    live: null,
+  });
+  const outgoingB = buildAssignmentNotifyOutgoing({
+    vehicle: vehicleB,
+    driver: driverB,
+    scope: "vehicle_and_driver",
+  });
+  assert.ok(!("error" in outgoingB));
+  const lastSentB = sentFromOutgoing(outgoingB, { reservationId: reservationB });
+  const base = {
+    customerEmail: "guest@example.com",
+    locked: false,
+    canAssign: true,
+  } as const;
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleB,
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "sent",
+  );
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleView(),
+      driver: driverView(),
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "resend",
+  );
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: vehicleB,
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "sent",
+  );
+  assert.equal(
+    assignmentNotifyUiState({
+      vehicle: resolveVehicleAssignment({
+        kind: "non_trp",
+        vehicleId: null,
+        snapshot: { plate: "07 NEW 99", brandModel: "Mercedes Vito" },
+        live: null,
+      }),
+      driver: driverB,
+      lastSent: scopedAssignmentCustomerNotification(lastSentB, reservationB),
+      ...base,
+    }).kind,
+    "resend",
+  );
 });
 
 test("send uses reservation locale and current assignment, never client payload", async () => {
@@ -690,12 +1009,46 @@ test("send core ignores client names and reads assignment from the reservation r
 });
 
 test("ops action is the only send entry and requires reservations.manage", () => {
+  assert.match(
+    source("lib/ops/assignment-customer-notification.ts"),
+    /id, reservation_id, sent_at/,
+  );
+  assert.match(
+    source("components/ops/assignment-customer-notify-cell.tsx"),
+    /scopedAssignmentCustomerNotification\(lastSent, reservationId\)/,
+  );
+  assert.match(
+    source("components/ops/assignment-customer-notify-cell.tsx"),
+    /assignmentNotifyDefaultIncludeDriver/,
+  );
+  assert.match(
+    source("components/ops/assignment-customer-notify-cell.tsx"),
+    /assignmentUpdatedAt/,
+  );
+  assert.match(
+    source("components/ops/reservation-table.tsx"),
+    /assignmentUpdatedAt=\{item\.assignmentUpdatedAt\}/,
+  );
+  assert.match(source("lib/ops/reservations.ts"), /assignment_updated_at/);
+  assert.match(
+    source("lib/ops/assignment-customer-notification-view.ts"),
+    /last\.scope !== "vehicle_and_driver"/,
+  );
+  assert.match(
+    source("components/ops/assignment-customer-notify-cell.tsx"),
+    /useReservationAction/,
+  );
+  assert.doesNotMatch(
+    source("components/ops/assignment-customer-notify-cell.tsx"),
+    /useActionState/,
+  );
   const actions = source("lib/ops/assignment-customer-notification-actions.ts");
   assert.match(actions, /reservations\.manage/);
   assert.match(actions, /getOpsActor/);
   assert.match(actions, /includeDriver/);
   assert.match(actions, /vehicle_and_driver/);
   assert.match(actions, /vehicle_only/);
+  assert.match(actions, /reservationId/);
   assert.doesNotMatch(actions, /formData\.get\("email"\)/);
   assert.doesNotMatch(actions, /formData\.get\("locale"\).*customer/);
   assert.doesNotMatch(actions, /formData\.get\("plate"\)/);
@@ -740,6 +1093,7 @@ test("050 migration is append-only history for assignment customer mail", () => 
 test("last-sent mapping and snapshot fingerprint stay stable", () => {
   const mapped = mapAssignmentCustomerNotificationRow({
     id: "n1",
+    reservation_id: RESERVATION,
     sent_at: new Date("2026-09-14T12:00:00.000Z"),
     sent_by_ops_user_id: ACTOR,
     notification_scope: "vehicle_only",
@@ -754,6 +1108,7 @@ test("last-sent mapping and snapshot fingerprint stay stable", () => {
     driver_phone: null,
   });
   assert.ok(mapped);
+  assert.equal(mapped.reservationId, RESERVATION);
   assert.equal(mapped.locale, "ru");
   assert.equal(mapped.scope, "vehicle_only");
   const outgoing = buildAssignmentNotifyOutgoing({
@@ -768,6 +1123,29 @@ test("last-sent mapping and snapshot fingerprint stay stable", () => {
   });
   assert.ok(!("error" in outgoing));
   assert.equal(isAssignmentNotifyNoChange(mapped, outgoing), true);
+  assert.equal(scopedAssignmentCustomerNotification(mapped, RESERVATION)?.id, "n1");
+  assert.equal(scopedAssignmentCustomerNotification(mapped, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), null);
+  assert.equal(
+    mapAssignmentCustomerNotificationRow({
+      ...{
+        id: "n1",
+        reservation_id: "",
+        sent_at: new Date("2026-09-14T12:00:00.000Z"),
+        sent_by_ops_user_id: ACTOR,
+        notification_scope: "vehicle_only",
+        reservation_locale: "ru",
+        vehicle_kind: "non_trp",
+        vehicle_id: null,
+        vehicle_plate: "07 NON 12",
+        vehicle_name: "Mercedes Vito",
+        driver_kind: null,
+        driver_id: null,
+        driver_name: null,
+        driver_phone: null,
+      },
+    }),
+    null,
+  );
 });
 
 function transferSummarySource(

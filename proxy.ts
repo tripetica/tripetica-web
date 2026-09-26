@@ -3,6 +3,7 @@ import { DRIVER_PORTAL_SESSION_COOKIE } from "@/lib/driver-portal/constants";
 import { resolveLegacyDriverRedirect } from "@/lib/driver-routes";
 import { OPS_SESSION_COOKIE } from "@/lib/ops/constants";
 import { PARTNER_SESSION_COOKIE } from "@/lib/partner/constants";
+import { partnerSessionCookieOptions } from "@/lib/partner/session-expiry";
 import {
   isGoneLegacyLangRoot,
   LEGACY_LANG_GONE_STATUS,
@@ -18,7 +19,35 @@ function withPathnameHeader(request: NextRequest, name: string, pathname: string
   });
 }
 
-export function proxy(request: NextRequest) {
+function requestIsHttps(request: NextRequest) {
+  return (
+    process.env.NODE_ENV === "production" ||
+    request.headers.get("x-forwarded-proto") === "https"
+  );
+}
+
+async function maybeAttachRenewedPartnerSessionCookie(
+  request: NextRequest,
+  response: NextResponse,
+  token: string,
+) {
+  try {
+    const { renewPartnerSessionIfNeeded } = await import("@/lib/partner/session");
+    const expiresAt = await renewPartnerSessionIfNeeded(token);
+    if (!expiresAt) {
+      return;
+    }
+    response.cookies.set(
+      PARTNER_SESSION_COOKIE,
+      token,
+      partnerSessionCookieOptions(expiresAt, requestIsHttps(request)),
+    );
+  } catch {
+    // Auth still proceeds via getPartnerActor; miss one renew rather than fail the request.
+  }
+}
+
+export async function proxy(request: NextRequest) {
   if (isGoneLegacyLangRoot(request.nextUrl.pathname, request.nextUrl.searchParams)) {
     return new NextResponse(null, { status: LEGACY_LANG_GONE_STATUS });
   }
@@ -93,16 +122,23 @@ export function proxy(request: NextRequest) {
       rest === "login" ||
       rest === "login/" ||
       rest === "register" ||
-      rest === "register/";
-    const hasSession = Boolean(request.cookies.get(PARTNER_SESSION_COOKIE)?.value);
-    if (!isPublic && !hasSession) {
+      rest === "register/" ||
+      rest === "forgot-password" ||
+      rest === "forgot-password/";
+    const token = request.cookies.get(PARTNER_SESSION_COOKIE)?.value;
+    if (!isPublic && !token) {
       const url = request.nextUrl.clone();
       url.pathname = `/${locale}/partner/login`;
       url.search = "";
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
-    return withPathnameHeader(request, "x-partner-pathname", pathname);
+    const response = withPathnameHeader(request, "x-partner-pathname", pathname);
+    // Cookie Set-Cookie is not allowed during RSC render; renew here (nodejs proxy).
+    if (token && !isPublic) {
+      await maybeAttachRenewedPartnerSessionCookie(request, response, token);
+    }
+    return response;
   }
 
   return NextResponse.next();

@@ -2,14 +2,16 @@ import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { partnerStatusBadgeClass, partnerStatusLabel } from "@/lib/ops/partner-labels";
-import { partnerVehicleCapacityLabel, vehicleStatusBadgeClass } from "@/lib/partner/fleet-view";
 import { partnerVehicleClassLabel } from "@/lib/partner/vehicle-class";
 import { vehicleStatusLabel } from "@/lib/partner/vehicle-labels";
 import { type DriverNameSortDir } from "@/lib/partner/driver-list-view";
 import { formatPartnerDriverLanguages } from "@/lib/partner/driver-languages";
 import {
   formatPartnerFleetPhone,
+  formatUetdsCompanyListLabel,
   partnerVehicleBrandModel,
+  partnerVehicleCapacityLabel,
+  vehicleStatusBadgeClass,
   type PartnerDriverRecord,
   type PartnerVehicleRecord,
 } from "@/lib/partner/fleet-view";
@@ -63,6 +65,7 @@ export function PartnerFleetTable({
               </th>
               <th>{copy.phone}</th>
               <th>{copy.driverLanguages}</th>
+              <th>{copy.uetdsCompanyColumn}</th>
               <th>{copy.status}</th>
               <th>{copy.details}</th>
             </tr>
@@ -74,6 +77,7 @@ export function PartnerFleetTable({
                 <td>{driver.fullName}</td>
                 <td>{formatPartnerFleetPhone(driver.phone)}</td>
                 <td>{formatPartnerDriverLanguages(driver.languageCodes, locale)}</td>
+                <td>{formatUetdsCompanyListLabel(driver.uetdsCompany, copy.uetdsCompanyExternal)}</td>
                 <td>
                   <span className={`ops-status-badge ${partnerStatusBadgeClass(driver.status)}`}>
                     {partnerStatusLabel(driver.status, copy)}
@@ -110,6 +114,7 @@ export function PartnerFleetTable({
             <th>{copy.vehicleModelYear}</th>
             <th>{copy.vehicleClass}</th>
             <th>{copy.vehicleCapacity}</th>
+            <th>{copy.uetdsCompanyColumn}</th>
             <th>{copy.status}</th>
             <th>{copy.details}</th>
           </tr>
@@ -127,6 +132,7 @@ export function PartnerFleetTable({
                   : "—"}
               </td>
               <td>{partnerVehicleCapacityLabel(vehicle, copy)}</td>
+              <td>{formatUetdsCompanyListLabel(vehicle.uetdsCompany, copy.uetdsCompanyExternal)}</td>
               <td>
                 <span className={`ops-status-badge ${vehicleStatusBadgeClass(vehicle.status)}`}>
                   {vehicleStatusLabel(vehicle.status, copy)}

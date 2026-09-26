@@ -1,4 +1,7 @@
 import { parsePhoneNumberFromString } from "libphonenumber-js/min";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
+
+export type { UetdsCompanyRef };
 
 export type PartnerFleetStatus = "active" | "inactive";
 export type PartnerVehicleStatus =
@@ -21,6 +24,8 @@ export type PartnerDriverRecord = {
   status: PartnerFleetStatus;
   deletedAt: string | null;
   updatedAt: string;
+  uetdsCompanyId?: string | null;
+  uetdsCompany?: UetdsCompanyRef | null;
 };
 
 export type PartnerVehicleRecord = {
@@ -46,7 +51,29 @@ export type PartnerVehicleRecord = {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  uetdsCompanyId?: string | null;
+  uetdsCompany?: UetdsCompanyRef | null;
 };
+
+export function mapUetdsCompanyLink(
+  id: string | null | undefined,
+  shortName: string | null | undefined,
+): { uetdsCompanyId: string | null; uetdsCompany: UetdsCompanyRef | null } {
+  if (!id) {
+    return { uetdsCompanyId: null, uetdsCompany: null };
+  }
+  return {
+    uetdsCompanyId: id,
+    uetdsCompany: { id, shortName: shortName?.trim() || "" },
+  };
+}
+
+export function formatUetdsCompanyListLabel(
+  company: UetdsCompanyRef | null | undefined,
+  externalLabel: string,
+) {
+  return company?.shortName.trim() || externalLabel;
+}
 
 export function partnerDriverFullName(firstName: string, lastName: string) {
   return [firstName, lastName].map((part) => part.trim()).filter(Boolean).join(" ");

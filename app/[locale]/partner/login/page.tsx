@@ -34,6 +34,10 @@ export default async function PartnerLoginPage({
   const query = await searchParams;
   const nextRaw = Array.isArray(query.next) ? query.next[0] : query.next;
   const nextPath = safePartnerReturnPath(nextRaw, locale);
+  const emailRaw = Array.isArray(query.email) ? query.email[0] : query.email;
+  const initialEmail = emailRaw ? String(emailRaw).trim() : "";
+  const resetRaw = Array.isArray(query.reset) ? query.reset[0] : query.reset;
+  const resetSuccess = resetRaw === "1";
   const actor = await getPartnerActor();
   if (actor) {
     redirect(actor.mustChangePassword ? partnerHomePath(locale, actor) : (nextPath ?? partnerHomePath(locale, actor)));
@@ -48,7 +52,13 @@ export default async function PartnerLoginPage({
           <h1>{copy.panelName}</h1>
           <p className="ops-login-lead">{copy.loginLead}</p>
         </div>
-        <PartnerLoginForm locale={locale} copy={copy} nextPath={nextPath} />
+        <PartnerLoginForm
+          locale={locale}
+          copy={copy}
+          nextPath={nextPath}
+          initialEmail={initialEmail}
+          resetSuccess={resetSuccess}
+        />
         <OpsLanguageSwitcher
           locale={locale}
           pathWithoutLocale="/partner/login"

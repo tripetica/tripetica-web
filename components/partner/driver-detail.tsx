@@ -3,7 +3,9 @@
 import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
+import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
@@ -28,6 +30,7 @@ type PartnerDriverDetailProps = {
   locale: Locale;
   copy: PartnerCopy;
   driver: PartnerDriverRecord;
+  activeUetdsCompanies: readonly UetdsCompanyRef[];
 };
 
 type DriverDraft = {
@@ -37,9 +40,10 @@ type DriverDraft = {
   phoneCountry: string;
   phoneNational: string;
   languages: string[];
+  uetdsCompanyId: string;
 };
 
-type EditableField = "fullName" | "nationalId" | "email" | "phone" | "languages";
+type EditableField = "fullName" | "nationalId" | "email" | "phone" | "languages" | "uetdsCompany";
 
 const ERROR_COPY: Record<
   Exclude<PartnerDriverFormState["error"], null>,
@@ -54,6 +58,7 @@ const ERROR_COPY: Record<
   "duplicate-email": "duplicateDriverEmail",
   "not-found": "driverSaveFailed",
   "in-use": "driverSaveFailed",
+  "invalid-uetds-company": "invalidUetdsCompany",
   failed: "driverSaveFailed",
 };
 
@@ -66,6 +71,7 @@ function draftFromDriver(driver: PartnerDriverRecord): DriverDraft {
     phoneCountry: storedPhone.iso2 ?? PARTNER_DEFAULT_COUNTRY_CODE,
     phoneNational: storedPhone.national,
     languages: driver.languageCodes,
+    uetdsCompanyId: driver.uetdsCompanyId ?? "",
   };
 }
 
@@ -76,7 +82,8 @@ function draftsEqual(left: DriverDraft, right: DriverDraft) {
     left.email.trim().toLowerCase() === right.email.trim().toLowerCase() &&
     left.phoneCountry === right.phoneCountry &&
     left.phoneNational.replace(/\D/g, "") === right.phoneNational.replace(/\D/g, "") &&
-    left.languages.join(",") === right.languages.join(",")
+    left.languages.join(",") === right.languages.join(",") &&
+    left.uetdsCompanyId === right.uetdsCompanyId
   );
 }
 
@@ -126,7 +133,12 @@ function DetailRow({
   );
 }
 
-export function PartnerDriverDetail({ locale, copy, driver }: PartnerDriverDetailProps) {
+export function PartnerDriverDetail({
+  locale,
+  copy,
+  driver,
+  activeUetdsCompanies,
+}: PartnerDriverDetailProps) {
   const baseline = useMemo(() => draftFromDriver(driver), [driver]);
   const [draft, setDraft] = useState(baseline);
   const [editing, setEditing] = useState<Partial<Record<EditableField, boolean>>>({});
@@ -187,6 +199,7 @@ export function PartnerDriverDetail({ locale, copy, driver }: PartnerDriverDetai
         <input type="hidden" name="phoneCountryCode" value={draft.phoneCountry} />
         <input type="hidden" name="phoneNational" value={draft.phoneNational} />
         <input type="hidden" name="languages" value={draft.languages.join(",")} />
+        <input type="hidden" name="uetdsCompanyId" value={draft.uetdsCompanyId} />
 
         <DetailRow
           label={copy.driverFullName}
@@ -299,6 +312,41 @@ export function PartnerDriverDetail({ locale, copy, driver }: PartnerDriverDetai
           ) : (
             <p className="partner-billing-value">
               {formatPartnerDriverLanguagesFull(draft.languages, locale)}
+            </p>
+          )}
+        </DetailRow>
+
+        <DetailRow
+          label={copy.uetdsNotifyCompany}
+          editLabel={`${copy.editField}: ${copy.uetdsNotifyCompany}`}
+          editing={Boolean(editing.uetdsCompany)}
+          onEdit={() =>
+            setEditing((current) => ({ ...current, uetdsCompany: !current.uetdsCompany }))
+          }
+        >
+          {editing.uetdsCompany ? (
+            <UetdsCompanySelect
+              name=""
+              value={draft.uetdsCompanyId}
+              activeCompanies={activeUetdsCompanies}
+              currentCompany={driver.uetdsCompany ?? null}
+              fieldLabel={copy.uetdsNotifyCompany}
+              noneLabel={copy.uetdsNotifyNone}
+              searchPlaceholder={copy.uetdsCompanySearch}
+              emptyLabel={copy.uetdsCompanyEmpty}
+              hideLabel
+              onChange={(uetdsCompanyId) =>
+                setDraft((current) => ({ ...current, uetdsCompanyId }))
+              }
+            />
+          ) : (
+            <p className="partner-billing-value">
+              {driver.uetdsCompany?.shortName && draft.uetdsCompanyId === driver.uetdsCompanyId
+                ? driver.uetdsCompany.shortName
+                : draft.uetdsCompanyId
+                  ? activeUetdsCompanies.find((company) => company.id === draft.uetdsCompanyId)
+                      ?.shortName || copy.uetdsNotifyNone
+                  : copy.uetdsNotifyNone}
             </p>
           )}
         </DetailRow>

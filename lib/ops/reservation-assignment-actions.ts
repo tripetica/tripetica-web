@@ -17,6 +17,7 @@ import {
 export type OpsAssignmentFormState = {
   error: OpsAssignmentError | null;
   ok: boolean;
+  reservationId: string;
 };
 
 function localeFromForm(formData: FormData): Locale {
@@ -59,25 +60,25 @@ export async function opsAssignReservationPartnerAction(
   _prev: OpsAssignmentFormState,
   formData: FormData,
 ): Promise<OpsAssignmentFormState> {
-  const auth = await requireOpsAssign();
-  if (!auth.ok) {
-    return { error: auth.error, ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const auth = await requireOpsAssign();
+  if (!auth.ok) {
+    return { error: auth.error, ok: false, reservationId };
+  }
   const partnerId = String(formData.get("partnerId") ?? "");
   try {
     const result = await assignOpsReservationPartner({ reservationId, partnerId });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshAssignment(locale, reservationId, [
       result.previousPartnerId ?? "",
       result.partnerId,
     ]);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }
 
@@ -85,22 +86,22 @@ export async function opsClearReservationPartnerAction(
   _prev: OpsAssignmentFormState,
   formData: FormData,
 ): Promise<OpsAssignmentFormState> {
-  const auth = await requireOpsAssign();
-  if (!auth.ok) {
-    return { error: auth.error, ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const auth = await requireOpsAssign();
+  if (!auth.ok) {
+    return { error: auth.error, ok: false, reservationId };
+  }
   const previousPartnerId = String(formData.get("partnerId") ?? "");
   try {
     const result = await clearOpsReservationPartner({ reservationId });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshAssignment(locale, reservationId, [previousPartnerId]);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }
 
@@ -108,12 +109,12 @@ export async function opsAssignReservationDriverAction(
   _prev: OpsAssignmentFormState,
   formData: FormData,
 ): Promise<OpsAssignmentFormState> {
-  const auth = await requireOpsAssign();
-  if (!auth.ok) {
-    return { error: auth.error, ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const auth = await requireOpsAssign();
+  if (!auth.ok) {
+    return { error: auth.error, ok: false, reservationId };
+  }
   const partnerId = String(formData.get("partnerId") ?? "");
   try {
     const result = await assignOpsReservationDriver({
@@ -128,12 +129,12 @@ export async function opsAssignReservationDriverAction(
       notes: String(formData.get("notes") ?? ""),
     });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshAssignment(locale, reservationId, [partnerId]);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }
 
@@ -141,12 +142,12 @@ export async function opsAssignReservationVehicleAction(
   _prev: OpsAssignmentFormState,
   formData: FormData,
 ): Promise<OpsAssignmentFormState> {
-  const auth = await requireOpsAssign();
-  if (!auth.ok) {
-    return { error: auth.error, ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const auth = await requireOpsAssign();
+  if (!auth.ok) {
+    return { error: auth.error, ok: false, reservationId };
+  }
   const partnerId = String(formData.get("partnerId") ?? "");
   try {
     const result = await assignOpsReservationVehicle({
@@ -157,12 +158,12 @@ export async function opsAssignReservationVehicleAction(
       features: String(formData.get("features") ?? ""),
     });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshAssignment(locale, reservationId, [partnerId]);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }
 
@@ -170,22 +171,22 @@ export async function opsClearReservationDriverAction(
   _prev: OpsAssignmentFormState,
   formData: FormData,
 ): Promise<OpsAssignmentFormState> {
-  const auth = await requireOpsAssign();
-  if (!auth.ok) {
-    return { error: auth.error, ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const auth = await requireOpsAssign();
+  if (!auth.ok) {
+    return { error: auth.error, ok: false, reservationId };
+  }
   const partnerId = String(formData.get("partnerId") ?? "");
   try {
     const result = await clearOpsReservationDriver({ reservationId });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshAssignment(locale, reservationId, [partnerId]);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }
 
@@ -193,21 +194,21 @@ export async function opsClearReservationVehicleAction(
   _prev: OpsAssignmentFormState,
   formData: FormData,
 ): Promise<OpsAssignmentFormState> {
-  const auth = await requireOpsAssign();
-  if (!auth.ok) {
-    return { error: auth.error, ok: false };
-  }
   const locale = localeFromForm(formData);
   const reservationId = String(formData.get("id") ?? "");
+  const auth = await requireOpsAssign();
+  if (!auth.ok) {
+    return { error: auth.error, ok: false, reservationId };
+  }
   const partnerId = String(formData.get("partnerId") ?? "");
   try {
     const result = await clearOpsReservationVehicle({ reservationId });
     if (!result.ok) {
-      return { error: result.error, ok: false };
+      return { error: result.error, ok: false, reservationId };
     }
     refreshAssignment(locale, reservationId, [partnerId]);
-    return { error: null, ok: true };
+    return { error: null, ok: true, reservationId };
   } catch {
-    return { error: "failed", ok: false };
+    return { error: "failed", ok: false, reservationId };
   }
 }

@@ -8,10 +8,18 @@ export type ReservationListItem = {
   pickupName: string | null;
   dropoffName: string | null;
   flightCode: string | null;
+  pickupAirportCode: string | null;
+  pickupLocationType: string | null;
+  pickupPlaceId: string | null;
+  flightTracking: import("@/lib/ops/flight-tracking").FlightTrackingSnapshot | null;
+  noShowReportedAt: string | null;
+  noShowReviewStatus: string | null;
   customerName: string;
   customerEmail: string | null;
   customerPhone: string | null;
   passengerCount: number | null;
+  luggageCount: number | null;
+  babySeatCount: number | null;
   vehicleLabel: string | null;
   totalPrice: string | null;
   currency: string | null;
@@ -32,5 +40,6 @@ export type ReservationListItem = {
   acceptedPartnerPriorityLevel: number | null;
   driverAssignment: import("@/lib/partner/job-assignment-view").JobDriverAssignmentView;
   vehicleAssignment: import("@/lib/partner/job-assignment-view").JobVehicleAssignmentView;
+  assignmentUpdatedAt: string | null;
   lastAssignmentCustomerNotification: import("@/lib/ops/assignment-customer-notification-view").AssignmentCustomerNotificationSent | null;
 };

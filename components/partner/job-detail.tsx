@@ -21,6 +21,9 @@ import {
   partnerJobTourName,
   partnerPassengerIdentityDisplay,
 } from "@/lib/partner/job-view";
+import { UetdsNotifyButton } from "@/components/uetds/uetds-notify-button";
+import { uetdsFormCopyFor } from "@/lib/uetds/copy";
+import { type UetdsEligibility } from "@/lib/uetds/eligibility";
 
 type PartnerJobDetailProps = {
   locale: Locale;
@@ -32,6 +35,7 @@ type PartnerJobDetailProps = {
   vehicles?: PartnerVehicleRecord[];
   driverTask?: import("@/lib/ops/driver-task-fields").DriverTaskOpsView | null;
   driverTaskCopy?: import("@/lib/ops/copy").OpsCopy;
+  uetdsNotify?: { href: string; eligibility: UetdsEligibility; label?: string } | null;
 };
 
 function present(value: string | null | undefined) {
@@ -80,6 +84,7 @@ export function PartnerJobDetail({
   vehicles = [],
   driverTask = null,
   driverTaskCopy,
+  uetdsNotify = null,
 }: PartnerJobDetailProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [state, action, pending] = useActionState<PartnerJobFormState, FormData>(
@@ -199,6 +204,17 @@ export function PartnerJobDetail({
           driverTask={driverTask}
           driverTaskCopy={driverTaskCopy}
         />
+      ) : null}
+
+      {job.accepted && uetdsNotify ? (
+        <div className="uetds-notify-section">
+          <UetdsNotifyButton
+            href={uetdsNotify.href}
+            eligibility={uetdsNotify.eligibility}
+            copy={uetdsFormCopyFor(locale)}
+            label={uetdsNotify.label}
+          />
+        </div>
       ) : null}
 
       <div className="partner-profile-actions partner-driver-status-actions">

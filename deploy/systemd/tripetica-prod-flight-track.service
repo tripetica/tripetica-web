@@ -1,0 +1,45 @@
+[Unit]
+Description=Tripetica production DHMİ flight tracking poll
+After=network-online.target postgresql.service
+Wants=postgresql.service network-online.target
+ConditionPathExists=/srv/tripetica/current/scripts/poll-flight-tracking-prod.ts
+
+[Service]
+Type=oneshot
+User=tripetica-worker
+Group=tripetica-worker
+WorkingDirectory=/srv/tripetica/current
+ExecStartPre=/usr/local/lib/tripetica/assert-expected-database /srv/tripetica/current/.env.production.local
+ExecStart=/usr/bin/flock -n /var/lib/tripetica-worker/flight-track-poll.lock /usr/bin/npm run flight-track:poll:prod
+TimeoutStartSec=180
+Nice=10
+UMask=0077
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/var/lib/tripetica-worker
+Environment=npm_config_cache=/var/lib/tripetica-worker/npm-cache
+Environment=NODE_ENV=production
+Environment=EXPECTED_DATABASE=tripetica
+Environment=PG_POOL_MAX=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/tripetica-worker
+InaccessiblePaths=/root/tripetica-web
+BindReadOnlyPaths=/srv/tripetica/current/.env.production.local:/srv/tripetica/current/.env.local
+StandardOutput=journal
+StandardError=journal

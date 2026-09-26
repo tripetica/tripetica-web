@@ -2,7 +2,9 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import { foldDriverSearchText } from "@/lib/partner/driver-list-view";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import {
+  mapUetdsCompanyLink,
   type PartnerVehicleRecord,
   type PartnerVehicleStatus,
 } from "@/lib/partner/fleet-view";
@@ -22,6 +24,7 @@ export type OpsVehicleListItem = {
   partnerId: string;
   partnerName: string;
   partnerCode: string;
+  uetdsCompany: UetdsCompanyRef | null;
 };
 
 export type OpsVehicleRecord = PartnerVehicleRecord & {
@@ -42,6 +45,8 @@ type VehicleListRow = {
   status: PartnerVehicleStatus;
   partner_name: string;
   partner_code: string;
+  uetds_company_id: string | null;
+  uetds_company_short_name: string | null;
 };
 
 type VehicleDetailRow = VehicleListRow & {
@@ -121,10 +126,13 @@ export async function listOpsVehicles(input: {
         v.luggage_capacity,
         v.vehicle_class_code,
         v.status,
+        v.uetds_company_id,
+        uc.short_name AS uetds_company_short_name,
         p.name AS partner_name,
         p.partner_code
      FROM partner_vehicles v
      JOIN partners p ON p.id = v.partner_id
+     LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
      WHERE ${where}
      ORDER BY v.created_at DESC, v.id DESC
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -144,6 +152,8 @@ export async function listOpsVehicles(input: {
       partnerId: row.partner_id,
       partnerName: row.partner_name,
       partnerCode: row.partner_code,
+      uetdsCompany: mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name)
+        .uetdsCompany,
     })),
     total,
     page,
@@ -176,10 +186,13 @@ export async function getOpsVehicle(vehicleId: string): Promise<OpsVehicleRecord
         v.deleted_at,
         v.created_at,
         v.updated_at,
+        v.uetds_company_id,
+        uc.short_name AS uetds_company_short_name,
         p.name AS partner_name,
         p.partner_code
      FROM partner_vehicles v
      JOIN partners p ON p.id = v.partner_id
+     LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
      WHERE v.id = $1
        AND v.deleted_at IS NULL
        AND p.deleted_at IS NULL
@@ -215,5 +228,6 @@ export async function getOpsVehicle(vehicleId: string): Promise<OpsVehicleRecord
     updatedAt: row.updated_at.toISOString(),
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
+    ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
   };
 }

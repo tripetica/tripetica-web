@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
+import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
 import {
   activatePartnerDriver,
@@ -44,6 +45,7 @@ export type OpsFleetFormState = {
     | "needs-approval"
     | "invalid-fields"
     | "in-use"
+    | "invalid-uetds-company"
     | "failed"
     | null;
   ok: boolean;
@@ -102,6 +104,17 @@ export async function updateOpsPartnerDriverAction(
   }
   const { partnerId, recordId } = idsFromForm(formData);
   try {
+    const current = await getPartnerDriver(partnerId, recordId);
+    if (!current) {
+      return { error: "not-found", ok: false };
+    }
+    const resolved = await resolveUetdsCompanyIdFromForm(
+      formData,
+      current.uetdsCompanyId ?? null,
+    );
+    if (!resolved.ok) {
+      return { error: "invalid-uetds-company", ok: false };
+    }
     const result = await updatePartnerDriver({
       partnerId,
       driverId: recordId,
@@ -115,6 +128,7 @@ export async function updateOpsPartnerDriverAction(
         .map((item) => item.trim())
         .filter(Boolean),
       email: String(formData.get("email") ?? ""),
+      uetdsCompanyId: resolved.companyId,
     });
     if (!result.ok) {
       logFleetFailure("update-driver", result.error, { partnerId, recordId });
@@ -236,6 +250,17 @@ export async function updateOpsPartnerVehicleAction(
   }
   const { partnerId, recordId } = idsFromForm(formData);
   try {
+    const current = await getPartnerVehicle(partnerId, recordId);
+    if (!current) {
+      return { error: "not-found", ok: false };
+    }
+    const resolved = await resolveUetdsCompanyIdFromForm(
+      formData,
+      current.uetdsCompanyId ?? null,
+    );
+    if (!resolved.ok) {
+      return { error: "invalid-uetds-company", ok: false };
+    }
     const result = await updatePartnerVehicle({
       partnerId,
       vehicleId: recordId,
@@ -254,6 +279,7 @@ export async function updateOpsPartnerVehicleAction(
         .map((item) => item.trim())
         .filter(Boolean),
       featureOther: String(formData.get("featureOther") ?? ""),
+      uetdsCompanyId: resolved.companyId,
     });
     if (!result.ok) {
       logFleetFailure("update-vehicle", result.error, { partnerId, recordId });

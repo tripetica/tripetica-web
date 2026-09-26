@@ -43,7 +43,13 @@ test("ops process and reservation tables show a compact # column after the check
   assert.match(processPage, /pageSize=\{pageSize\}/);
   assert.match(reservationPage, /page=\{page\}/);
   assert.match(reservationPage, /pageSize=\{pageSize\}/);
-  assert.match(processTable, /copy\.kilometre/);
+  assert.match(reservationTable, /copy\.flightStatus/);
+  const flightHeader = reservationTable.indexOf("copy.flight}");
+  const flightStatusHeader = reservationTable.indexOf("copy.flightStatus");
+  const meetHeader = reservationTable.indexOf("copy.meetAndGreet");
+  assert.equal(flightHeader > 0, true);
+  assert.equal(flightStatusHeader > flightHeader, true);
+  assert.equal(meetHeader > flightStatusHeader, true);
   assert.match(processTable, /item\.flightCode/);
   assert.match(processTable, /item\.distanceKm/);
   assert.doesNotMatch(processTable, /from \"@\/lib\/ops\/process-list-display\"/);

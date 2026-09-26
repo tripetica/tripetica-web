@@ -25,6 +25,7 @@ import {
   buildPartnerEmailChangeCodeEmail,
   buildPartnerEmailChangedNotice,
   buildPartnerPasswordChangedNotice,
+  buildPartnerPasswordResetCodeEmail,
   buildPartnerRegisterCodeEmail,
 } from "@/lib/partner/verification-email";
 import { cookieSecure } from "@/lib/partner/session";
@@ -180,7 +181,9 @@ export async function issuePartnerEmailChallenge(input: {
   const mail =
     input.purpose === "register"
       ? buildPartnerRegisterCodeEmail(input.locale, code)
-      : buildPartnerEmailChangeCodeEmail(input.locale, code);
+      : input.purpose === "password_reset"
+        ? buildPartnerPasswordResetCodeEmail(input.locale, code)
+        : buildPartnerEmailChangeCodeEmail(input.locale, code);
   const sent = await sendPartnerMail({
     to: email,
     subject: mail.subject,

@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
@@ -9,6 +9,7 @@ import { LanguageMultiSelect } from "@/components/partner/language-multi-select"
 import { NonTrpAssignPanelHeader } from "@/components/partner/non-trp-assign-panel-header";
 import { SearchableSelect } from "@/components/partner/searchable-select";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
+import { useReservationAction } from "@/components/ops/use-reservation-action";
 import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import {
@@ -37,13 +38,17 @@ import {
 
 type CellMode = "closed" | "select" | "nontrp";
 
+const INITIAL_ASSIGNMENT_STATE: OpsAssignmentFormState = {
+  error: null,
+  ok: false,
+  reservationId: "",
+};
+
 function runAssignmentAction(
   dispatch: (payload: FormData) => void,
   payload: FormData,
 ) {
-  startTransition(() => {
-    dispatch(payload);
-  });
+  dispatch(payload);
 }
 
 function AssignChevron() {
@@ -127,13 +132,15 @@ function OpsPartnerAssignmentCell({
   const cellRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [state, action, pending] = useActionState<OpsAssignmentFormState, FormData>(
+  const [state, action, pending] = useReservationAction(
     opsAssignReservationPartnerAction,
-    { error: null, ok: false },
+    INITIAL_ASSIGNMENT_STATE,
+    reservationId,
   );
-  const [clearState, clearAction, clearing] = useActionState<OpsAssignmentFormState, FormData>(
+  const [clearState, clearAction, clearing] = useReservationAction(
     opsClearReservationPartnerAction,
-    { error: null, ok: false },
+    INITIAL_ASSIGNMENT_STATE,
+    reservationId,
   );
   const busy = pending || clearing;
   const options = useMemo(
@@ -150,13 +157,23 @@ function OpsPartnerAssignmentCell({
   useEffect(() => {
     setOpen(false);
     setConfirming(false);
-  }, [partnerId, partnerName]);
+  }, [reservationId, partnerId, partnerName]);
 
   useEffect(() => {
-    if (state.ok || clearState.ok) {
+    if (
+      (state.ok && state.reservationId === reservationId) ||
+      (clearState.ok && clearState.reservationId === reservationId)
+    ) {
       router.refresh();
     }
-  }, [clearState.ok, router, state.ok]);
+  }, [
+    clearState.ok,
+    clearState.reservationId,
+    reservationId,
+    router,
+    state.ok,
+    state.reservationId,
+  ]);
 
   function submitPartner(nextId: string) {
     if (!nextId || nextId === partnerId) {
@@ -311,13 +328,15 @@ function OpsDriverAssignmentCell({
   const [phoneNational, setPhoneNational] = useState(storedPhone.national);
   const [languages, setLanguages] = useState(driver.languageCodes);
   const [notes, setNotes] = useState(driver.notes ?? "");
-  const [state, action, pending] = useActionState<OpsAssignmentFormState, FormData>(
+  const [state, action, pending] = useReservationAction(
     opsAssignReservationDriverAction,
-    { error: null, ok: false },
+    INITIAL_ASSIGNMENT_STATE,
+    reservationId,
   );
-  const [clearState, clearAction, clearing] = useActionState<OpsAssignmentFormState, FormData>(
+  const [clearState, clearAction, clearing] = useReservationAction(
     opsClearReservationDriverAction,
-    { error: null, ok: false },
+    INITIAL_ASSIGNMENT_STATE,
+    reservationId,
   );
   const options = useMemo(
     () => buildDriverAssignmentOptions(drivers, locale, isPrimaryPartner, copy.assignmentNonTrp),
@@ -333,10 +352,32 @@ function OpsDriverAssignmentCell({
   }, [driver.kind, driver.selection, driver.fullName, driver.phone]);
 
   useEffect(() => {
-    if (state.ok || clearState.ok) {
+    const stored = fromStoredPhone(driver.phoneCountryCode, driver.phone);
+    setMode("closed");
+    setFullName(
+      joinPartnerContactName(driver.firstName, driver.lastName) || driver.fullName || "",
+    );
+    setPhoneCountry(stored.iso2 ?? PARTNER_DEFAULT_COUNTRY_CODE);
+    setPhoneNational(stored.national);
+    setLanguages(driver.languageCodes);
+    setNotes(driver.notes ?? "");
+  }, [reservationId]);
+
+  useEffect(() => {
+    if (
+      (state.ok && state.reservationId === reservationId) ||
+      (clearState.ok && clearState.reservationId === reservationId)
+    ) {
       router.refresh();
     }
-  }, [clearState.ok, router, state.ok]);
+  }, [
+    clearState.ok,
+    clearState.reservationId,
+    reservationId,
+    router,
+    state.ok,
+    state.reservationId,
+  ]);
 
   function togglePicker() {
     setMode((current) => (current === "closed" ? "select" : "closed"));
@@ -582,13 +623,15 @@ function OpsVehicleAssignmentCell({
     formatAssignmentVehicleName(vehicle.brand, vehicle.model),
   );
   const [features, setFeatures] = useState(vehicle.features ?? vehicle.notes ?? "");
-  const [state, action, pending] = useActionState<OpsAssignmentFormState, FormData>(
+  const [state, action, pending] = useReservationAction(
     opsAssignReservationVehicleAction,
-    { error: null, ok: false },
+    INITIAL_ASSIGNMENT_STATE,
+    reservationId,
   );
-  const [clearState, clearAction, clearing] = useActionState<OpsAssignmentFormState, FormData>(
+  const [clearState, clearAction, clearing] = useReservationAction(
     opsClearReservationVehicleAction,
-    { error: null, ok: false },
+    INITIAL_ASSIGNMENT_STATE,
+    reservationId,
   );
   const options = useMemo(
     () => buildVehicleAssignmentOptions(vehicles, locale, isPrimaryPartner, copy.assignmentNonTrp, true),
@@ -604,10 +647,27 @@ function OpsVehicleAssignmentCell({
   }, [vehicle.kind, vehicle.selection, vehicle.plate, vehicle.brand, vehicle.model]);
 
   useEffect(() => {
-    if (state.ok || clearState.ok) {
+    setMode("closed");
+    setPlate(vehicle.plate ?? "");
+    setBrandModel(formatAssignmentVehicleName(vehicle.brand, vehicle.model));
+    setFeatures(vehicle.features ?? vehicle.notes ?? "");
+  }, [reservationId]);
+
+  useEffect(() => {
+    if (
+      (state.ok && state.reservationId === reservationId) ||
+      (clearState.ok && clearState.reservationId === reservationId)
+    ) {
       router.refresh();
     }
-  }, [clearState.ok, router, state.ok]);
+  }, [
+    clearState.ok,
+    clearState.reservationId,
+    reservationId,
+    router,
+    state.ok,
+    state.reservationId,
+  ]);
 
   function togglePicker() {
     setMode((current) => (current === "closed" ? "select" : "closed"));

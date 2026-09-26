@@ -6,6 +6,11 @@ import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { loginPartnerUser, logoutPartnerUser } from "@/lib/partner/auth";
 import { changePartnerPassword } from "@/lib/partner/password-change";
+import {
+  completePartnerPasswordReset,
+  requestPartnerPasswordReset,
+  verifyPartnerPasswordResetCode,
+} from "@/lib/partner/password-reset";
 import { partnerContactNamesFromForm } from "@/lib/partner/contact-name";
 import {
   consumeVerifiedPartnerEmailChallenge,
@@ -74,6 +79,9 @@ export type PartnerEmailCodeState = {
     | "current-invalid"
     | "mismatch"
     | "same-email"
+    | "not-found"
+    | "pending"
+    | "inactive"
     | "failed"
     | null;
   ok: boolean;
@@ -388,4 +396,59 @@ export async function partnerVerifyEmailChangeAction(
   });
   revalidatePath(localizedPath(locale, "/partner/profile"));
   return { error: null, ok: true, verified: true };
+}
+
+export type PartnerPasswordResetCompleteState = {
+  error: "unverified" | "short" | "mismatch" | "same-as-old" | "failed" | null;
+  ok: boolean;
+};
+
+export async function partnerRequestPasswordResetAction(
+  _prev: PartnerEmailCodeState,
+  formData: FormData,
+): Promise<PartnerEmailCodeState> {
+  const locale = localeFromForm(formData);
+  const result = await requestPartnerPasswordReset({
+    email: String(formData.get("email") ?? ""),
+    locale,
+    ip: await requestClientIp(),
+  });
+  if (!result.ok) {
+    return { error: result.error, ok: false };
+  }
+  return { error: null, ok: true, sent: true };
+}
+
+export async function partnerVerifyPasswordResetCodeAction(
+  _prev: PartnerEmailCodeState,
+  formData: FormData,
+): Promise<PartnerEmailCodeState> {
+  const result = await verifyPartnerPasswordResetCode({
+    email: String(formData.get("email") ?? ""),
+    code: String(formData.get("code") ?? ""),
+  });
+  if (!result.ok) {
+    return { error: result.error, ok: false };
+  }
+  return { error: null, ok: true, verified: true };
+}
+
+export async function partnerCompletePasswordResetAction(
+  _prev: PartnerPasswordResetCompleteState,
+  formData: FormData,
+): Promise<PartnerPasswordResetCompleteState> {
+  const locale = localeFromForm(formData);
+  const email = normalizePartnerEmail(String(formData.get("email") ?? ""));
+  const result = await completePartnerPasswordReset({
+    email,
+    newPassword: String(formData.get("newPassword") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+    locale,
+  });
+  if (!result.ok) {
+    return { error: result.error, ok: false };
+  }
+  redirect(
+    `${localizedPath(locale, "/partner/login")}?email=${encodeURIComponent(result.email)}&reset=1`,
+  );
 }

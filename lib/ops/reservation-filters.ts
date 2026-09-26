@@ -35,6 +35,8 @@ export const RESERVATION_LIST_VIEWS = [
   "active",
   "completed",
   "cancelled",
+  "no_show",
+  "service_failed",
   "all",
 ] as const;
 export type ReservationListView = (typeof RESERVATION_LIST_VIEWS)[number];
@@ -120,12 +122,18 @@ export function reservationOperationWhereSql(
     return null;
   }
   if (normalized === "completed") {
-    return DRIVER_TASK_COMPLETED_EXISTS_SQL;
+    return `${DRIVER_TASK_COMPLETED_EXISTS_SQL} AND status NOT IN ('no_show', 'service_failed')`;
   }
   if (normalized === "cancelled") {
     return "status = 'cancelled'";
   }
-  return `NOT ${DRIVER_TASK_COMPLETED_EXISTS_SQL} AND status <> 'cancelled'`;
+  if (normalized === "no_show") {
+    return "status = 'no_show'";
+  }
+  if (normalized === "service_failed") {
+    return "status = 'service_failed'";
+  }
+  return `NOT ${DRIVER_TASK_COMPLETED_EXISTS_SQL} AND status NOT IN ('cancelled', 'no_show', 'service_failed')`;
 }
 
 export function pickupAtBounds(

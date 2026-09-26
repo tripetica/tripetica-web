@@ -7,7 +7,14 @@ import {
   istanbulDayStart,
   parseIsoDate,
   parseProcessDatePreset,
+  parseProcessLanguageCodes,
   parseProcessListFilters,
+  parseProcessLocaleFilter,
+  processLanguageDraftFromApplied,
+  processLanguageFilterOptions,
+  processLanguageLabel,
+  processPublicLanguageCodes,
+  normalizeProcessLanguageSelection,
   uniqueUuids,
 } from "@/lib/ops/process-filters";
 
@@ -92,6 +99,45 @@ test("combined filters keep search/status/locale/conversion with date", () => {
   assert.equal(filters.to, "");
 });
 
+test("language filter accepts multiple codes and ignores junk", () => {
+  assert.deepEqual(parseProcessLanguageCodes("en,ru"), ["en", "ru"]);
+  assert.deepEqual(parseProcessLanguageCodes("ru, en, ru"), ["en", "ru"]);
+  assert.equal(parseProcessLocaleFilter("EN,ru,not-a-lang,de"), "de,en,ru");
+  assert.equal(parseProcessListFilters({ locale: "en,ru" }).locale, "en,ru");
+  assert.equal(parseProcessListFilters({ locale: "" }).locale, "");
+  assert.equal(parseProcessListFilters({ locale: "zz" }).locale, "zz");
+});
+
+test("language options follow public site locales and omit inactive German", () => {
+  assert.deepEqual(processPublicLanguageCodes(), ["tr", "en", "ru", "ar"]);
+  assert.deepEqual(processLanguageFilterOptions([]), ["tr", "en", "ru", "ar"]);
+  assert.deepEqual(processLanguageFilterOptions(["fr", "tr", "de", "xx1"]), [
+    "tr",
+    "en",
+    "ru",
+    "ar",
+  ]);
+  assert.equal(processLanguageLabel("tr", "tr"), "Türkçe");
+  assert.equal(processLanguageLabel("en", "tr"), "İngilizce");
+  assert.equal(processLanguageLabel("ru", "tr"), "Rusça");
+  assert.equal(processLanguageLabel("ar", "tr"), "Arapça");
+});
+
+test("empty or complete language selection normalizes to all", () => {
+  const publicCodes = processPublicLanguageCodes();
+  assert.equal(normalizeProcessLanguageSelection([], publicCodes), "");
+  assert.equal(normalizeProcessLanguageSelection(publicCodes, publicCodes), "");
+  assert.equal(normalizeProcessLanguageSelection(["en", "ru"], publicCodes), "en,ru");
+  assert.deepEqual(
+    processLanguageDraftFromApplied([], publicCodes),
+    publicCodes,
+  );
+  assert.deepEqual(
+    processLanguageDraftFromApplied(["en", "ru"], publicCodes),
+    ["en", "ru"],
+  );
+});
+
 test("uuid list is parameterized-safe and de-duplicated", () => {
   const ids = uniqueUuids([
     "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -105,20 +151,46 @@ test("uuid list is parameterized-safe and de-duplicated", () => {
   ]);
 });
 
-test("process filter UI drops the language select but keeps query locale semantics", () => {
+test("process filter UI uses live search, language multi-select, and no Filtrele", () => {
   const filters = readFileSync(
     new URL("../../components/ops/process-filters.tsx", import.meta.url),
     "utf8",
   );
+  const logic = readFileSync(
+    new URL("../../lib/ops/process-filters.ts", import.meta.url),
+    "utf8",
+  );
+  const processes = readFileSync(
+    new URL("../../lib/ops/processes.ts", import.meta.url),
+    "utf8",
+  );
   assert.match(filters, /OpsRefreshButton/);
   assert.match(filters, /ops-process-filters/);
+  assert.match(filters, /PROCESS_SEARCH_DEBOUNCE_MS/);
   assert.match(filters, /name="status"/);
-  assert.match(filters, /name="conversion"/);
-  assert.doesNotMatch(filters, /name="locale"/);
+  assert.match(filters, /ops-filter-dropdown/);
+  assert.match(filters, /OpsFilterChevron/);
+  assert.match(filters, /onToggle/);
+  assert.match(filters, /ProcessLanguageFilter/);
+  assert.match(filters, /type="checkbox"/);
+  assert.match(filters, /copy\.all/);
+  assert.match(filters, /copy\.applyLanguageSelections/);
+  assert.match(filters, /processLanguageDraftFromApplied/);
+  assert.match(filters, /onApply/);
+  assert.match(filters, /copy\.clearFilters/);
   assert.match(
-    readFileSync(new URL("../../lib/ops/process-filters.ts", import.meta.url), "utf8"),
-    /parseProcessLocaleFilter/,
+    readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8"),
+    /\.ops-filter-chevron[\s\S]*right: 0\.55rem[\s\S]*background-image:[\s\S]*transform: rotate\(0deg\)[\s\S]*transition: transform 180ms ease[\s\S]*rotate\(180deg\)/,
   );
+  assert.doesNotMatch(filters, /name="conversion"/);
+  assert.doesNotMatch(filters, /copy\.filter/);
+  assert.doesNotMatch(filters, /Almanca|"de"/);
+  assert.match(logic, /PROCESS_SEARCH_DEBOUNCE_MS = 350/);
+  assert.match(logic, /parseProcessLanguageCodes/);
+  assert.match(logic, /from "@\/lib\/i18n\/config"/);
+  assert.match(logic, /normalizeProcessLanguageSelection/);
+  assert.match(processes, /LOWER\(s\.locale\) = ANY/);
+  assert.match(processes, /listProcessLanguageCodes/);
   assert.match(
     readFileSync(new URL("../../components/ops/language-switcher.tsx", import.meta.url), "utf8"),
     /localeCatalog/,

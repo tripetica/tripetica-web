@@ -5,6 +5,7 @@ import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { getOpsDriver } from "@/lib/ops/drivers";
+import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { actorCan } from "@/lib/ops/session";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,10 @@ export default async function OpsDriverDetailPage({
     notFound();
   }
   const actor = await requireOpsPage(locale, "partners.view");
-  const driver = await getOpsDriver(id);
+  const [driver, activeUetdsCompanies] = await Promise.all([
+    getOpsDriver(id),
+    listActiveUetdsCompanyOptions(),
+  ]);
   if (!driver) {
     notFound();
   }
@@ -27,6 +31,7 @@ export default async function OpsDriverDetailPage({
       locale={locale}
       copy={opsCopy[asPanelLocale(locale)]}
       driver={driver}
+      activeUetdsCompanies={activeUetdsCompanies}
       canManage={actorCan(actor, "partners.manage")}
       linkedPartner={{
         id: driver.partnerId,

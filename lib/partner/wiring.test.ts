@@ -22,6 +22,22 @@ test("partner session cookie is isolated from ops and customer auth", () => {
   assert.doesNotMatch(source("proxy.ts"), /OPS_SESSION_COOKIE.*partner/);
 });
 
+test("partner session uses 30-day sliding renewal, not 12-hour absolute", () => {
+  assert.match(
+    source("lib/partner/constants.ts"),
+    /PARTNER_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 24 \* 30/,
+  );
+  assert.match(
+    source("lib/partner/constants.ts"),
+    /PARTNER_SESSION_RENEW_WITHIN_SECONDS = 60 \* 60 \* 24 \* 7/,
+  );
+  assert.doesNotMatch(
+    source("lib/partner/constants.ts"),
+    /PARTNER_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 12/,
+  );
+  assert.match(source("lib/ops/constants.ts"), /OPS_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 12/);
+});
+
 test("primary partner is a database flag, not a hardcoded name check", () => {
   const auth = source("lib/partner/auth.ts");
   const session = source("lib/partner/session.ts");
@@ -210,6 +226,7 @@ test("email change updates login email only after verification consume", () => {
   );
   assert.match(emailChange, /notifyPreviousPartnerEmail/);
   assert.match(verify, /purpose === "register"/);
+  assert.match(verify, /buildPartnerPasswordResetCodeEmail/);
   assert.match(verify, /buildPartnerEmailChangeCodeEmail/);
   assert.doesNotMatch(verify, /UPDATE partners[\s\S]*status/);
 });

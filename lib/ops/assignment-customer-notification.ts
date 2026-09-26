@@ -18,6 +18,7 @@ export type {
 
 type LastSentRow = {
   id: string;
+  reservation_id: string;
   sent_at: Date;
   sent_by_ops_user_id: string | null;
   notification_scope: string;
@@ -35,7 +36,7 @@ type LastSentRow = {
 
 const LAST_SENT_SQL = `
   SELECT
-    id, sent_at, sent_by_ops_user_id, notification_scope, reservation_locale,
+    id, reservation_id, sent_at, sent_by_ops_user_id, notification_scope, reservation_locale,
     vehicle_kind, vehicle_id, vehicle_plate, vehicle_name,
     driver_kind, driver_id, driver_name, driver_phone, fingerprint
   FROM reservation_assignment_customer_notifications

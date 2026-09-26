@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { formatDurationHours } from "@/lib/booking/catalog";
 import { pickupAirportCode } from "@/lib/booking/meet-and-greet";
 import { reservationMailCopy } from "@/lib/mail/reservation-copy";
@@ -167,10 +169,30 @@ test("reservation mail contact section wraps each channel label and value in one
 
 test("IST asset public URLs encode filenames and keep original names", () => {
   process.env.APP_BASE_URL = "https://tripetica.com";
-  assert.ok(IST_MEET_PHOTO_FILENAME.includes("evet foto.png"));
+  assert.ok(IST_MEET_PHOTO_FILENAME.includes("evet foto.jpeg"));
   assert.ok(IST_MEET_VIDEO_FILENAME.includes("evet video.mp4"));
   assert.equal(
     publicAssetUrl(IST_MEET_PHOTO_FILENAME),
     `https://tripetica.com/${encodeURIComponent(IST_MEET_PHOTO_FILENAME)}`,
   );
+});
+
+test("IST meet-and-greet copy is SR25 in all locales and uses the new public assets", () => {
+  const locales = ["tr", "en", "ru", "ar"] as const;
+  for (const locale of locales) {
+    const copy = reservationMailCopy[locale];
+    assert.match(copy.meetingPointValue, /SR25/);
+    assert.match(copy.meetingInstructions, /SR25/);
+    assert.doesNotMatch(copy.meetingPointValue, /BYRIDES/);
+    assert.doesNotMatch(copy.meetingInstructions, /BYRIDES/);
+    assert.doesNotMatch(copy.sawMeetingPointValue, /SR25|BYRIDES/);
+    assert.doesNotMatch(copy.aytMeetingPointValue, /SR25|BYRIDES/);
+    assert.doesNotMatch(copy.noMeetPointValue, /SR25|BYRIDES/);
+    assert.match(copy.meetingInstructions, /13/);
+  }
+  const photoPath = join(process.cwd(), "public", IST_MEET_PHOTO_FILENAME);
+  const videoPath = join(process.cwd(), "public", IST_MEET_VIDEO_FILENAME);
+  assert.equal(existsSync(photoPath), true);
+  assert.equal(existsSync(videoPath), true);
+  assert.doesNotMatch(IST_MEET_PHOTO_FILENAME, /\.png$/);
 });

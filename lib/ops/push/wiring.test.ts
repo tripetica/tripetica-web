@@ -66,3 +66,13 @@ test("service worker handles push and notification click without a fetch cache",
   assert.match(sw, /payload.kind === "partner"/);
   assert.match(sw, /payload.kind === "partner-job"/);
 });
+
+test("driver no-show push reuses reservation kind without changing SW caching", () => {
+  assert.match(source("lib/ops/push/dedupe.ts"), /driver_no_show_reported/);
+  assert.match(
+    source("db/migrations/051_flight_tracking_and_no_show.sql"),
+    /driver_no_show_reported/,
+  );
+  assert.match(source("lib/ops/driver-task-actions.ts"), /notifyOpsDriverNoShowReported/);
+  assert.doesNotMatch(source("public/sw.js"), /addEventListener\("fetch"/);
+});

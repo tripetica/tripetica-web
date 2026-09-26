@@ -4,7 +4,9 @@ import { query } from "@/lib/db/postgres";
 import { type OpsDriverListFilters } from "@/lib/ops/driver-filters";
 import { foldDriverSearchText } from "@/lib/partner/driver-list-view";
 import { normalizePartnerDriverLanguageCodes } from "@/lib/partner/driver-languages";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import {
+  mapUetdsCompanyLink,
   partnerDriverFullName,
   type PartnerDriverRecord,
   type PartnerFleetStatus,
@@ -21,6 +23,7 @@ export type OpsDriverListItem = {
   partnerId: string;
   partnerName: string;
   partnerCode: string;
+  uetdsCompany: UetdsCompanyRef | null;
 };
 
 export type OpsDriverRecord = PartnerDriverRecord & {
@@ -38,6 +41,8 @@ type DriverListRow = {
   status: PartnerFleetStatus;
   partner_name: string;
   partner_code: string;
+  uetds_company_id: string | null;
+  uetds_company_short_name: string | null;
 };
 
 type DriverDetailRow = DriverListRow & {
@@ -62,6 +67,8 @@ function mapListItem(row: DriverListRow): OpsDriverListItem {
     partnerId: row.partner_id,
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
+    uetdsCompany: mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name)
+      .uetdsCompany,
   };
 }
 
@@ -132,10 +139,13 @@ export async function listOpsDrivers(input: {
         d.phone,
         d.languages,
         d.status,
+        d.uetds_company_id,
+        uc.short_name AS uetds_company_short_name,
         p.name AS partner_name,
         p.partner_code
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id
+     LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
      WHERE ${where}
      ORDER BY ${orderBy}
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -159,10 +169,13 @@ export async function getOpsDriver(driverId: string): Promise<OpsDriverRecord | 
         d.status,
         d.deleted_at,
         d.updated_at,
+        d.uetds_company_id,
+        uc.short_name AS uetds_company_short_name,
         p.name AS partner_name,
         p.partner_code
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id
+     LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
      WHERE d.id = $1
        AND d.deleted_at IS NULL
        AND p.deleted_at IS NULL
@@ -189,5 +202,6 @@ export async function getOpsDriver(driverId: string): Promise<OpsDriverRecord | 
     updatedAt: row.updated_at.toISOString(),
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
+    ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
   };
 }

@@ -5,6 +5,7 @@ import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { getOpsPartner } from "@/lib/ops/partners";
 import { actorCan } from "@/lib/ops/session";
+import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getPartnerDriver } from "@/lib/partner/fleet";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,10 @@ export default async function OpsPartnerDriverPage({
   if (!partner) {
     notFound();
   }
-  const driver = await getPartnerDriver(partner.id, driverId);
+  const [driver, activeUetdsCompanies] = await Promise.all([
+    getPartnerDriver(partner.id, driverId),
+    listActiveUetdsCompanyOptions(),
+  ]);
   if (!driver) {
     notFound();
   }
@@ -31,6 +35,7 @@ export default async function OpsPartnerDriverPage({
       locale={locale}
       copy={opsCopy[asPanelLocale(locale)]}
       driver={driver}
+      activeUetdsCompanies={activeUetdsCompanies}
       canManage={actorCan(actor, "partners.manage")}
       linkedPartner={{
         id: partner.id,

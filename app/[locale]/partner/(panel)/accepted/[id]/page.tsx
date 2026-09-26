@@ -8,6 +8,13 @@ import { getDriverTaskForPartner } from "@/lib/partner/driver-task";
 import { listAssignablePartnerDrivers, listAssignablePartnerVehicles } from "@/lib/partner/fleet";
 import { loadPartnerJobAssignment, emptyJobAssignment } from "@/lib/partner/job-assignment";
 import { getPartnerJob } from "@/lib/partner/jobs";
+import { localizedPath } from "@/lib/i18n/path";
+import { uetdsFormCopyFor } from "@/lib/uetds/copy";
+import { loadUetdsReservationContext } from "@/lib/uetds/reservation-context";
+import {
+  findActiveUetdsNotificationForReservation,
+  uetdsReservationNotifyPath,
+} from "@/lib/uetds/reservation-notification";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +38,7 @@ export default async function PartnerAcceptedJobDetailPage({
   if (!job || !job.accepted) {
     notFound();
   }
-  const [assignment, drivers, vehicles, driverTask] = await Promise.all([
+  const [assignment, drivers, vehicles, driverTask, uetdsContext, existingUetds] = await Promise.all([
     loadPartnerJobAssignment({
       reservationId: job.id,
       partnerId: actor.partnerId,
@@ -43,7 +50,13 @@ export default async function PartnerAcceptedJobDetailPage({
       reservationId: job.id,
       locale,
     }),
+    loadUetdsReservationContext(job.id),
+    findActiveUetdsNotificationForReservation({
+      reservationId: job.id,
+      partnerId: actor.partnerId,
+    }),
   ]);
+  const uetdsCopy = uetdsFormCopyFor(locale);
 
   return (
     <div className="ops-page partner-profile-page partner-job-detail-page">
@@ -57,6 +70,22 @@ export default async function PartnerAcceptedJobDetailPage({
         vehicles={vehicles}
         driverTask={driverTask}
         driverTaskCopy={opsCopy[asPanelLocale(locale)]}
+        uetdsNotify={
+          uetdsContext
+            ? {
+                href: localizedPath(
+                  locale,
+                  uetdsReservationNotifyPath({
+                    panel: "partner",
+                    reservationId: job.id,
+                    existingId: existingUetds?.id,
+                  }),
+                ),
+                eligibility: uetdsContext.eligibility,
+                label: existingUetds ? uetdsCopy.notifyEditAction : uetdsCopy.notifyAction,
+              }
+            : null
+        }
       />
     </div>
   );

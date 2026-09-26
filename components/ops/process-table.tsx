@@ -13,6 +13,7 @@ import { formatOpsAmountOrDash } from "@/lib/ops/money";
 import { type ProcessListFilters } from "@/lib/ops/process-filters";
 import { type ProcessListItem } from "@/lib/ops/process-types";
 import { serviceLabel } from "@/lib/ops/record-detail";
+import { OpsOccupancyCell } from "@/components/ops/occupancy-cell";
 import { RecordDetailModal } from "@/components/ops/record-detail-modal";
 
 type SelectionMode = "none" | "page" | "filtered";
@@ -286,7 +287,7 @@ export function ProcessTable({
               <th>{copy.durationHours}</th>
               <th>{copy.pickup}</th>
               <th>{copy.dropoff}</th>
-              <th>{copy.passengerLuggageBaby}</th>
+              <th className="ops-col-occupancy">{copy.passengerLuggageBaby}</th>
               <th>{copy.vehicleClass}</th>
               <th>{copy.flight}</th>
               <th>{copy.meetAndGreet}</th>
@@ -348,7 +349,14 @@ export function ProcessTable({
                   <td>{formatOpsDuration(item.durationHours, locale)}</td>
                   <td>{item.pickupName ?? "—"}</td>
                   <td>{item.dropoffName ?? "—"}</td>
-                  <td>{item.passengerLuggageBaby}</td>
+                  <td className="ops-col-occupancy">
+                    <OpsOccupancyCell
+                      copy={copy}
+                      passengerCount={item.passengerCount}
+                      luggageCount={item.luggageCount}
+                      babySeatCount={item.babySeatCount}
+                    />
+                  </td>
                   <td>{item.vehicleLabel ?? "—"}</td>
                   <td>{item.flightCode ?? "—"}</td>
                   <td>

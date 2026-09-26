@@ -31,6 +31,7 @@ import { partnerRegisterUiPhase } from "@/lib/partner/register-gate";
 type PartnerRegisterFormProps = {
   locale: Locale;
   copy: PartnerCopy;
+  initialEmail?: string;
 };
 
 const ERROR_COPY: Record<
@@ -70,6 +71,9 @@ const CODE_ERROR_COPY: Record<
   "current-invalid": "currentPasswordInvalid",
   mismatch: "emailConfirmMismatch",
   "same-email": "emailUnchanged",
+  "not-found": "passwordResetNotFound",
+  pending: "pendingLogin",
+  inactive: "inactiveLogin",
   failed: "verificationFailed",
 };
 
@@ -90,7 +94,11 @@ function errorsForCode(
   return { [field]: message };
 }
 
-export function PartnerRegisterForm({ locale, copy }: PartnerRegisterFormProps) {
+export function PartnerRegisterForm({
+  locale,
+  copy,
+  initialEmail = "",
+}: PartnerRegisterFormProps) {
   const [state, action, pending] = useActionState<PartnerRegisterState, FormData>(
     partnerRegisterAction,
     { error: null, ok: false },
@@ -106,7 +114,7 @@ export function PartnerRegisterForm({ locale, copy }: PartnerRegisterFormProps) 
   const [, startInvalidate] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const emailRef = useRef("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [verifiedEmail, setVerifiedEmail] = useState("");
   const [challengeEmail, setChallengeEmail] = useState("");

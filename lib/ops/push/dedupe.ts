@@ -6,7 +6,8 @@ export type OpsPushEventType =
   | "process_created"
   | "reservation_confirmed"
   | "partner_application_created"
-  | "partner_vehicle_approval_requested";
+  | "partner_vehicle_approval_requested"
+  | "driver_no_show_reported";
 
 export async function claimOpsPushEvent(
   eventType: OpsPushEventType,

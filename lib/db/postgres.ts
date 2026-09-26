@@ -16,11 +16,19 @@ function databaseUrl() {
   return url;
 }
 
+function poolMax() {
+  const raw = Number(process.env.PG_POOL_MAX);
+  if (Number.isInteger(raw) && raw > 0 && raw <= 10) {
+    return raw;
+  }
+  return 10;
+}
+
 export function getPool() {
   if (!globalForPg.tripeticaPgPool) {
     globalForPg.tripeticaPgPool = new Pool({
       connectionString: databaseUrl(),
-      max: 10,
+      max: poolMax(),
     });
   }
   return globalForPg.tripeticaPgPool;

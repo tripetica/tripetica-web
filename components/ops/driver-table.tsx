@@ -13,7 +13,7 @@ import {
   type DriverNameSortDir,
 } from "@/lib/partner/driver-list-view";
 import { formatPartnerDriverLanguages } from "@/lib/partner/driver-languages";
-import { formatPartnerFleetPhone } from "@/lib/partner/fleet-view";
+import { formatPartnerFleetPhone, formatUetdsCompanyListLabel } from "@/lib/partner/fleet-view";
 
 type OpsDriverTableProps = {
   locale: Locale;
@@ -116,6 +116,7 @@ export function OpsDriverTable({
                 </th>
                 <th>{copy.phone}</th>
                 <th>{copy.driverLanguages}</th>
+                <th>{copy.uetdsCompanyColumn}</th>
                 <th>{copy.status}</th>
                 <th>{copy.linkedPartner}</th>
                 <th>{copy.details}</th>
@@ -128,6 +129,7 @@ export function OpsDriverTable({
                   <td>{driver.fullName}</td>
                   <td>{formatPartnerFleetPhone(driver.phone)}</td>
                   <td>{formatPartnerDriverLanguages(driver.languageCodes, locale)}</td>
+                  <td>{formatUetdsCompanyListLabel(driver.uetdsCompany, copy.uetdsCompanyExternal)}</td>
                   <td>
                     <span className={`ops-status-badge ${partnerStatusBadgeClass(driver.status)}`}>
                       {partnerStatusLabel(driver.status, copy)}

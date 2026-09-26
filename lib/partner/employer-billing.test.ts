@@ -18,10 +18,10 @@ const EMAIL = "info@tripetica.com";
 const PHONE = "+90 533 205 82 19";
 const AUTHORIZED = "Recep YILDIRIM";
 
-test("partner menu uses the six requested section labels", () => {
+test("partner menu uses the requested section labels", () => {
   assert.deepEqual(
     PARTNER_NAV.map((item) => item.labelKey),
-    ["jobs", "accepted", "drivers", "vehicles", "profile", "employerBilling"],
+    ["jobs", "accepted", "drivers", "vehicles", "uetds", "profile", "employerBilling"],
   );
   assert.equal(partnerCopy.tr.jobs, "Açık İşler");
   assert.equal(partnerCopy.tr.accepted, "İşlerim");

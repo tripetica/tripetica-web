@@ -51,6 +51,10 @@ function operationChipLabel(copy: OpsCopy, view: ReservationListView) {
       return copy.operationCompleted;
     case "cancelled":
       return copy.operationCancelled;
+    case "no_show":
+      return copy.operationNoShow;
+    case "service_failed":
+      return copy.operationServiceFailed;
     case "all":
       return copy.operationAll;
   }

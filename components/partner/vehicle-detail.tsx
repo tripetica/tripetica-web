@@ -2,6 +2,8 @@
 
 import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
+import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { VehicleFields, type VehicleDraft } from "@/components/partner/vehicle-fields";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
@@ -32,6 +34,7 @@ type PartnerVehicleDetailProps = {
   locale: Locale;
   copy: PartnerCopy;
   vehicle: PartnerVehicleRecord;
+  activeUetdsCompanies: readonly UetdsCompanyRef[];
 };
 
 const ERROR_COPY: Record<
@@ -51,6 +54,7 @@ const ERROR_COPY: Record<
   "needs-approval": "vehicleNeedsApproval",
   "not-found": "vehicleSaveFailed",
   "in-use": "vehicleSaveFailed",
+  "invalid-uetds-company": "invalidUetdsCompany",
   failed: "vehicleSaveFailed",
 };
 
@@ -120,9 +124,16 @@ function DetailRow({
   );
 }
 
-export function PartnerVehicleDetail({ locale, copy, vehicle }: PartnerVehicleDetailProps) {
+export function PartnerVehicleDetail({
+  locale,
+  copy,
+  vehicle,
+  activeUetdsCompanies,
+}: PartnerVehicleDetailProps) {
   const baseline = useMemo(() => draftFromVehicle(vehicle), [vehicle]);
   const [draft, setDraft] = useState(baseline);
+  const [uetdsCompanyId, setUetdsCompanyId] = useState(vehicle.uetdsCompanyId ?? "");
+  const baselineUetdsCompanyId = vehicle.uetdsCompanyId ?? "";
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [saveState, saveAction, saving] = useActionState<PartnerVehicleFormState, FormData>(
@@ -147,7 +158,7 @@ export function PartnerVehicleDetail({ locale, copy, vehicle }: PartnerVehicleDe
     error: null,
     ok: false,
   });
-  const dirty = !draftsEqual(draft, baseline);
+  const dirty = !draftsEqual(draft, baseline) || uetdsCompanyId !== baselineUetdsCompanyId;
   const mode = partnerDriverDetailMode(editing, dirty);
   const listHref = localizedPath(locale, "/partner/vehicles");
   const fieldError =
@@ -158,6 +169,7 @@ export function PartnerVehicleDetail({ locale, copy, vehicle }: PartnerVehicleDe
 
   function discardEdits() {
     setDraft(baseline);
+    setUetdsCompanyId(baselineUetdsCompanyId);
     setEditing(false);
   }
 
@@ -175,6 +187,7 @@ export function PartnerVehicleDetail({ locale, copy, vehicle }: PartnerVehicleDe
       <form action={saveAction} className="partner-profile-form" noValidate>
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="id" value={vehicle.id} />
+        <input type="hidden" name="uetdsCompanyId" value={uetdsCompanyId} />
         {editing ? (
           <VehicleFields
             locale={locale}
@@ -184,6 +197,19 @@ export function PartnerVehicleDetail({ locale, copy, vehicle }: PartnerVehicleDe
               errorField && fieldError ? { [errorField]: fieldError } : undefined
             }
             onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+          />
+        ) : null}
+        {editing ? (
+          <UetdsCompanySelect
+            name=""
+            value={uetdsCompanyId}
+            activeCompanies={activeUetdsCompanies}
+            currentCompany={vehicle.uetdsCompany ?? null}
+            fieldLabel={copy.uetdsNotifyCompany}
+            noneLabel={copy.uetdsNotifyNone}
+            searchPlaceholder={copy.uetdsCompanySearch}
+            emptyLabel={copy.uetdsCompanyEmpty}
+            onChange={setUetdsCompanyId}
           />
         ) : (
           <>
@@ -262,6 +288,16 @@ export function PartnerVehicleDetail({ locale, copy, vehicle }: PartnerVehicleDe
             >
               <p className="partner-billing-value">
                 {formatVehicleFeatures(draft.featureCodes, draft.featureOther, copy)}
+              </p>
+            </DetailRow>
+            <DetailRow
+              label={copy.uetdsNotifyCompany}
+              editLabel={`${copy.editField}: ${copy.uetdsNotifyCompany}`}
+              editing={false}
+              onEdit={() => setEditing(true)}
+            >
+              <p className="partner-billing-value">
+                {vehicle.uetdsCompany?.shortName ?? copy.uetdsNotifyNone}
               </p>
             </DetailRow>
           </>

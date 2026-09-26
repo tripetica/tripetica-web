@@ -17,6 +17,7 @@ import {
   paymentLabel,
   processPdfFilename,
   reservationPdfFilename,
+  reservationStatusBadgeClass,
   reservationStatusLabel,
   reservationVoucherPdfFilename,
   serviceLabel,
@@ -48,6 +49,8 @@ test("status and stage labels stay readable without changing DB values", () => {
   assert.equal(reservationStatusLabel("payment_pending", copy), "Aktif");
   assert.equal(reservationStatusLabel("confirmed", copy), "Aktif");
   assert.equal(reservationStatusLabel("cancelled", copy), "İptal edildi");
+  assert.equal(reservationStatusLabel("no_show", copy), "No Show");
+  assert.equal(reservationStatusLabel("service_failed", copy), "Hizmet Gerçekleşmedi");
   assert.equal(paymentLabel("sbp", copy), "Online");
   assert.equal(genderLabel("female", copy), "Kadın");
   assert.equal(stageLabel("vehicle_selection", copy) !== "vehicle_selection", true);
@@ -193,6 +196,10 @@ test("reservation status labels use active/cancelled wording", () => {
   assert.equal(reservationStatusLabel("confirmed", copy), "Aktif");
   assert.equal(reservationStatusLabel("payment_pending", copy), "Aktif");
   assert.equal(reservationStatusLabel("cancelled", copy), "İptal edildi");
+  assert.equal(reservationStatusLabel("no_show", copy), "No Show");
+  assert.equal(reservationStatusLabel("service_failed", copy), "Hizmet Gerçekleşmedi");
+  assert.equal(reservationStatusBadgeClass("service_failed"), "is-service-failed");
+  assert.equal(reservationStatusBadgeClass("no_show"), "is-no-show");
   assert.equal(isReservationCancelled("cancelled"), true);
   assert.equal(isReservationCancelled("confirmed"), false);
   assert.equal(isReservationCancelled("payment_pending"), false);

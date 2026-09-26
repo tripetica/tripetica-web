@@ -192,11 +192,19 @@ test("process table shows vehicle class, occupancy triple, and meet and greet", 
   assert.match(table, /copy\.meetAndGreet/);
   assert.match(table, /copy\.flight/);
   assert.match(table, /copy\.kilometre/);
-  assert.match(table, /item\.passengerLuggageBaby/);
-  assert.match(table, /item\.flightCode/);
-  assert.match(table, /item\.distanceKm/);
+  assert.match(table, /OpsOccupancyCell/);
+  assert.match(table, /item\.passengerCount/);
+  assert.match(table, /item\.luggageCount/);
+  assert.match(table, /item\.babySeatCount/);
+  assert.doesNotMatch(table, /item\.passengerLuggageBaby/);
   assert.doesNotMatch(table, /from \"@\/lib\/ops\/process-list-display\"/);
   assert.doesNotMatch(table, /<th>\{copy\.passengerCount\}<\/th>/);
+  const cell = source("components/ops/occupancy-cell.tsx");
+  assert.match(cell, /formatOpsExactCount/);
+  assert.match(cell, /copy\.occupancyPassenger/);
+  assert.match(cell, /copy\.occupancyLuggage/);
+  assert.match(cell, /copy\.occupancyBaby/);
+  assert.doesNotMatch(cell, /\?\? 0/);
   const sql = source("lib/ops/processes.ts");
   assert.match(sql, /applied_vehicle_code/);
   assert.match(sql, /selected_vehicle_code/);
@@ -215,6 +223,10 @@ test("process table shows vehicle class, occupancy triple, and meet and greet", 
   assert.doesNotMatch(sql, /googleapis|computeDrivingRoute|computeSelectedRoute/);
   const reservationTable = source("components/ops/reservation-table.tsx");
   assert.doesNotMatch(reservationTable, /copy\.kilometre/);
+  assert.match(reservationTable, /OpsOccupancyCell/);
+  assert.match(reservationTable, /copy\.passengerLuggageBaby/);
+  assert.doesNotMatch(reservationTable, /<th>\{copy\.passengerCount\}<\/th>/);
+  assert.doesNotMatch(reservationTable, /item\.passengerCount \?\? "—"/);
   const header = table.slice(table.indexOf("<thead>"), table.indexOf("</thead>"));
   const checkbox = header.indexOf('type="checkbox"');
   const rowNum = header.indexOf("ops-row-num-col");
@@ -240,4 +252,39 @@ test("process table shows vehicle class, occupancy triple, and meet and greet", 
   assert.equal(meet < kilometre, true);
   assert.equal(kilometre < total, true);
   assert.equal(total < currency, true);
+});
+
+test("reservation list occupancy uses persisted passenger/luggage/baby_seat counts", () => {
+  const list = source("lib/ops/reservations.ts");
+  assert.match(list, /jobs\.luggage_count/);
+  assert.match(list, /jobs\.baby_seat_count/);
+  assert.match(list, /passenger_count, luggage_count, baby_seat_count/);
+  assert.match(list, /luggageCount: row\.luggage_count/);
+  assert.match(list, /babySeatCount: row\.baby_seat_count/);
+  const occupancySql = list.slice(
+    list.indexOf("jobs.passenger_count, jobs.luggage_count, jobs.baby_seat_count"),
+    list.indexOf("jobs.total_price"),
+  );
+  assert.doesNotMatch(occupancySql, /total_price|vehicle_total|amount/);
+  const types = source("lib/ops/reservation-types.ts");
+  assert.match(types, /luggageCount: number \| null/);
+  assert.match(types, /babySeatCount: number \| null/);
+  const detail = source("lib/ops/record-detail.ts");
+  assert.match(detail, /copy\.babySeat/);
+  assert.match(detail, /item\.babySeatCount/);
+  assert.match(detail, /item\.luggageCount/);
+  assert.match(source("lib/ops/copy.ts"), /occupancyPassenger: "Yolcu"/);
+  assert.match(source("lib/ops/copy.ts"), /occupancyLuggage: "Valiz"/);
+  assert.match(source("lib/ops/copy.ts"), /occupancyBaby: "Bebek"/);
+  const occupancyCss = source("app/globals.css");
+  const occupancyBlock = occupancyCss.slice(
+    occupancyCss.indexOf(".ops-occupancy {"),
+    occupancyCss.indexOf(".ops-table th {", occupancyCss.indexOf(".ops-occupancy {")),
+  );
+  assert.match(occupancyCss, /\.ops-occupancy/);
+  assert.match(occupancyBlock, /width: max-content/);
+  assert.doesNotMatch(occupancyBlock, /width:\s*1%/);
+  assert.doesNotMatch(occupancyBlock, /flex:\s*1|flex-grow|1fr|grid-template-columns/);
+  assert.doesNotMatch(occupancyCss, /\.ops-table th\.ops-col-occupancy[\s\S]{0,120}width:\s*1%/);
+  assert.match(source("lib/ops/reservation-filters.ts"), /status NOT IN \('cancelled', 'no_show', 'service_failed'\)/);
 });

@@ -3,6 +3,7 @@ import "server-only";
 import { getPool, query } from "@/lib/db/postgres";
 import {
   createdAtBounds,
+  parseProcessLanguageCodes,
   uniqueUuids,
   type ProcessListFilters,
 } from "@/lib/ops/process-filters";
@@ -249,9 +250,10 @@ function processWhere(filters: ProcessListFilters) {
     values.push(filters.status);
     clauses.push(`s.status = $${values.length}`);
   }
-  if (filters.locale) {
-    values.push(filters.locale);
-    clauses.push(`s.locale = $${values.length}`);
+  const locales = parseProcessLanguageCodes(filters.locale);
+  if (locales.length > 0) {
+    values.push(locales);
+    clauses.push(`LOWER(s.locale) = ANY($${values.length}::text[])`);
   }
   if (filters.conversion === "converted") {
     clauses.push("r.id IS NOT NULL");
@@ -269,6 +271,19 @@ function processWhere(filters: ProcessListFilters) {
     );
   }
   return { where: clauses.join(" AND "), values };
+}
+
+export async function listProcessLanguageCodes() {
+  const result = await query<{ locale: string }>(
+    `SELECT DISTINCT LOWER(BTRIM(locale)) AS locale
+     FROM reservation_searches
+     WHERE locale IS NOT NULL
+       AND BTRIM(locale) <> ''
+     ORDER BY 1`,
+  );
+  return result.rows
+    .map((row) => row.locale)
+    .filter((code) => parseProcessLanguageCodes(code).length === 1);
 }
 
 export async function listProcesses(

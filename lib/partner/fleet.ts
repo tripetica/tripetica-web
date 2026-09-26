@@ -10,6 +10,7 @@ import { isDriverNationalIdValid, normalizeDriverNationalId } from "@/lib/partne
 import { normalizePartnerDriverLanguageCodes } from "@/lib/partner/driver-languages";
 import {
   isPartnerFleetAssignable,
+  mapUetdsCompanyLink,
   partnerDriverFullName,
   type PartnerDriverRecord,
   type PartnerFleetStatus,
@@ -51,6 +52,8 @@ type DriverRow = {
   status: PartnerFleetStatus;
   deleted_at: Date | null;
   updated_at: Date;
+  uetds_company_id: string | null;
+  uetds_company_short_name: string | null;
 };
 
 type VehicleRow = {
@@ -76,6 +79,8 @@ type VehicleRow = {
   deleted_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  uetds_company_id: string | null;
+  uetds_company_short_name: string | null;
 };
 
 function mapDriver(row: DriverRow): PartnerDriverRecord {
@@ -93,6 +98,7 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
     status: row.status,
     deletedAt: row.deleted_at?.toISOString() ?? null,
     updatedAt: row.updated_at.toISOString(),
+    ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
   };
 }
 
@@ -120,19 +126,32 @@ function mapVehicle(row: VehicleRow): PartnerVehicleRecord {
     deletedAt: row.deleted_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
+    ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
   };
 }
 
 const DRIVER_SELECT = `
-  id, partner_id, first_name, last_name, national_id, phone, phone_country_code,
-  email, languages, status, deleted_at, updated_at
+  d.id, d.partner_id, d.first_name, d.last_name, d.national_id, d.phone, d.phone_country_code,
+  d.email, d.languages, d.status, d.deleted_at, d.updated_at, d.uetds_company_id,
+  uc.short_name AS uetds_company_short_name
 `;
 
 const VEHICLE_SELECT = `
-  id, partner_id, plate, brand_code, model_code, brand, model, model_year,
-  color_code, color_other, color, passenger_capacity, luggage_capacity,
-  vehicle_class_code, feature_codes, feature_other, features, status,
-  approved_at, deleted_at, created_at, updated_at
+  v.id, v.partner_id, v.plate, v.brand_code, v.model_code, v.brand, v.model, v.model_year,
+  v.color_code, v.color_other, v.color, v.passenger_capacity, v.luggage_capacity,
+  v.vehicle_class_code, v.feature_codes, v.feature_other, v.features, v.status,
+  v.approved_at, v.deleted_at, v.created_at, v.updated_at, v.uetds_company_id,
+  uc.short_name AS uetds_company_short_name
+`;
+
+const DRIVER_FROM = `
+  FROM partner_drivers d
+  LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
+`;
+
+const VEHICLE_FROM = `
+  FROM partner_vehicles v
+  LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
 `;
 
 export async function listPartnerDrivers(
@@ -140,10 +159,10 @@ export async function listPartnerDrivers(
 ): Promise<PartnerDriverRecord[]> {
   const result = await query<DriverRow>(
     `SELECT ${DRIVER_SELECT}
-     FROM partner_drivers
-     WHERE partner_id = $1
-       AND deleted_at IS NULL
-     ORDER BY last_name ASC, first_name ASC, created_at ASC`,
+     ${DRIVER_FROM}
+     WHERE d.partner_id = $1
+       AND d.deleted_at IS NULL
+     ORDER BY d.last_name ASC, d.first_name ASC, d.created_at ASC`,
     [partnerId],
   );
   return result.rows.map(mapDriver);
@@ -154,10 +173,10 @@ export async function listPartnerVehicles(
 ): Promise<PartnerVehicleRecord[]> {
   const result = await query<VehicleRow>(
     `SELECT ${VEHICLE_SELECT}
-     FROM partner_vehicles
-     WHERE partner_id = $1
-       AND deleted_at IS NULL
-     ORDER BY created_at DESC, id DESC`,
+     ${VEHICLE_FROM}
+     WHERE v.partner_id = $1
+       AND v.deleted_at IS NULL
+     ORDER BY v.created_at DESC, v.id DESC`,
     [partnerId],
   );
   return result.rows.map(mapVehicle);
@@ -181,10 +200,10 @@ export async function getPartnerDriver(
 ): Promise<PartnerDriverRecord | null> {
   const result = await query<DriverRow>(
     `SELECT ${DRIVER_SELECT}
-     FROM partner_drivers
-     WHERE id = $1
-       AND partner_id = $2
-       AND deleted_at IS NULL
+     ${DRIVER_FROM}
+     WHERE d.id = $1
+       AND d.partner_id = $2
+       AND d.deleted_at IS NULL
      LIMIT 1`,
     [driverId, partnerId],
   );
@@ -197,10 +216,10 @@ export async function getPartnerVehicle(
 ): Promise<PartnerVehicleRecord | null> {
   const result = await query<VehicleRow>(
     `SELECT ${VEHICLE_SELECT}
-     FROM partner_vehicles
-     WHERE id = $1
-       AND partner_id = $2
-       AND deleted_at IS NULL
+     ${VEHICLE_FROM}
+     WHERE v.id = $1
+       AND v.partner_id = $2
+       AND v.deleted_at IS NULL
      LIMIT 1`,
     [vehicleId, partnerId],
   );
@@ -331,6 +350,7 @@ export async function createPartnerDriver(input: {
   nationalId: string;
   languageCodes: readonly string[];
   email?: string;
+  uetdsCompanyId: string | null;
 }) {
   const parsed = parseDriverInput({
     fullName: input.fullName,
@@ -350,9 +370,10 @@ export async function createPartnerDriver(input: {
     const created = await query<{ id: string }>(
       `INSERT INTO partner_drivers (
           partner_id, first_name, last_name, national_id, phone, phone_country_code,
-          email, languages, status, last_edited_by_ops_user_id, last_edited_by_partner_user_id
+          email, languages, status, last_edited_by_ops_user_id, last_edited_by_partner_user_id,
+          uetds_company_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10, $11)
        RETURNING id`,
       [
         input.partnerId,
@@ -365,6 +386,7 @@ export async function createPartnerDriver(input: {
         parsed.value.languageCodes,
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
+        input.uetdsCompanyId,
       ],
     );
     const id = created.rows[0]?.id;
@@ -391,6 +413,7 @@ export async function updatePartnerDriver(input: {
   nationalId: string;
   languageCodes: readonly string[];
   email?: string;
+  uetdsCompanyId: string | null;
 }) {
   const current = await getPartnerDriver(input.partnerId, input.driverId);
   if (!current) {
@@ -421,8 +444,9 @@ export async function updatePartnerDriver(input: {
            phone_country_code = $7,
            email = $8,
            languages = $9,
-           last_edited_by_ops_user_id = COALESCE($10, last_edited_by_ops_user_id),
-           last_edited_by_partner_user_id = COALESCE($11, last_edited_by_partner_user_id)
+           uetds_company_id = $10,
+           last_edited_by_ops_user_id = COALESCE($11, last_edited_by_ops_user_id),
+           last_edited_by_partner_user_id = COALESCE($12, last_edited_by_partner_user_id)
        WHERE id = $1
          AND partner_id = $2
          AND deleted_at IS NULL`,
@@ -436,6 +460,7 @@ export async function updatePartnerDriver(input: {
         parsed.value.phoneCountryCode,
         nextEmail,
         parsed.value.languageCodes,
+        input.uetdsCompanyId,
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
       ],
@@ -483,6 +508,7 @@ export async function createPartnerVehicle(
   input: PartnerVehicleWriteInput & {
     partnerId: string;
     editor: PartnerFleetEditor;
+    uetdsCompanyId: string | null;
   },
 ) {
   const parsed = parsePartnerVehicleInput(input);
@@ -497,10 +523,10 @@ export async function createPartnerVehicle(
           partner_id, plate, brand_code, model_code, brand, model, model_year,
           color_code, color_other, color, passenger_capacity, luggage_capacity,
           vehicle_class_code, feature_codes, feature_other, features, status,
-          last_edited_by_ops_user_id, last_edited_by_partner_user_id
+          last_edited_by_ops_user_id, last_edited_by_partner_user_id, uetds_company_id
        )
        VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
        )
        RETURNING id`,
       [
@@ -523,6 +549,7 @@ export async function createPartnerVehicle(
         status,
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
+        input.uetdsCompanyId,
       ],
     );
     const id = created.rows[0]?.id;
@@ -543,6 +570,7 @@ export async function updatePartnerVehicle(
     partnerId: string;
     vehicleId: string;
     editor: PartnerFleetEditor;
+    uetdsCompanyId: string | null;
   },
 ) {
   const current = await getPartnerVehicle(input.partnerId, input.vehicleId);
@@ -585,7 +613,8 @@ export async function updatePartnerVehicle(
            approved_at = CASE WHEN $19 THEN NULL ELSE approved_at END,
            approved_by_ops_user_id = CASE WHEN $19 THEN NULL ELSE approved_by_ops_user_id END,
            last_edited_by_ops_user_id = COALESCE($20, last_edited_by_ops_user_id),
-           last_edited_by_partner_user_id = COALESCE($21, last_edited_by_partner_user_id)
+           last_edited_by_partner_user_id = COALESCE($21, last_edited_by_partner_user_id),
+           uetds_company_id = $22
        WHERE id = $1
          AND partner_id = $2
          AND deleted_at IS NULL`,
@@ -611,6 +640,7 @@ export async function updatePartnerVehicle(
         classChangedToApproval && input.editor.source === "partner",
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
+        input.uetdsCompanyId,
       ],
     );
     void updated;

@@ -78,6 +78,7 @@ test("ops assignment actions require reservations.manage and revalidate partner 
   assert.match(actions, /brandModel/);
   assert.match(actions, /NON TRP|non_trp|selection/);
   assert.match(actions, /revalidatePath\(localizedPath\(locale, "\/ops\/reservations"\)\)/);
+  assert.match(actions, /reservationId/);
   assert.doesNotMatch(actions, /redirect\(/);
   assert.doesNotMatch(actions, /router\.(push|replace)/);
 });
@@ -90,6 +91,20 @@ test("ops reservation assignment UI uses existing popover language", () => {
   assert.match(cells, /partner-job-assign-clear/);
   assert.match(cells, /assignmentRemovePartnerConfirm/);
   assert.match(cells, /OpsConfirmDialog/);
+  assert.doesNotMatch(cells, /createPortal/);
+
+  const confirmDialog = source("components/ops/ops-confirm-dialog.tsx");
+  assert.match(confirmDialog, /createPortal/);
+  assert.match(confirmDialog, /portal-root/);
+  assert.match(confirmDialog, /document\.body/);
+  assert.match(confirmDialog, /ops-detail-confirm-backdrop/);
+  assert.match(confirmDialog, /ops-detail-confirm-dialog/);
+  assert.match(
+    source("app/globals.css"),
+    /\.ops-detail-confirm-dialog h2\s*\{[^}]*color:\s*#475569/,
+  );
+  assert.match(confirmDialog, /confirmFormId/);
+  assert.match(confirmDialog, /onConfirm/);
   assert.match(cells, /locked \|\| !partnerId/);
   assert.match(cells, /buildDriverAssignmentOptions\(drivers, locale, isPrimaryPartner/);
   assert.match(cells, /buildVehicleAssignmentOptions\(vehicles, locale, isPrimaryPartner/);
@@ -101,7 +116,9 @@ test("ops reservation assignment UI uses existing popover language", () => {
   assert.match(cells, /copy\.vehicleFeatures/);
   assert.match(cells, /copy\.assignmentNote/);
   assert.match(cells, /mode === "nontrp"/);
-  assert.match(cells, /startTransition/);
+  assert.match(cells, /useReservationAction/);
+  assert.match(cells, /\[reservationId\]/);
+  assert.doesNotMatch(cells, /useActionState/);
   assert.match(cells, /runAssignmentAction\(action, fd\)/);
   assert.match(cells, /runAssignmentAction\(clearAction, fd\)/);
   assert.doesNotMatch(cells, /^\s+action\(fd\);/m);

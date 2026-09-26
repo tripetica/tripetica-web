@@ -15,10 +15,13 @@ import {
   type ReservationSortField,
 } from "@/lib/ops/reservation-filters";
 import { type ReservationListItem } from "@/lib/ops/reservation-types";
+import { flightStatusBadge, flightNumberKey, trackingPickupIsAirport } from "@/lib/ops/flight-tracking";
 import { reservationStatusLabel, reservationStatusBadgeClass, serviceLabel, paymentLabel, paymentProviderLabel, paymentStatusLabel, paymentStatusBadgeClass, refundStatusBadgeClass, refundStatusLabel } from "@/lib/ops/record-detail";
+import { isPendingNoShowReview, isReservationOpsFinalStatus } from "@/lib/ops/no-show";
 import { compactPaymentMovementLines } from "@/lib/ops/payment-history";
 import { OpsReservationAssignmentCells } from "@/components/ops/reservation-assignment-cells";
 import { OpsAssignmentCustomerNotifyCell } from "@/components/ops/assignment-customer-notify-cell";
+import { OpsOccupancyCell } from "@/components/ops/occupancy-cell";
 import { RecordDetailModal } from "@/components/ops/record-detail-modal";
 import { type OpsAssignmentFleet, type OpsAssignmentPartnerOption } from "@/lib/ops/reservation-assignment-view";
 
@@ -71,6 +74,25 @@ function SortHeader({
         )}
       </a>
     </th>
+  );
+}
+
+function FlightStatusCell({ item }: { item: ReservationListItem }) {
+  const trackable =
+    trackingPickupIsAirport({
+      airportCode: item.pickupAirportCode,
+      locationType: item.pickupLocationType,
+      placeId: item.pickupPlaceId,
+    }) && flightNumberKey(item.flightCode).length > 0;
+  const badge = flightStatusBadge({
+    trackable,
+    snapshot: item.flightTracking,
+  });
+  if (!badge) {
+    return "—";
+  }
+  return (
+    <span className={`ops-flight-status is-${badge.tone}`}>{badge.label}</span>
   );
 }
 
@@ -203,11 +225,12 @@ export function ReservationTable({
               <th>{copy.pickup}</th>
               <th>{copy.dropoff}</th>
               <th className="ops-col-flight">{copy.flight}</th>
+              <th className="ops-col-flight-status">{copy.flightStatus}</th>
               <th className="ops-col-meet">{copy.meetAndGreet}</th>
               <th>{copy.mainPassenger}</th>
               <th>{copy.phone}</th>
               <th>{copy.email}</th>
-              <th>{copy.passengerCount}</th>
+              <th className="ops-col-occupancy">{copy.passengerLuggageBaby}</th>
               <th>{copy.vehicle}</th>
               <th className="ops-col-assignment">{copy.assignmentPartner}</th>
               <th className="ops-col-assignment">{copy.assignmentDriver}</th>
@@ -249,7 +272,14 @@ export function ReservationTable({
                     {listRowNumber(page, pageSize, rowIndex)}
                   </td>
                   <td>{formatOpsDateTime(item.pickupAt, locale)}</td>
-                  <td>{item.reservationCode}</td>
+                  <td>
+                    <span className="ops-cell-stack">
+                      <span>{item.reservationCode}</span>
+                      {isPendingNoShowReview(item.noShowReviewStatus, item.status) ? (
+                        <span className="ops-no-show-badge">{copy.driverNoShowReviewBadge}</span>
+                      ) : null}
+                    </span>
+                  </td>
                   <td>{formatOpsDateTime(item.createdAt, locale)}</td>
                   <td>
                     <span className="ops-cell-stack">
@@ -265,6 +295,9 @@ export function ReservationTable({
                   <td>{item.pickupName ?? "—"}</td>
                   <td>{item.dropoffName ?? "—"}</td>
                   <td className="ops-col-flight">{item.flightCode || "—"}</td>
+                  <td className="ops-col-flight-status">
+                    <FlightStatusCell item={item} />
+                  </td>
                   <td className="ops-col-meet">
                     {item.meetAndGreet ? copy.yes : item.meetAndGreet === false ? copy.no : "—"}
                   </td>
@@ -279,7 +312,14 @@ export function ReservationTable({
                     )}
                   </td>
                   <td>{item.customerEmail ?? "—"}</td>
-                  <td>{item.passengerCount ?? "—"}</td>
+                  <td className="ops-col-occupancy">
+                    <OpsOccupancyCell
+                      copy={copy}
+                      passengerCount={item.passengerCount}
+                      luggageCount={item.luggageCount}
+                      babySeatCount={item.babySeatCount}
+                    />
+                  </td>
                   <td>{item.vehicleLabel ?? "—"}</td>
                   <OpsReservationAssignmentCells
                     locale={locale}
@@ -301,10 +341,19 @@ export function ReservationTable({
                       driver={item.driverAssignment}
                       vehicle={item.vehicleAssignment}
                       lastSent={item.lastAssignmentCustomerNotification}
+                      assignmentUpdatedAt={item.assignmentUpdatedAt}
                     />
                   </td>
                   <td className="ops-col-operation">
-                    {driverTaskStageLabel(item.driverTaskStage, copy)}
+                    {isReservationOpsFinalStatus(item.status) ? (
+                      <span
+                        className={`ops-status-badge ${reservationStatusBadgeClass(item.status)}`}
+                      >
+                        {reservationStatusLabel(item.status, copy)}
+                      </span>
+                    ) : (
+                      driverTaskStageLabel(item.driverTaskStage, copy)
+                    )}
                   </td>
                   <td className="ops-amount-cell">
                     {formatOpsAmountOrDash(item.totalPrice, locale)}

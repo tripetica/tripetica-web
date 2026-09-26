@@ -100,6 +100,13 @@ test("partner and ops driver screens share partner_drivers and ops cannot create
     list.indexOf('driver.email?.trim() || "—"') <
       list.indexOf("formatPartnerDriverLanguages(driver.languageCodes, locale)"),
   );
+  assert.ok(list.indexOf("copy.driverLanguages") < list.indexOf("copy.uetdsCompanyColumn"));
+  assert.ok(list.indexOf("copy.uetdsCompanyColumn") < list.indexOf("copy.driverStatus"));
+  assert.match(list, /formatUetdsCompanyListLabel\(driver\.uetdsCompany/);
+  const vehicleList = source("components/partner/vehicle-list.tsx");
+  assert.ok(vehicleList.indexOf("copy.vehicleCapacity") < vehicleList.indexOf("copy.uetdsCompanyColumn"));
+  assert.ok(vehicleList.indexOf("copy.uetdsCompanyColumn") < vehicleList.indexOf("copy.vehicleStatus"));
+  assert.match(vehicleList, /formatUetdsCompanyListLabel\(vehicle\.uetdsCompany/);
   assert.doesNotMatch(source("lib/ops/partner-fleet-actions.ts"), /createPartnerDriver/);
   assert.doesNotMatch(source("components/ops/partner-info-form.tsx"), /addDriver|Sürücü Ekle/);
   assert.match(source("components/ops/partner-info-form.tsx"), /driverSearchPlaceholder/);
@@ -111,8 +118,13 @@ test("partner and ops driver screens share partner_drivers and ops cannot create
   assert.doesNotMatch(globalDrivers, /Sürücü Ekle|addDriver|createPartnerDriver/);
   assert.match(source("lib/ops/drivers.ts"), /FROM partner_drivers d/);
   assert.doesNotMatch(source("lib/ops/drivers.ts"), /CREATE TABLE/);
-  assert.match(source("components/ops/driver-table.tsx"), /driver\.partnerName/);
-  assert.doesNotMatch(source("components/ops/driver-table.tsx"), /nationalId|national_id/);
+  const opsDrivers = source("components/ops/driver-table.tsx");
+  assert.match(opsDrivers, /driver\.partnerName/);
+  assert.doesNotMatch(opsDrivers, /nationalId|national_id/);
+  assert.ok(opsDrivers.indexOf("copy.driverLanguages") < opsDrivers.indexOf("copy.uetdsCompanyColumn"));
+  assert.ok(opsDrivers.indexOf("copy.uetdsCompanyColumn") < opsDrivers.indexOf("copy.status"));
+  assert.match(source("lib/ops/drivers.ts"), /LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id/);
+  assert.doesNotMatch(source("lib/ops/drivers.ts"), /password_sealed|test_username|live_username/);
   assert.match(source("db/migrations/037_partner_driver_identity_languages.sql"), /ALTER TABLE partner_drivers/);
   assert.doesNotMatch(source("db/migrations/037_partner_driver_identity_languages.sql"), /CREATE TABLE partner_drivers/);
   assert.doesNotMatch(source("db/migrations/037_partner_driver_identity_languages.sql"), /ALTER TABLE reservations/);
@@ -124,7 +136,12 @@ test("partner and ops driver screens share partner_drivers and ops cannot create
   assert.doesNotMatch(source("lib/ops/vehicles.ts"), /CREATE TABLE/);
   assert.match(source("app/[locale]/ops/(panel)/vehicles/page.tsx"), /listOpsVehicles/);
   assert.doesNotMatch(source("app/[locale]/ops/(panel)/vehicles/page.tsx"), /Araç Ekle|addVehicle|createPartnerVehicle/);
-  assert.match(source("components/ops/vehicle-table.tsx"), /vehicle\.partnerName/);
+  const opsVehicles = source("components/ops/vehicle-table.tsx");
+  assert.match(opsVehicles, /vehicle\.partnerName/);
+  assert.ok(opsVehicles.indexOf("copy.vehicleCapacity") < opsVehicles.indexOf("copy.uetdsCompanyColumn"));
+  assert.ok(opsVehicles.indexOf("copy.uetdsCompanyColumn") < opsVehicles.indexOf("copy.status"));
+  assert.match(source("lib/ops/vehicles.ts"), /LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id/);
+  assert.doesNotMatch(source("lib/ops/vehicles.ts"), /password_sealed|test_username|live_username/);
   assert.match(source("db/migrations/038_partner_vehicles.sql"), /ALTER TABLE partner_vehicles/);
   assert.match(source("db/migrations/038_partner_vehicles.sql"), /partner_vehicles_plate_global_uidx/);
   assert.match(source("db/migrations/038_partner_vehicles.sql"), /partner_vehicle_approval_requested/);

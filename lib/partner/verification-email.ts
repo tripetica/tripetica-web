@@ -14,6 +14,9 @@ const COPY = {
     passwordChangedSubject: "Tripetica Partner şifreniz değiştirildi",
     passwordChangedText:
       "Tripetica Partner hesabınızın şifresi değiştirildi. Bu işlemi siz yapmadıysanız destek ekibimizle iletişime geçin.",
+    resetSubject: "Tripetica Partner Portal şifre sıfırlama kodu",
+    resetText: (code: string) =>
+      `Tripetica Partner Portal şifre sıfırlama kodunuz: ${code}\n\nBu kod yalnızca Partner Portal şifre sıfırlama içindir ve 10 dakika geçerlidir.\n\nBu işlemi siz başlatmadıysanız bu e-postayı dikkate almayın.`,
   },
   en: {
     registerSubject: "Tripetica Partner email verification code",
@@ -28,6 +31,9 @@ const COPY = {
     passwordChangedSubject: "Your Tripetica Partner password was changed",
     passwordChangedText:
       "The password on your Tripetica Partner account was changed. If you did not do this, contact our support team.",
+    resetSubject: "Tripetica Partner Portal password reset code",
+    resetText: (code: string) =>
+      `Your Tripetica Partner Portal password reset code is: ${code}\n\nThis code is only for Partner Portal password reset and is valid for 10 minutes.\n\nIf you did not request this, you can ignore this email.`,
   },
   ru: {
     registerSubject: "Код подтверждения email партнёра Tripetica",
@@ -42,6 +48,9 @@ const COPY = {
     passwordChangedSubject: "Пароль партнёра Tripetica изменён",
     passwordChangedText:
       "Пароль вашего аккаунта партнёра Tripetica был изменён. Если это сделали не вы, свяжитесь с нашей службой поддержки.",
+    resetSubject: "Код сброса пароля Tripetica Partner Portal",
+    resetText: (code: string) =>
+      `Ваш код сброса пароля Tripetica Partner Portal: ${code}\n\nЭтот код предназначен только для сброса пароля Partner Portal и действует 10 минут.\n\nЕсли вы не запрашивали это действие, проигнорируйте письмо.`,
   },
 } as const;
 
@@ -74,5 +83,13 @@ export function buildPartnerPasswordChangedNotice(locale: Locale) {
   return {
     subject: copy.passwordChangedSubject,
     text: copy.passwordChangedText,
+  };
+}
+
+export function buildPartnerPasswordResetCodeEmail(locale: Locale, code: string) {
+  const copy = COPY[asPanelLocale(locale)];
+  return {
+    subject: copy.resetSubject,
+    text: copy.resetText(code),
   };
 }

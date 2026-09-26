@@ -1,17 +1,20 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FloatingPopover } from "@/components/partner/floating-popover";
+import { useReservationAction } from "@/components/ops/use-reservation-action";
 import { type Locale } from "@/lib/i18n/config";
 import {
   opsSendAssignmentCustomerNotificationAction,
   type OpsAssignmentNotifyFormState,
 } from "@/lib/ops/assignment-customer-notification-actions";
 import {
+  assignmentNotifyDefaultIncludeDriver,
   assignmentNotifyUiState,
   buildAssignmentNotifyOutgoing,
   isAssignmentNotifyNoChange,
+  scopedAssignmentCustomerNotification,
   type AssignmentCustomerNotificationSent,
 } from "@/lib/ops/assignment-customer-notification-view";
 import { type OpsCopy } from "@/lib/ops/copy";
@@ -73,6 +76,12 @@ function triggerLabel(
   return copy.passengerNotifySend;
 }
 
+const INITIAL_NOTIFY_STATE: OpsAssignmentNotifyFormState = {
+  error: null,
+  ok: false,
+  reservationId: "",
+};
+
 export function OpsAssignmentCustomerNotifyCell({
   locale,
   copy,
@@ -83,6 +92,7 @@ export function OpsAssignmentCustomerNotifyCell({
   driver,
   vehicle,
   lastSent,
+  assignmentUpdatedAt,
 }: {
   locale: Locale;
   copy: OpsCopy;
@@ -93,35 +103,41 @@ export function OpsAssignmentCustomerNotifyCell({
   driver: JobDriverAssignmentView;
   vehicle: JobVehicleAssignmentView;
   lastSent: AssignmentCustomerNotificationSent | null;
+  assignmentUpdatedAt: string | null;
 }) {
   const router = useRouter();
   const cellRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [includeDriver, setIncludeDriver] = useState(false);
-  const [state, action, pending] = useActionState<
-    OpsAssignmentNotifyFormState,
-    FormData
-  >(opsSendAssignmentCustomerNotificationAction, { error: null, ok: false });
+  const [includeDriver, setIncludeDriver] = useState(() =>
+    assignmentNotifyDefaultIncludeDriver(driver),
+  );
+  const [state, action, pending] = useReservationAction(
+    opsSendAssignmentCustomerNotificationAction,
+    INITIAL_NOTIFY_STATE,
+    reservationId,
+  );
+  const scopedLastSent = scopedAssignmentCustomerNotification(lastSent, reservationId);
   const ui = assignmentNotifyUiState({
     vehicle,
     driver,
-    lastSent,
+    lastSent: scopedLastSent,
+    assignmentUpdatedAt,
     customerEmail,
     locked,
     canAssign,
   });
 
   useEffect(() => {
-    setIncludeDriver(false);
+    setIncludeDriver(assignmentNotifyDefaultIncludeDriver(driver));
     setOpen(false);
-  }, [reservationId, lastSent?.id, vehicle.selection, driver.selection]);
+  }, [reservationId, lastSent?.id, vehicle.selection, driver.selection, driver.kind, driver.fullName, driver.phone]);
 
   useEffect(() => {
-    if (state.ok) {
+    if (state.ok && state.reservationId === reservationId) {
       setOpen(false);
       router.refresh();
     }
-  }, [router, state.ok]);
+  }, [reservationId, router, state.ok, state.reservationId]);
 
   const error = notifyErrorText(state.error, copy);
   const selectedOutgoing = buildAssignmentNotifyOutgoing({
@@ -131,7 +147,7 @@ export function OpsAssignmentCustomerNotifyCell({
   });
   const selectionNoChange =
     !("error" in selectedOutgoing) &&
-    isAssignmentNotifyNoChange(lastSent, selectedOutgoing);
+    isAssignmentNotifyNoChange(scopedLastSent, selectedOutgoing);
   const canSubmit =
     ui.vehicleReady &&
     (!includeDriver || ui.driverReady) &&
@@ -148,9 +164,7 @@ export function OpsAssignmentCustomerNotifyCell({
     if (includeDriver) {
       fd.set("includeDriver", "1");
     }
-    startTransition(() => {
-      action(fd);
-    });
+    action(fd);
   }
 
   return (

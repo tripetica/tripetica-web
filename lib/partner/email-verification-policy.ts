@@ -9,7 +9,10 @@ export const PARTNER_EMAIL_RESEND_MAX_PER_WINDOW = 5;
 export const PARTNER_EMAIL_MAX_VERIFY_ATTEMPTS = 5;
 export const PARTNER_EMAIL_CHALLENGE_COOKIE = "tripetica_partner_email_challenge";
 
-export type PartnerEmailChallengePurpose = "register" | "email_change";
+export type PartnerEmailChallengePurpose =
+  | "register"
+  | "email_change"
+  | "password_reset";
 
 export type PartnerEmailChallengeStatus =
   | "pending"

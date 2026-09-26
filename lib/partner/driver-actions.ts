@@ -12,6 +12,7 @@ import {
   getPartnerDriver,
   updatePartnerDriver,
 } from "@/lib/partner/fleet";
+import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerDriverFormState = {
@@ -25,6 +26,7 @@ export type PartnerDriverFormState = {
     | "duplicate-email"
     | "not-found"
     | "in-use"
+    | "invalid-uetds-company"
     | "failed"
     | null;
   ok: boolean;
@@ -71,6 +73,10 @@ export async function partnerCreateDriverAction(
   const locale = localeFromForm(formData);
   const actor = await requirePartnerActor(locale);
   let result: Awaited<ReturnType<typeof createPartnerDriver>>;
+  const resolved = await resolveUetdsCompanyIdFromForm(formData, null);
+  if (!resolved.ok) {
+    return { error: "invalid-uetds-company", ok: false };
+  }
   try {
     result = await createPartnerDriver({
       partnerId: actor.partnerId,
@@ -81,6 +87,7 @@ export async function partnerCreateDriverAction(
       nationalId: String(formData.get("nationalId") ?? ""),
       languageCodes: languageCodesFromForm(formData),
       email: String(formData.get("email") ?? ""),
+      uetdsCompanyId: resolved.companyId,
     });
   } catch {
     return { error: "failed", ok: false };
@@ -104,6 +111,13 @@ export async function partnerUpdateDriverAction(
     return { error: "not-found", ok: false };
   }
   try {
+    const resolved = await resolveUetdsCompanyIdFromForm(
+      formData,
+      owned.uetdsCompanyId ?? null,
+    );
+    if (!resolved.ok) {
+      return { error: "invalid-uetds-company", ok: false };
+    }
     const result = await updatePartnerDriver({
       partnerId: actor.partnerId,
       driverId,
@@ -114,6 +128,7 @@ export async function partnerUpdateDriverAction(
       nationalId: String(formData.get("nationalId") ?? ""),
       languageCodes: languageCodesFromForm(formData),
       email: String(formData.get("email") ?? ""),
+      uetdsCompanyId: resolved.companyId,
     });
     if (!result.ok) {
       return { error: result.error, ok: false };

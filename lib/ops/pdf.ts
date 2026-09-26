@@ -377,7 +377,11 @@ function drawPassengers(
   }
   doc.y = headerY + headerHeight + 2;
   for (const passenger of detail.passengers) {
-    const cells = cols.map((col) => String(passenger[col.key]));
+    const cells = cols.map((col) =>
+      detail.kind === "reservation" && col.key === "identity" && passenger.identity.trim() && passenger.identity !== "—"
+        ? "11111111111"
+        : String(passenger[col.key]),
+    );
     const rowHeight =
       Math.max(
         ...cols.map((col, index) =>

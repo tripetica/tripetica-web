@@ -6,6 +6,7 @@ import { type Locale } from "@/lib/i18n/config";
 import { type PartnerCopy } from "@/lib/partner/copy";
 import { filterPartnerVehicles } from "@/lib/partner/driver-list-view";
 import {
+  formatUetdsCompanyListLabel,
   partnerVehicleBrandModel,
   partnerVehicleCapacityLabel,
   vehicleStatusBadgeClass,
@@ -87,6 +88,7 @@ export function PartnerVehicleList({
                 <th>{copy.vehicleModelYear}</th>
                 <th>{copy.vehicleClass}</th>
                 <th>{copy.vehicleCapacity}</th>
+                <th>{copy.uetdsCompanyColumn}</th>
                 <th>{copy.vehicleStatus}</th>
                 <th>{copy.vehicleDetail}</th>
               </tr>
@@ -104,6 +106,7 @@ export function PartnerVehicleList({
                       : "—"}
                   </td>
                   <td>{partnerVehicleCapacityLabel(vehicle, copy)}</td>
+                  <td>{formatUetdsCompanyListLabel(vehicle.uetdsCompany, copy.uetdsCompanyExternal)}</td>
                   <td>
                     <span className={`ops-status-badge ${vehicleStatusBadgeClass(vehicle.status)}`}>
                       {vehicleStatusLabel(vehicle.status, copy)}
