@@ -69,6 +69,23 @@ test("AI mapping applies name transliteration and purpose Turkish without touchi
   assert.equal(mapped.passengers?.[0].identityNumber, "N1234567");
 });
 
+test("AI mapping folds accented Latin passenger names to English ASCII without touching identity", () => {
+  const mapped = mapAiUetdsExtraction({
+    ...empty,
+    passengers: [{
+      firstName: "Højris",
+      lastName: "Louens",
+      nationality: "DK",
+      identityNumber: "PØ-99-KEEP",
+      gender: "male",
+    }],
+  });
+  assert.equal(mapped.passengers?.[0].firstName, "Hojris");
+  assert.equal(mapped.passengers?.[0].lastName, "Louens");
+  // Passport/identity must not be ASCII-folded by the name pipeline.
+  assert.equal(mapped.passengers?.[0].identityNumber, "PØ-99-KEEP");
+});
+
 test("permanent AI language rules cover Ops+Partner fill paths and schema fields", () => {
   assert.match(UETDS_FORM_LANGUAGE_AI_RULES, /NEVER translate into Turkish/);
   assert.match(UETDS_FORM_LANGUAGE_AI_RULES, /transliterate/);
@@ -85,8 +102,15 @@ test("permanent AI language rules cover Ops+Partner fill paths and schema fields
   );
   assert.match(
     UETDS_AI_EXTRACTION_SCHEMA.properties.passengers.items.properties.firstName.description,
+    /English ASCII letters A-Z\/a-z/,
+  );
+  assert.match(
+    UETDS_AI_EXTRACTION_SCHEMA.properties.passengers.items.properties.firstName.description,
     /Given name\(s\) ONLY/,
   );
+  assert.match(UETDS_FORM_LANGUAGE_AI_RULES, /English ASCII letters A-Z\/a-z/);
+  assert.match(UETDS_FORM_LANGUAGE_AI_RULES, /Højris→Hojris/);
+
   assert.match(
     UETDS_AI_EXTRACTION_SCHEMA.properties.passengers.items.properties.lastName.description,
     /surname particles/,

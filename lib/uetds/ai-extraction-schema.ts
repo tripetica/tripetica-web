@@ -36,11 +36,11 @@ const tripFields = {
 };
 const passengerFields = {
   firstName: field(
-    "Given name(s) ONLY — not the full name. When the source shows passport GIVEN NAMES / SURNAME (or equivalent), prefer those structured fields. Never put the entire full name here while leaving lastName null/empty. Multi-word given names stay here (e.g. Elton Portela). Never translate into Turkish. Latin names stay as written (Turkish letters OK). Non-Latin scripts → Latin transliteration only (Алексей → Aleksey).",
+    "Given name(s) ONLY — not the full name. When the source shows passport GIVEN NAMES / SURNAME (or equivalent), prefer those structured fields. Never put the entire full name here while leaving lastName null/empty. Multi-word given names stay here (e.g. Elton Portela). Never translate into Turkish. Output English ASCII letters A-Z/a-z only (Højris→Hojris, Müller→Muller, Şahin→Sahin); spaces OK. Non-Latin scripts → English ASCII transliteration (Алексей → Aleksey).",
     100,
   ),
   lastName: field(
-    "Surname ONLY. Include surname particles with the surname (da, de, do, dos, das, del, van, von, bin, al, …) — e.g. da Silva, van Beethoven. When the source shows passport SURNAME / GIVEN NAMES, prefer those structured fields. Never leave lastName null/empty when a multi-word full name is present in the source. Never translate into Turkish. Latin stays; non-Latin scripts → Latin transliteration only (Иванов → Ivanov).",
+    "Surname ONLY. Include surname particles with the surname (da, de, do, dos, das, del, van, von, bin, al, …) — e.g. da Silva, van Beethoven. When the source shows passport SURNAME / GIVEN NAMES, prefer those structured fields. Never leave lastName null/empty when a multi-word full name is present in the source. Never translate into Turkish. Output English ASCII letters A-Z/a-z only (Østergaard→Ostergaard, Louens stays Louens); spaces OK. Non-Latin scripts → English ASCII transliteration (Иванов → Ivanov).",
     100,
   ),
   nationality: {

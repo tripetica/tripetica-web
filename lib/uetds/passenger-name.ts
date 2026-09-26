@@ -5,6 +5,42 @@ const INVISIBLE_OR_FORMAT =
 const NON_ASCII_SPACE = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
 
 /**
+ * Characters NFKD does not reliably map to English ASCII letters.
+ * Ligatures expand (æ→ae); Scandinavian/slashed letters fold to base Latin.
+ */
+const UETDS_PERSON_NAME_ASCII_SPECIAL: Record<string, string> = {
+  ø: "o",
+  Ø: "O",
+  ł: "l",
+  Ł: "L",
+  đ: "d",
+  Đ: "D",
+  ð: "d",
+  Ð: "D",
+  þ: "th",
+  Þ: "Th",
+  æ: "ae",
+  Æ: "Ae",
+  œ: "oe",
+  Œ: "Oe",
+  ß: "ss",
+  ẞ: "Ss",
+  // Turkish / Azerbaijani letters that need explicit maps (ı stays after NFKD).
+  ı: "i",
+  İ: "I",
+  ğ: "g",
+  Ğ: "G",
+  ş: "s",
+  Ş: "S",
+  ç: "c",
+  Ç: "C",
+  ö: "o",
+  Ö: "O",
+  ü: "u",
+  Ü: "U",
+};
+
+/**
  * Common surname particles (case-insensitive). Used only when repairing a full
  * name dumped into firstName with an empty lastName — never invents tokens.
  */
@@ -33,7 +69,7 @@ const UETDS_SURNAME_PARTICLES = new Set([
 /**
  * Strip iOS/invisible characters, then Latinize non-Latin scripts.
  * Never translates person names into Turkish. Turkish letters stay as-is.
- * Used by Ops and Partner ministry payload paths.
+ * Used by Ops and Partner ministry payload paths (manual/ministry submit).
  */
 export function normalizeUetdsPersonName(value: string) {
   return transliterateUetdsPersonName(
@@ -46,6 +82,42 @@ export function normalizeUetdsPersonName(value: string) {
   )
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Deterministic English-ASCII fold for AI-extracted passenger names only.
+ * After script transliteration, maps special Latin letters (ø, æ, ı, …) and
+ * strips remaining diacritics so the result is A–Z / a–z plus spaces and the
+ * name separators hyphen / apostrophe (preserved; not blindly deleted).
+ */
+export function foldUetdsPersonNameToEnglishAscii(value: string) {
+  let out = "";
+  for (const char of value) {
+    if (Object.prototype.hasOwnProperty.call(UETDS_PERSON_NAME_ASCII_SPECIAL, char)) {
+      out += UETDS_PERSON_NAME_ASCII_SPECIAL[char]!;
+      continue;
+    }
+    // Normalize curly / typographic apostrophes to ASCII apostrophe.
+    if (char === "\u2019" || char === "\u2018" || char === "\u02BC" || char === "`") {
+      out += "'";
+      continue;
+    }
+    out += char;
+  }
+  out = out
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "");
+  // Keep English letters, spaces, hyphen, apostrophe only.
+  out = out.replace(/[^A-Za-z\s\-']/g, "");
+  return out.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * AI extraction pipeline only: transliterate non-Latin scripts, then fold to
+ * English ASCII A–Z/a–z. Does not replace normalizeUetdsPersonName for SOAP.
+ */
+export function normalizeUetdsExtractedPersonName(value: string) {
+  return foldUetdsPersonNameToEnglishAscii(normalizeUetdsPersonName(value));
 }
 
 export function uetdsPersonNameTooLong(value: string) {
@@ -65,7 +137,7 @@ export function splitUetdsFullPersonName(fullName: string): {
   firstName: string;
   lastName: string;
 } {
-  const parts = normalizeUetdsPersonName(fullName).split(" ").filter(Boolean);
+  const parts = normalizeUetdsExtractedPersonName(fullName).split(" ").filter(Boolean);
   if (parts.length === 0) {
     return { firstName: "", lastName: "" };
   }
@@ -98,6 +170,7 @@ export function splitUetdsFullPersonName(fullName: string): {
  * Deterministic post-AI repair: when firstName holds a multi-word full name and
  * lastName is empty, split safely. Never overwrites a non-empty lastName and
  * never invents a surname for a single-token given name.
+ * Applies English-ASCII normalization to AI-extracted given/surname fields only.
  */
 export function repairUetdsExtractedPersonNames(input: {
   firstName?: string | null;
@@ -108,8 +181,8 @@ export function repairUetdsExtractedPersonNames(input: {
 
   if (rawLast) {
     return {
-      firstName: rawFirst ? normalizeUetdsPersonName(rawFirst) : undefined,
-      lastName: normalizeUetdsPersonName(rawLast),
+      firstName: rawFirst ? normalizeUetdsExtractedPersonName(rawFirst) : undefined,
+      lastName: normalizeUetdsExtractedPersonName(rawLast),
     };
   }
 
@@ -117,7 +190,7 @@ export function repairUetdsExtractedPersonNames(input: {
     return { firstName: undefined, lastName: undefined };
   }
 
-  const normalized = normalizeUetdsPersonName(rawFirst);
+  const normalized = normalizeUetdsExtractedPersonName(rawFirst);
   const tokens = normalized.split(" ").filter(Boolean);
   if (tokens.length < 2) {
     return { firstName: normalized || undefined, lastName: undefined };

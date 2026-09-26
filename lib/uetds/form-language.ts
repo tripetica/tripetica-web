@@ -2,7 +2,8 @@
  * Permanent Turkish / transliteration rules for U-ETDS notification forms.
  * Shared by Ops and Partner (AI extraction, chat/paste fill, PDF/image OCR, manual submit).
  *
- * Person names: transliterate to Latin; never translate.
+ * Person names: transliterate to English ASCII A–Z/a–z for AI extraction; ministry
+ * normalizeUetdsPersonName still Latinizes scripts without forcing ASCII fold.
  * Purpose / meaning-bearing text: translate to Turkish.
  * Pickup / dropoff: prefer airport/hotel/POI identity over street fragments; never reduce to bare city/province.
  * Identifiers (TCKN, passport, phone, plate, refs, dates, times): never rewrite for language.
@@ -11,7 +12,7 @@
 /** Appended to the Ops/Partner AI extraction instructions for every fill request. */
 export const UETDS_FORM_LANGUAGE_AI_RULES = `U-ETDS ministry form language rules (always apply for Ops and Partner, including OCR, pasted text, reservation data, and later "fill the form" / "prepare notification" chat turns):
 - Form language is Turkish for meaning-bearing fields.
-- Passenger firstName/lastName: NEVER translate into Turkish. Keep the person's real name. If already Latin (including Turkish letters ÇĞİÖŞÜ), preserve it. If Cyrillic, Arabic, Persian, or another non-Latin script, transliterate to the closest Latin letters only (e.g. Алексей Иванов → Aleksey Ivanov). Do not ASCII-fold Turkish letters.
+- Passenger firstName/lastName: NEVER translate into Turkish. Keep the person's real name, but output ONLY English ASCII letters A-Z/a-z (spaces between name parts OK; hyphens/apostrophes OK when present in the source). Transliterate accented Latin and special letters (Højris→Hojris, Müller→Muller, Şahin→Sahin, Østergaard→Ostergaard). If Cyrillic, Arabic, Persian, Chinese, or another non-Latin script, transliterate to the closest English ASCII letters (e.g. Алексей Иванов → Aleksey Ivanov). Never leave ø/Ø, æ, œ, ł, Turkish ÇĞİÖŞÜ/çğıöşü, or other non-ASCII letters in firstName/lastName.
 - firstName = given name(s) only; lastName = surname only. Never dump the entire full name into firstName while leaving lastName null/empty. Prefer passport structured GIVEN NAMES / SURNAME (or equivalent labeled fields) over free-text guessing when both exist. Keep surname particles with the surname (da/de/do/dos/das/del/van/von/bin/al/…), e.g. Elton Portela da Silva → firstName "Elton Portela", lastName "da Silva".
 - purpose / service description: if foreign-language meaning text, TRANSLATE into natural Turkish (Airport Transfer → Havalimanı Transferi; Hotel Transfer → Otel Transferi; Hourly Chauffeur Service → Saatlik Şoförlü Araç Hizmeti). Transliteration is wrong here.
 - origin / destination: return the primary place identity, not a street/door fragment. Priority: (1) airport name + IATA when present (Istanbul Airport (IST) / İstanbul Havalimanı — never Terminal Caddesi No:1); (2) hotel/facility/POI name (Antusa Design Hotel, The Conforium Hotel İstanbul — never only Divanyolu Cd. No:38); (3) full street address only when no airport/hotel/POI name exists; (4) never bare city/province only (e.g. not only İstanbul). Named airports keep existing U-ETDS airport handling. If free-text place wording must be written, use Turkish. Never invent ministry il/ilçe or airport codes.
