@@ -13813,18 +13813,21 @@ html[dir="rtl"] .location-back {
 }
 
 .uetds-edit-method-modal {
-  width: min(26rem, 100%);
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: min(92vh, 48rem);
 }
 
 .uetds-edit-method-options {
   display: grid;
   gap: 0.65rem;
+  min-width: 0;
 }
 
 .uetds-edit-method-option {
   display: grid;
   gap: 0.35rem;
   width: 100%;
+  min-width: 0;
   margin: 0;
   padding: 0.85rem 0.9rem;
   text-align: left;
@@ -13851,15 +13854,33 @@ html[dir="rtl"] .location-back {
 }
 
 .uetds-edit-method-option-body,
-.uetds-edit-method-option-hint {
+.uetds-edit-method-option-note,
+.uetds-edit-method-sefer {
   font-size: 0.9rem;
-  line-height: 1.4;
+  line-height: 1.45;
   color: #475569;
+  overflow-wrap: anywhere;
 }
 
-.uetds-edit-method-option-hint {
-  margin-top: 0.15rem;
+.uetds-edit-method-sefer {
   color: #334155;
+  font-weight: 600;
+}
+
+.uetds-edit-method-emphasis {
+  font-weight: 650;
+}
+
+.uetds-edit-method-emphasis.is-positive-green {
+  color: #2f7d4a;
+}
+
+.uetds-edit-method-emphasis.is-attention-amber {
+  color: #c05621;
+}
+
+.uetds-edit-method-emphasis.is-neutral-teal {
+  color: #0f6e8c;
 }
 
 .uetds-form-info {

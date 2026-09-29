@@ -206,16 +206,19 @@ export const uetdsFormCopy = {
     lastPassengerNotifyUnknown: "Bakanlık belgesinden henüz doğrulanmadı",
     edit: "Düzenle",
     editMethodTitle: "Düzenleme yöntemi",
-    editMethodFormTitle: "Formdan düzenlemeye devam et",
+    editMethodAiTitle: "Tripetica AI ile düzenle",
+    editMethodAiBody:
+      "Tripetica AI, onayınızla Kamu Uygulama Merkezi’ne giriş yaparak ilgili seferde gerekli güncellemeleri yapacaktır.",
+    editMethodFormTitle: "Tripetica Bildirim Formu üzerinden düzenle",
     editMethodFormBody:
-      "Değişiklik Tripetica üzerinden U-ETDS’ye yeniden bildirilir. Düzenlenen yolcuların son bildirim zamanı değişebilir.",
-    editMethodEdevletTitle: "e-Devlet üzerinden düzenlemeye devam et",
+      "Mevcut bildirimi Tripetica Bildirim Formu üzerinden düzenleyerek U-ETDS’ye güncelleyebilirsiniz.",
+    editMethodEdevletTitle: "e-Devlet üzerinden manuel düzenle",
     editMethodEdevletBody:
-      "Kamu Uygulama Merkezi’nde mevcut yolcu kaydını düzenleyebilirsiniz. Bu firma adına e-Devlet üzerinden işlem yapmaya yetkili olmanız gerekir.",
-    editMethodEdevletHint:
-      "Giriş ve firma seçiminden sonra Sefer Listesi açılır. Listede şu Firma Sefer Numarasını arayın: {firmaSeferNo}",
-    editMethodEdevletHintGeneric:
-      "Giriş ve firma seçiminden sonra Sefer Listesi’nde ilgili seferi plaka ve tarih ile bulun.",
+      "Kamu Uygulama Merkezi’ne e-Devlet hesabınızla giriş yaparak ilgili seferi bulabilir ve gerekli değişiklikleri manuel olarak kendiniz yapabilirsiniz.",
+    editMethodSeferNo: "İşlem yapılacak Sefer No: {seferNo}",
+    editMethodPassengerUpdatePrefix: "Mevcut yolcu bilgileri güncellendiğinde",
+    editMethodNotifyUnchanged: "Son Yolcu Bildirim Tarih/Saat değişmez.",
+    editMethodNotifyChanged: "Son Yolcu Bildirim Tarih/Saat değişir.",
     editMethodClose: "Vazgeç",
     cancelTrip: "İptal",
     cancelTripConfirm: "Bu U-ETDS bildirimi iptal edilecek. Devam etmek istiyor musunuz?",
@@ -484,16 +487,19 @@ export const uetdsFormCopy = {
     lastPassengerNotifyUnknown: "Not yet verified from the Ministry document",
     edit: "Edit",
     editMethodTitle: "Edit method",
-    editMethodFormTitle: "Continue editing in the form",
+    editMethodAiTitle: "Edit with Tripetica AI",
+    editMethodAiBody:
+      "With your approval, Tripetica AI will sign in to the Kamu Application Center and make the required updates on this trip.",
+    editMethodFormTitle: "Edit via the Tripetica notification form",
     editMethodFormBody:
-      "Changes are re-notified to U-ETDS through Tripetica. The last notification time for edited passengers may change.",
-    editMethodEdevletTitle: "Continue editing via e-Devlet",
+      "You can edit the existing notification in the Tripetica notification form and update it in U-ETDS.",
+    editMethodEdevletTitle: "Edit manually via e-Devlet",
     editMethodEdevletBody:
-      "You can edit the existing passenger record in the Kamu Application Center. You must be authorized to act for this company via e-Devlet.",
-    editMethodEdevletHint:
-      "After login and company selection, Sefer Listesi opens. Find this Firma Sefer Numarası in the list: {firmaSeferNo}",
-    editMethodEdevletHintGeneric:
-      "After login and company selection, find the trip in Sefer Listesi by plate and date.",
+      "You can sign in to the Kamu Application Center with your e-Devlet account, find the trip, and make the required changes yourself.",
+    editMethodSeferNo: "Trip number for this action: {seferNo}",
+    editMethodPassengerUpdatePrefix: "When existing passenger details are updated",
+    editMethodNotifyUnchanged: "the last passenger notification date/time does not change.",
+    editMethodNotifyChanged: "the last passenger notification date/time changes.",
     editMethodClose: "Cancel",
     cancelTrip: "Cancel",
     cancelTripConfirm: "This U-ETDS notification will be cancelled. Continue?",
@@ -762,16 +768,19 @@ export const uetdsFormCopy = {
     lastPassengerNotifyUnknown: "Ещё не подтверждено документом министерства",
     edit: "Изменить",
     editMethodTitle: "Способ изменения",
-    editMethodFormTitle: "Продолжить изменение через форму",
+    editMethodAiTitle: "Изменить с Tripetica AI",
+    editMethodAiBody:
+      "С вашего согласия Tripetica AI войдёт в Центр государственных приложений Kamu и внесёт нужные изменения в этот рейс.",
+    editMethodFormTitle: "Изменить через форму уведомления Tripetica",
     editMethodFormBody:
-      "Изменения повторно уведомляются в U-ETDS через Tripetica. Время последнего уведомления для изменённых пассажиров может измениться.",
-    editMethodEdevletTitle: "Продолжить изменение через e-Devlet",
+      "Вы можете изменить текущее уведомление в форме уведомления Tripetica и обновить его в U-ETDS.",
+    editMethodEdevletTitle: "Изменить вручную через e-Devlet",
     editMethodEdevletBody:
-      "Вы можете изменить существующую запись пассажира в Центре государственных приложений Kamu. Для этой компании у вас должно быть право действовать через e-Devlet.",
-    editMethodEdevletHint:
-      "После входа и выбора компании откроется список рейсов. Найдите в списке этот номер рейса фирмы: {firmaSeferNo}",
-    editMethodEdevletHintGeneric:
-      "После входа и выбора компании найдите рейс в списке по номеру и дате.",
+      "Вы можете войти в Центр государственных приложений Kamu со своей учётной записью e-Devlet, найти рейс и внести нужные изменения самостоятельно.",
+    editMethodSeferNo: "Номер рейса для этой операции: {seferNo}",
+    editMethodPassengerUpdatePrefix: "При обновлении данных существующих пассажиров",
+    editMethodNotifyUnchanged: "дата и время последнего уведомления о пассажире не меняются.",
+    editMethodNotifyChanged: "дата и время последнего уведомления о пассажире меняются.",
     editMethodClose: "Отмена",
     cancelTrip: "Отменить",
     cancelTripConfirm: "Это уведомление U-ETDS будет отменено. Продолжить?",
