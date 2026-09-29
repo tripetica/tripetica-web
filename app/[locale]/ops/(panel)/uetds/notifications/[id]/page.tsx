@@ -4,6 +4,7 @@ import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { uetdsFormCopyFor } from "@/lib/uetds/copy";
+import { showUetdsAiEditMethod } from "@/lib/uetds/edit-method-options";
 import { hydrateMinistryLastPassengerNotify } from "@/lib/uetds/manage";
 import { getUetdsNotification } from "@/lib/uetds/notifications";
 
@@ -43,6 +44,7 @@ export default async function OpsUetdsNotificationDetailPage({
           : localizedPath(locale, `/ops/uetds/notifications/${notification.id}/edit`)
       }
       openEditMethod={query.editMethod === "1"}
+      showAiEdit={showUetdsAiEditMethod()}
       actor="ops"
       locale={locale}
     />
