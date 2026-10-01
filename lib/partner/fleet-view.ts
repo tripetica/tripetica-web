@@ -1,5 +1,7 @@
 import { parsePhoneNumberFromString } from "libphonenumber-js/min";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
+import { type DriverMembershipStatus } from "@/lib/ops/driver-membership";
+import { type UetdsDriverSubscriptionListSummary } from "@/lib/uetds/driver-subscription";
 
 export type { UetdsCompanyRef };
 
@@ -22,10 +24,14 @@ export type PartnerDriverRecord = {
   email: string | null;
   languageCodes: string[];
   status: PartnerFleetStatus;
+  membershipStatus?: DriverMembershipStatus;
   deletedAt: string | null;
   updatedAt: string;
   uetdsCompanyId?: string | null;
   uetdsCompany?: UetdsCompanyRef | null;
+  defaultVehicleId?: string | null;
+  defaultAuthorityId?: string | null;
+  uetdsSubscription?: UetdsDriverSubscriptionListSummary;
 };
 
 export type PartnerVehicleRecord = {
@@ -53,6 +59,7 @@ export type PartnerVehicleRecord = {
   updatedAt: string;
   uetdsCompanyId?: string | null;
   uetdsCompany?: UetdsCompanyRef | null;
+  defaultDriverId?: string | null;
 };
 
 export function mapUetdsCompanyLink(

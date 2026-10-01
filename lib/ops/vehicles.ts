@@ -8,6 +8,7 @@ import {
   type PartnerVehicleRecord,
   type PartnerVehicleStatus,
 } from "@/lib/partner/fleet-view";
+import { listFleetChoicesForPartners, type FleetChoicesByPartner } from "@/lib/partner/fleet-pairing";
 
 export const OPS_VEHICLES_PAGE_SIZE = 25;
 
@@ -24,7 +25,9 @@ export type OpsVehicleListItem = {
   partnerId: string;
   partnerName: string;
   partnerCode: string;
+  uetdsCompanyId: string | null;
   uetdsCompany: UetdsCompanyRef | null;
+  defaultDriverId: string | null;
 };
 
 export type OpsVehicleRecord = PartnerVehicleRecord & {
@@ -47,6 +50,7 @@ type VehicleListRow = {
   partner_code: string;
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
+  default_driver_id: string | null;
 };
 
 type VehicleDetailRow = VehicleListRow & {
@@ -128,38 +132,42 @@ export async function listOpsVehicles(input: {
         v.status,
         v.uetds_company_id,
         uc.short_name AS uetds_company_short_name,
+        dd.id AS default_driver_id,
         p.name AS partner_name,
         p.partner_code
      FROM partner_vehicles v
      JOIN partners p ON p.id = v.partner_id
      LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
+     LEFT JOIN partner_fleet_defaults fd
+       ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
+     LEFT JOIN partner_drivers dd
+       ON dd.id = fd.driver_id AND dd.partner_id = v.partner_id AND dd.deleted_at IS NULL
      WHERE ${where}
      ORDER BY v.created_at DESC, v.id DESC
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
-  return {
-    items: result.rows.map((row) => ({
-      id: row.id,
-      plate: row.plate,
-      brand: row.brand,
-      model: row.model,
-      modelYear: row.model_year,
-      passengerCapacity: row.passenger_capacity,
-      luggageCapacity: row.luggage_capacity,
-      vehicleClassCode: row.vehicle_class_code,
-      status: row.status,
-      partnerId: row.partner_id,
-      partnerName: row.partner_name,
-      partnerCode: row.partner_code,
-      uetdsCompany: mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name)
-        .uetdsCompany,
-    })),
-    total,
-    page,
-    pageSize,
-  };
+  const items = result.rows.map((row) => ({
+    id: row.id,
+    plate: row.plate,
+    brand: row.brand,
+    model: row.model,
+    modelYear: row.model_year,
+    passengerCapacity: row.passenger_capacity,
+    luggageCapacity: row.luggage_capacity,
+    vehicleClassCode: row.vehicle_class_code,
+    status: row.status,
+    partnerId: row.partner_id,
+    partnerName: row.partner_name,
+    partnerCode: row.partner_code,
+    ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
+    defaultDriverId: row.default_driver_id,
+  }));
+  const fleetChoices = await listFleetChoicesForPartners(items.map((item) => item.partnerId));
+  return { items, total, page, pageSize, fleetChoices };
 }
+
+export type { FleetChoicesByPartner };
 
 export async function getOpsVehicle(vehicleId: string): Promise<OpsVehicleRecord | null> {
   const result = await query<VehicleDetailRow>(

@@ -1,3 +1,4 @@
+import { getDriverMembership } from "@/lib/ops/driver-membership-store";
 import { notFound } from "next/navigation";
 import { PartnerDriverForm } from "@/components/ops/partner-driver-form";
 import { asPanelLocale, isLocale } from "@/lib/i18n/config";
@@ -7,6 +8,7 @@ import { getOpsPartner } from "@/lib/ops/partners";
 import { actorCan } from "@/lib/ops/session";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getPartnerDriver } from "@/lib/partner/fleet";
+import { getDriverUetdsSubscription } from "@/lib/uetds/driver-subscription-store";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +24,16 @@ export default async function OpsPartnerDriverPage({
   if (!partner) {
     notFound();
   }
-  const [driver, activeUetdsCompanies] = await Promise.all([
+  const [driver, activeUetdsCompanies, subscription] = await Promise.all([
     getPartnerDriver(partner.id, driverId),
     listActiveUetdsCompanyOptions(),
+    getDriverUetdsSubscription(driverId),
   ]);
   if (!driver) {
     notFound();
   }
+
+  const membership = await getDriverMembership(driver.id);
 
   return (
     <PartnerDriverForm
@@ -36,6 +41,8 @@ export default async function OpsPartnerDriverPage({
       copy={opsCopy[asPanelLocale(locale)]}
       driver={driver}
       activeUetdsCompanies={activeUetdsCompanies}
+      subscription={subscription}
+      membership={membership}
       canManage={actorCan(actor, "partners.manage")}
       linkedPartner={{
         id: partner.id,

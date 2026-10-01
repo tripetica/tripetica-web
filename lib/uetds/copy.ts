@@ -86,6 +86,10 @@ export const uetdsFormCopy = {
     selectVehicle: "Araç seçin",
     noDrivers: "Seçilebilecek şoför yok.",
     noVehicles: "Seçilebilecek araç yok.",
+    edevletAuthority: "e-Devlet Yetkilisi",
+    selectEdevletAuthority: "e-Devlet yetkilisi seçin",
+    noEdevletAuthorities: "Seçilebilecek e-Devlet yetkilisi yok.",
+    edevletAuthorityOptional: "Zorunlu değil. Yetkili yoksa bildirim gönderilebilir.",
     eligibleVia: "U-ETDS bildirimi {company} üzerinden yapılacak.",
     fromReservation: "Rezervasyondan",
     fromDocument: "Belgeden dolduruldu",
@@ -156,6 +160,10 @@ export const uetdsFormCopy = {
     reasonExternal: "Şoför ve araç için U-ETDS firma ilişkisi eksik.",
     reasonIncomplete: "Şoför veya araç için U-ETDS firma ilişkisi eksik.",
     reasonMismatch: "Şoför ve araç farklı U-ETDS firmalarına kayıtlı. Lütfen kontrol edin.",
+    reasonSubscription:
+      "Bu şoförün U-ETDS bildirim aboneliği bu dönem için aktif değildir. Aboneliği aktif ettirmek için ödeme durumunu güncellemeniz gerekmektedir.",
+    reasonSubscriptionPartner:
+      "Bu şoförün U-ETDS bildirim aboneliği bu dönem için aktif değildir. Aboneliğin aktif edilmesi için Tripetica ile iletişime geçiniz.",
     reasonInactive: "Seçilen U-ETDS firması bildirim için kullanılamıyor.",
     reasonNotReady: "Seçilen U-ETDS firması bildirim için kullanılamıyor.",
     recorded: "Kaydedildi",
@@ -206,16 +214,20 @@ export const uetdsFormCopy = {
     lastPassengerNotifyUnknown: "Bakanlık belgesinden henüz doğrulanmadı",
     edit: "Düzenle",
     editMethodTitle: "Düzenleme yöntemi",
-    editMethodFormTitle: "Formdan düzenlemeye devam et",
-    editMethodFormBody:
-      "Değişiklik Tripetica üzerinden U-ETDS’ye yeniden bildirilir. Düzenlenen yolcuların son bildirim zamanı değişebilir.",
-    editMethodEdevletTitle: "e-Devlet üzerinden düzenlemeye devam et",
+    editMethodSeferNo: "İşlem yapılacak Sefer No: {seferNo}",
+    editMethodAiTitle: "Tripetica AI ile düzenle",
+    editMethodAiImpact: "Son Yolcu Bildirim Tarih/Saat değişmez.",
+    editMethodAiBody: "Onayınızla Tripetica AI, Kamu Uygulama Merkezi üzerinden mevcut yolcu kaydında gerekli güncellemeleri yapar.",
+    editMethodAiPending: "Tripetica AI düzenleme akışı sonraki aşamada etkinleştirilecektir.",
+    aiEditContinue: "Tripetica AI ile düzenlemeye devam et",
+    aiEditContinuePending: "Kamu Uygulama Merkezi adımı sonraki aşamada açılacaktır. Bu formdaki düzenleme henüz gönderilmedi.",
+    editMethodFormTitle: "Tripetica Bildirim Formu ile düzenle",
+    editMethodFormImpact: "Son Yolcu Bildirim Tarih/Saat değişir.",
+    editMethodFormBody: "Değişiklik Tripetica üzerinden U-ETDS’ye yeniden bildirilir.",
+    editMethodEdevletTitle: "e-Devlet üzerinden manuel düzenle",
+    editMethodEdevletImpact: "Son Yolcu Bildirim Tarih/Saat değişmez.",
     editMethodEdevletBody:
-      "Kamu Uygulama Merkezi’nde mevcut yolcu kaydını düzenleyebilirsiniz. Bu firma adına e-Devlet üzerinden işlem yapmaya yetkili olmanız gerekir.",
-    editMethodEdevletHint:
-      "Giriş ve firma seçiminden sonra Sefer Listesi açılır. Listede şu Firma Sefer Numarasını arayın: {firmaSeferNo}",
-    editMethodEdevletHintGeneric:
-      "Giriş ve firma seçiminden sonra Sefer Listesi’nde ilgili seferi plaka ve tarih ile bulun.",
+      "Kamu Uygulama Merkezi’nde mevcut yolcu kaydını kendiniz düzenleyebilirsiniz. Bu firma adına işlem yapmaya yetkili olmanız gerekir.",
     editMethodClose: "Vazgeç",
     cancelTrip: "İptal",
     cancelTripConfirm: "Bu U-ETDS bildirimi iptal edilecek. Devam etmek istiyor musunuz?",
@@ -364,6 +376,10 @@ export const uetdsFormCopy = {
     selectVehicle: "Select a vehicle",
     noDrivers: "No drivers available.",
     noVehicles: "No vehicles available.",
+    edevletAuthority: "e-Government authority",
+    selectEdevletAuthority: "Select an e-Government authority",
+    noEdevletAuthorities: "No e-Government authority available.",
+    edevletAuthorityOptional: "Optional. A notification can be sent without an authority.",
     eligibleVia: "The U-ETDS notification will be filed through {company}.",
     fromReservation: "From reservation",
     fromDocument: "Filled from document",
@@ -434,6 +450,10 @@ export const uetdsFormCopy = {
     reasonExternal: "The driver and vehicle are missing a U-ETDS company link.",
     reasonIncomplete: "The driver or vehicle is missing a U-ETDS company link.",
     reasonMismatch: "The driver and vehicle belong to different U-ETDS companies. Please check.",
+    reasonSubscription:
+      "This driver's U-ETDS notification subscription is not active for this period. Update the payment status to activate the subscription.",
+    reasonSubscriptionPartner:
+      "This driver's U-ETDS notification subscription is not active for this period. Please contact Tripetica to activate it.",
     reasonInactive: "The selected U-ETDS company cannot be used for notifications.",
     reasonNotReady: "The selected U-ETDS company cannot be used for notifications.",
     recorded: "Recorded",
@@ -484,16 +504,20 @@ export const uetdsFormCopy = {
     lastPassengerNotifyUnknown: "Not yet verified from the Ministry document",
     edit: "Edit",
     editMethodTitle: "Edit method",
-    editMethodFormTitle: "Continue editing in the form",
-    editMethodFormBody:
-      "Changes are re-notified to U-ETDS through Tripetica. The last notification time for edited passengers may change.",
-    editMethodEdevletTitle: "Continue editing via e-Devlet",
+    editMethodSeferNo: "Trip number for this action: {seferNo}",
+    editMethodAiTitle: "Edit with Tripetica AI",
+    editMethodAiImpact: "Last Passenger Notification Date/Time does not change.",
+    editMethodAiBody: "With your approval, Tripetica AI makes the required updates to the existing passenger record through Kamu Uygulama Merkezi.",
+    editMethodAiPending: "The Tripetica AI editing flow will be enabled in a later phase.",
+    aiEditContinue: "Continue editing with Tripetica AI",
+    aiEditContinuePending: "The Kamu Uygulama Merkezi step will open in a later phase. This form has not been submitted.",
+    editMethodFormTitle: "Edit with the Tripetica notification form",
+    editMethodFormImpact: "Last Passenger Notification Date/Time changes.",
+    editMethodFormBody: "The change is re-notified to U-ETDS through Tripetica.",
+    editMethodEdevletTitle: "Edit manually via e-Devlet",
+    editMethodEdevletImpact: "Last Passenger Notification Date/Time does not change.",
     editMethodEdevletBody:
-      "You can edit the existing passenger record in the Kamu Application Center. You must be authorized to act for this company via e-Devlet.",
-    editMethodEdevletHint:
-      "After login and company selection, Sefer Listesi opens. Find this Firma Sefer Numarası in the list: {firmaSeferNo}",
-    editMethodEdevletHintGeneric:
-      "After login and company selection, find the trip in Sefer Listesi by plate and date.",
+      "You can edit the existing passenger record yourself in Kamu Uygulama Merkezi. You must be authorized to act for this company.",
     editMethodClose: "Cancel",
     cancelTrip: "Cancel",
     cancelTripConfirm: "This U-ETDS notification will be cancelled. Continue?",
@@ -642,6 +666,10 @@ export const uetdsFormCopy = {
     selectVehicle: "Выберите автомобиль",
     noDrivers: "Нет доступных водителей.",
     noVehicles: "Нет доступных автомобилей.",
+    edevletAuthority: "Уполномоченный e-Devlet",
+    selectEdevletAuthority: "Выберите уполномоченного e-Devlet",
+    noEdevletAuthorities: "Нет доступного уполномоченного e-Devlet.",
+    edevletAuthorityOptional: "Необязательно. Уведомление можно отправить без уполномоченного.",
     eligibleVia: "Уведомление U-ETDS будет подано через {company}.",
     fromReservation: "Из брони",
     fromDocument: "Из документа",
@@ -712,6 +740,10 @@ export const uetdsFormCopy = {
     reasonExternal: "У водителя и автомобиля нет связи с компанией U-ETDS.",
     reasonIncomplete: "У водителя или автомобиля нет связи с компанией U-ETDS.",
     reasonMismatch: "Водитель и автомобиль привязаны к разным компаниям U-ETDS.",
+    reasonSubscription:
+      "Подписка U-ETDS этого водителя неактивна в текущем периоде. Обновите статус оплаты, чтобы активировать подписку.",
+    reasonSubscriptionPartner:
+      "Подписка U-ETDS этого водителя неактивна в текущем периоде. Для активации свяжитесь с Tripetica.",
     reasonInactive: "Выбранная компания U-ETDS недоступна для уведомлений.",
     reasonNotReady: "Выбранная компания U-ETDS недоступна для уведомлений.",
     recorded: "Сохранено",
@@ -762,16 +794,20 @@ export const uetdsFormCopy = {
     lastPassengerNotifyUnknown: "Ещё не подтверждено документом министерства",
     edit: "Изменить",
     editMethodTitle: "Способ изменения",
-    editMethodFormTitle: "Продолжить изменение через форму",
-    editMethodFormBody:
-      "Изменения повторно уведомляются в U-ETDS через Tripetica. Время последнего уведомления для изменённых пассажиров может измениться.",
-    editMethodEdevletTitle: "Продолжить изменение через e-Devlet",
+    editMethodSeferNo: "Номер рейса для этой операции: {seferNo}",
+    editMethodAiTitle: "Изменить с Tripetica AI",
+    editMethodAiImpact: "Дата и время последнего уведомления о пассажире не меняются.",
+    editMethodAiBody: "С вашего согласия Tripetica AI внесёт необходимые обновления в существующую запись пассажира через Kamu Uygulama Merkezi.",
+    editMethodAiPending: "Редактирование через Tripetica AI будет включено на следующем этапе.",
+    aiEditContinue: "Продолжить редактирование через Tripetica AI",
+    aiEditContinuePending: "Шаг Kamu Uygulama Merkezi откроется на следующем этапе. Эта форма ещё не отправлена.",
+    editMethodFormTitle: "Изменить через форму уведомления Tripetica",
+    editMethodFormImpact: "Дата и время последнего уведомления о пассажире меняются.",
+    editMethodFormBody: "Изменение повторно уведомляется в U-ETDS через Tripetica.",
+    editMethodEdevletTitle: "Изменить вручную через e-Devlet",
+    editMethodEdevletImpact: "Дата и время последнего уведомления о пассажире не меняются.",
     editMethodEdevletBody:
-      "Вы можете изменить существующую запись пассажира в Центре государственных приложений Kamu. Для этой компании у вас должно быть право действовать через e-Devlet.",
-    editMethodEdevletHint:
-      "После входа и выбора компании откроется список рейсов. Найдите в списке этот номер рейса фирмы: {firmaSeferNo}",
-    editMethodEdevletHintGeneric:
-      "После входа и выбора компании найдите рейс в списке по номеру и дате.",
+      "Вы можете сами изменить существующую запись пассажира в Kamu Uygulama Merkezi. Для этой компании у вас должно быть право действовать.",
     editMethodClose: "Отмена",
     cancelTrip: "Отменить",
     cancelTripConfirm: "Это уведомление U-ETDS будет отменено. Продолжить?",
@@ -865,6 +901,9 @@ export function uetdsEligibilityMessage(reason: UetdsEligibilityReason, copy: Ue
   }
   if (reason === "unassigned-driver") {
     return copy.reasonUnassignedDriver;
+  }
+  if (reason === "subscription") {
+    return copy.reasonSubscription;
   }
   if (reason === "unassigned-vehicle") {
     return copy.reasonUnassignedVehicle;

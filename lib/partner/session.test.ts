@@ -28,8 +28,8 @@ test("partner session max age is 30 days sliding window", () => {
   assert.equal(PARTNER_SESSION_COOKIE, "tripetica_partner_session");
 });
 
-test("ops / driver / account TTLs are unchanged by partner sliding work", () => {
-  assert.equal(OPS_SESSION_MAX_AGE_SECONDS, HOUR * 12);
+test("Ops now also has 30 days; driver/account TTLs remain unchanged", () => {
+  assert.equal(OPS_SESSION_MAX_AGE_SECONDS, DAY * 30);
   assert.equal(DRIVER_PORTAL_SESSION_MAX_AGE_SECONDS, HOUR * 12);
   assert.equal(ACCOUNT_SESSION_MAX_AGE_SECONDS, DAY * 30);
   assert.notEqual(PARTNER_SESSION_COOKIE, OPS_SESSION_COOKIE);

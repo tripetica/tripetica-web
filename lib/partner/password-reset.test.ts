@@ -114,7 +114,7 @@ test("forgot-password copy exists in tr, en, and ru", () => {
 
 test("password reset does not change partner sliding session or ops TTL", () => {
   assert.equal(PARTNER_SESSION_MAX_AGE_SECONDS, 60 * 60 * 24 * 30);
-  assert.equal(OPS_SESSION_MAX_AGE_SECONDS, 60 * 60 * 12);
+  assert.equal(OPS_SESSION_MAX_AGE_SECONDS, 60 * 60 * 24 * 30);
   assert.doesNotMatch(
     source("lib/partner/password-reset.ts"),
     /PARTNER_SESSION_MAX_AGE|OPS_SESSION/,

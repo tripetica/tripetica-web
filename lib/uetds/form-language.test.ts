@@ -34,7 +34,7 @@ test("mapAiUetdsExtraction prefers airport/hotel identity over address tails", (
 test("Cyrillic and Arabic names transliterate; Turkish letters and Latin stay", () => {
   assert.equal(normalizeUetdsPersonName("Алексей Иванов"), "Aleksey Ivanov");
   assert.equal(normalizeUetdsPersonName("محمد علي"), "mhmd aly");
-  assert.equal(normalizeUetdsPersonName("Çiğdem Yılmaz"), "Çiğdem Yılmaz");
+  assert.equal(normalizeUetdsPersonName("Çiğdem Yılmaz"), "Cigdem Yilmaz");
   assert.equal(normalizeUetdsPersonName("John Smith"), "John Smith");
   // Do not invent Turkish translations of foreign Latin names.
   assert.equal(normalizeUetdsPersonName("Alexander"), "Alexander");
@@ -63,7 +63,8 @@ test("AI mapping applies name transliteration and purpose Turkish without touchi
       gender: "male",
     }],
   });
-  assert.equal(mapped.purpose, "Havalimanı Transferi");
+  assert.equal(mapped.purpose, "Transfer");
+  assert.equal(mapped.tripKind, "transfer");
   assert.equal(mapped.passengers?.[0].firstName, "Aleksey");
   assert.equal(mapped.passengers?.[0].lastName, "Ivanov");
   assert.equal(mapped.passengers?.[0].identityNumber, "N1234567");

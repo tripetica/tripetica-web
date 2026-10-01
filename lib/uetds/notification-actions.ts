@@ -12,6 +12,7 @@ import { getPartnerActor } from "@/lib/partner/session";
 import { extractAiUetdsDocument } from "@/lib/uetds/ai-extraction";
 import { AiExtractionError, type AiExtractionErrorCode, type AiUetdsExtractedDraft } from "@/lib/uetds/ai-extraction-schema";
 import { type UetdsFleetScope } from "@/lib/uetds/fleet-options";
+import { persistAiEditTarget } from "@/lib/uetds/ai-edit-target-store";
 import { saveUetdsFormDraft } from "@/lib/uetds/form-drafts";
 import { cancelUetdsNotification, updateUetdsNotification, type UetdsManageError } from "@/lib/uetds/manage";
 import { submitUetdsNotification, type UetdsSubmitError } from "@/lib/uetds/submit";
@@ -83,6 +84,28 @@ export async function extractUetdsDocumentAction(formData: FormData): Promise<Ue
   } catch (error) {
     return { ok: false, extracted: null, imageOnly: false, error: error instanceof AiExtractionError ? error.code : "failed" };
   }
+}
+
+export async function persistAiEditTargetAction(formData: FormData) {
+  const actor = await requireActor(scopeFromForm(formData), "uetds.manage");
+  if (!actor) return { ok: false as const, error: "forbidden" as const };
+  let draft: unknown = null;
+  try {
+    draft = JSON.parse(String(formData.get("draft") ?? ""));
+  } catch {
+    return { ok: false as const, error: "invalid" as const };
+  }
+  const saved = await persistAiEditTarget({
+    actorType: actor.type,
+    partnerId: actor.partnerId,
+    notificationId: String(formData.get("id") ?? ""),
+    draft,
+  });
+  if (!saved.ok) return saved;
+  const locale = localeFromForm(formData);
+  revalidatePath(localizedPath(locale, `/${actor.type}/uetds/notifications/${String(formData.get("id") ?? "")}`));
+  revalidatePath(localizedPath(locale, actor.type === "ops" ? `/ops/uetds/notifications/${String(formData.get("id") ?? "")}/edit` : `/partner/uetds/notifications/${String(formData.get("id") ?? "")}/edit`));
+  return saved;
 }
 
 export async function saveUetdsFormDraftAction(formData: FormData) {

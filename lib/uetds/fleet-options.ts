@@ -1,4 +1,5 @@
 import { partnerDriverFullName } from "@/lib/partner/fleet-view";
+import { type DriverMembershipStatus } from "@/lib/ops/driver-membership";
 import { isUetdsCompanyUsable, type UetdsCompanyReadiness } from "@/lib/uetds/eligibility";
 
 export type UetdsFleetScope = "partner" | "ops";
@@ -10,6 +11,9 @@ export type UetdsFleetOption = {
   uetdsCompanyId: string | null;
   company: UetdsCompanyReadiness | null;
   hasNationalId?: boolean;
+  membershipStatus?: DriverMembershipStatus;
+  defaultVehicleId?: string | null;
+  defaultAuthorityId?: string | null;
 };
 
 /** Initial selection only; lists already enforce fleet status and actor scope. */

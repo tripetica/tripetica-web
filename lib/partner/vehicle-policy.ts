@@ -115,7 +115,8 @@ export function partnerVehicleErrorField(
     | "not-found"
     | "needs-approval"
     | "in-use"
-    | "invalid-uetds-company",
+    | "invalid-uetds-company"
+    | "invalid-fleet-pair",
 ): PartnerVehicleField | null {
   switch (error) {
     case "invalid-plate":

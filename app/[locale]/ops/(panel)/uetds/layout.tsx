@@ -35,6 +35,7 @@ export default async function OpsUetdsLayout({
           { href: "/ops/uetds/companies", label: copy.uetdsCompanies },
           { href: "/ops/uetds/notifications/new", label: copy.uetdsNewNotification },
           { href: "/ops/uetds/notifications", label: copy.uetdsNotifications },
+          { href: "/ops/uetds/authorities", label: copy.uetdsEdevletAuthorities },
         ]}
       />
       {children}

@@ -101,6 +101,19 @@ export async function clearOpsSessionCookie() {
   });
 }
 
+/** Rolling idle expiry; revoked/expired sessions and inactive users are never renewed. */
+export async function renewOpsSessionIfNeeded(token: string): Promise<Date | null> {
+  const result = await query<{ expires_at: Date }>(
+    `UPDATE ops_sessions s SET expires_at = NOW() + ($2 * INTERVAL '1 second'), last_seen_at = NOW()
+     FROM ops_users u
+     WHERE s.token_hash = $1 AND s.expires_at > NOW()
+       AND u.id = s.user_id AND u.is_active = TRUE AND u.role IN ('owner', 'employee')
+     RETURNING s.expires_at`,
+    [hashSessionToken(token), OPS_SESSION_MAX_AGE_SECONDS],
+  );
+  return result.rows[0]?.expires_at ?? null;
+}
+
 export const getOpsActor = cache(async (): Promise<OpsActor | null> => {
   const token = (await cookies()).get(OPS_SESSION_COOKIE)?.value;
   if (!token) {
@@ -132,10 +145,13 @@ export const getOpsActor = cache(async (): Promise<OpsActor | null> => {
      WHERE user_id = $1`,
     [row.user_id],
   );
-  await query(
-    `UPDATE ops_sessions SET last_seen_at = NOW() WHERE id = $1`,
-    [row.session_id],
-  );
+  const expiresAt = await renewOpsSessionIfNeeded(token);
+  if (!expiresAt) return null;
+  try {
+    await writeOpsSessionCookie(token, expiresAt);
+  } catch {
+    // RSC cannot set cookies; the proxy renews the browser cookie, as in Partner.
+  }
   const role = row.role as OpsRole;
   return {
     id: row.user_id,

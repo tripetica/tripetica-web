@@ -1,3 +1,4 @@
+import { enrichUetdsDraftLocationsFromText } from "../uetds/resolve-location";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { istanbulLocalToUtcMs } from "../booking/istanbul-time";
@@ -215,6 +216,7 @@ test("Responses SDK sends one strict request for text/images/PDF and never falls
   const originalKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "fixture-not-a-real-key";
   let calls = 0;
+  const sourceKinds: string[] = [];
   let mode: "ok" | "model" | "refusal" | "incomplete" = "ok";
   let unblock: (() => void) | undefined;
   let gate: Promise<void> | undefined;
@@ -228,8 +230,10 @@ test("Responses SDK sends one strict request for text/images/PDF and never falls
     assert.deepEqual(body.tools, []);
     assert.equal(body.text.format.strict, true);
     assert.deepEqual(body.text.format.schema, UETDS_AI_EXTRACTION_SCHEMA);
-    assert.deepEqual(body.input[0].content.map((item: { type: string }) => item.type), ["input_text", "input_image", "input_file"]);
-    assert.equal(body.input[0].content[2].filename, "document-2.pdf");
+    const kinds = body.input[0].content.map((item: { type: string }) => item.type);
+    assert.equal(kinds.length, 1);
+    if (mode === "ok" && !gate) sourceKinds.push(kinds[0]);
+    if (kinds[0] === "input_file") assert.equal(body.input[0].content[0].filename, "document-2.pdf");
     assert.ok(init?.signal);
     if (gate) await gate;
     if (mode === "model") return new Response(JSON.stringify({ error: { message: "upstream-sensitive-text", type: "invalid_request_error", code: "model_not_found" } }), { status: 404, headers: { "content-type": "application/json" } });
@@ -242,10 +246,11 @@ test("Responses SDK sends one strict request for text/images/PDF and never falls
   try {
     const result = await extractAiUetdsDocument(input, "fixture-actor");
     assert.equal(result.passengers?.[0].firstName, "Fixture");
-    assert.equal(calls, 1);
+    assert.deepEqual(sourceKinds, ["input_text", "input_image", "input_file"]);
+    assert.equal(calls, 3);
     mode = "model";
     await assert.rejects(extractAiUetdsDocument(input, "fixture-actor"), { message: "model-unavailable" });
-    assert.equal(calls, 2);
+    assert.equal(calls, 4);
     mode = "refusal";
     await assert.rejects(extractAiUetdsDocument(input, "fixture-actor"), { message: "failed" });
     mode = "incomplete";
@@ -256,15 +261,15 @@ test("Responses SDK sends one strict request for text/images/PDF and never falls
     await assert.rejects(extractAiUetdsDocument(input, "fixture-actor"), { message: "busy" });
     unblock!();
     await first;
-    assert.equal(calls, 5);
+    assert.equal(calls, 9);
     await assert.rejects(extractAiUetdsDocument({ text: "", files: [] }, "fixture-actor"), { message: "invalid" });
     await assert.rejects(extractAiUetdsDocument({ text: "x".repeat(30_001), files: [] }, "fixture-actor"), { message: "too-large" });
     await assert.rejects(extractAiUetdsDocument({ text: "", files: [new File(["x"], "x.pdf", { type: "text/plain" })] }, "fixture-actor"), { message: "unsupported-type" });
     await assert.rejects(extractAiUetdsDocument({ text: "", files: [new File(["invalid"], "x.pdf", { type: "application/pdf" })] }, "fixture-actor"), { message: "invalid" });
-    assert.equal(calls, 5);
+    assert.equal(calls, 9);
     globalThis.fetch = async () => { calls++; throw new DOMException("fixture", "AbortError"); };
     await assert.rejects(extractAiUetdsDocument(input, "fixture-actor"), { message: "timeout" });
-    assert.equal(calls, 6);
+    assert.equal(calls, 10);
   } finally {
     unblock?.();
     globalThis.fetch = originalFetch;
@@ -273,7 +278,7 @@ test("Responses SDK sends one strict request for text/images/PDF and never falls
   }
 });
 
-test("all seven source combinations use one request and preserve canonical prefill", async () => {
+test("each text, image, and PDF source is read separately and the passengers are merged", async () => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "synthetic-test-key";
@@ -284,7 +289,9 @@ test("all seven source combinations use one request and preserve canonical prefi
   globalThis.fetch = async (_url, init) => {
     calls++;
     const body = JSON.parse(String(init?.body));
-    assert.deepEqual(body.input[0].content.map((part: { type: string }) => part.type), expected);
+    const kinds = body.input[0].content.map((part: { type: string }) => part.type);
+    assert.equal(kinds.length, 1);
+    assert.equal(kinds[0], expected.shift());
     assert.match(body.instructions, /complementary sources for ONE reservation trip/);
     assert.match(body.instructions, /return null for the disputed field/);
     assert.match(body.instructions, /jointly weighing all meaningful clues/);
@@ -299,6 +306,8 @@ test("all seven source combinations use one request and preserve canonical prefi
     assert.match(body.instructions, /Never invent ministry il\/ilçe|Never invent province\/district/);
     assert.match(body.instructions, /Ops and Partner/);
     assert.match(body.instructions, /Each distinct passport or ID document/);
+    assert.match(body.instructions, /booking confirmation, reservation voucher/);
+    assert.match(body.instructions, /SUN\/CHONG → lastName SUN, firstName CHONG/);
     assert.match(body.instructions, /ONLY when the explicit identity\/passport number is the same/);
     assert.match(body.instructions, /Same surname, same nationality/);
     assert.match(body.instructions, /Never silently omit a hard-to-read second passport/);
@@ -307,22 +316,74 @@ test("all seven source combinations use one request and preserve canonical prefi
     return new Response(JSON.stringify({ id: "resp_fixture", object: "response", status: "completed", output: [{ id: "msg_fixture", type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify({ ...empty, passengers: [{ ...passenger, nationality: "LY", gender: "male" }] }), annotations: [] }] }] }), { headers: { "content-type": "application/json" } });
   };
   try {
+    let expectedCalls = 0;
     for (let mask = 1; mask < 8; mask++) {
       const files = [...(mask & 1 ? [pdf] : []), ...(mask & 2 ? [image] : [])];
       const text = mask & 4 ? "Synthetic reservation: all listed passengers are Libyan and male." : "";
       expected = [...(text ? ["input_text"] : []), ...(mask & 1 ? ["input_file"] : []), ...(mask & 2 ? ["input_image"] : [])];
+      expectedCalls += expected.length;
       const result = await extractAiUetdsDocument({ files, text }, "hybrid-fixture");
-      assert.equal(calls, mask);
+      assert.equal(expected.length, 0);
+      assert.equal(calls, expectedCalls);
       const merged = mergeAiUetdsExtraction(createEmptyDraft("manual"), result).draft;
       assert.equal(merged.passengers[0].nationality, "LY");
       assert.equal(merged.passengers[0].gender, "male");
       assert.equal(merged.passengers[0].identityNumber, "11111111111");
     }
     await assert.rejects(extractAiUetdsDocument({ files: [], text: " " }, "hybrid-fixture"), { message: "invalid" });
-    assert.equal(calls, 7);
+    assert.equal(calls, 12);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
+  }
+});
+
+
+test("explicit description location lines survive omitted AI output through canonical form merge", async () => {
+  const beforeFetch = globalThis.fetch;
+  const beforeKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "fixture-not-a-real-key";
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return new Response(JSON.stringify({ id: "resp_fixture", object: "response", status: "completed", output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: JSON.stringify(empty), annotations: [] }] }] }), { headers: { "content-type": "application/json" } });
+  };
+  try {
+    for (const [text, origin, destination] of [
+      ["Alış yeri Beyoğlu\nBırakma yeri İstanbul Havalimanı\nGrup ücreti 40\nBaşlangıç zamanı 18:00", "Beyoğlu", "İstanbul Havalimanı"],
+      ["Alış yeri Fatih\nBırakma yeri Beyoğlu\nGrup ücreti 100", "Fatih", "Beyoğlu"],
+      ["Pickup: Levent\nDrop-off: Istanbul Airport", "Levent", "Istanbul Airport"],
+      ["Alış: Fatih\nBırakma: Beyoğlu", "Fatih", "Beyoğlu"],
+    ]) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const extracted = await extractAiUetdsDocument({ text, files: [] }, "location-fixture");
+        assert.equal(extracted.origin, origin);
+        assert.equal(extracted.destination, destination);
+        const merged = mergeAiUetdsExtraction(createEmptyDraft("manual"), extracted).draft;
+        assert.equal(merged.origin, origin);
+        assert.equal(merged.destination, destination);
+        assert.equal(merged.originLocation.placeName, origin);
+        assert.equal(merged.destinationLocation.placeName, destination);
+        const enriched = await enrichUetdsDraftLocationsFromText(merged, {
+          search: async () => [], details: async () => null,
+        });
+        assert.ok(enriched.origin.length > 0);
+        assert.ok(enriched.destination.length > 0);
+        assert.equal(enriched.originLocation.placeName, enriched.origin);
+        assert.equal(enriched.destinationLocation.placeName, enriched.destination);
+
+      }
+    }
+    assert.equal(calls, 12, "one mocked request per analysis; no retries");
+    const explicit = mapAiUetdsExtraction({ ...empty, origin: "Fatih", destination: "Beyoğlu" }, "Alış: Levent\nBırakma: İstanbul Havalimanı");
+    assert.equal(explicit.origin, "Fatih");
+    assert.equal(explicit.destination, "Beyoğlu");
+    for (const text of ["Beyoğlu'ndan havalimanına gideceğiz", "Alış:\nBırakma:", "Alış: Fatih\nAlış: Beyoğlu"]) {
+      assert.equal(mapAiUetdsExtraction(empty, text).origin, undefined);
+    }
+  } finally {
+    globalThis.fetch = beforeFetch;
+    if (beforeKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = beforeKey;
   }
 });

@@ -129,18 +129,24 @@ test("fleet lists show short company name or Harici and keep inactive names", ()
   );
   assert.equal(formatUetdsCompanyListLabel(null, "Harici"), "Harici");
   assert.equal(formatUetdsCompanyListLabel({ id: "1", shortName: "  " }, "Harici"), "Harici");
-  const lists = [
+  const inlineLists = [
     "components/partner/driver-list.tsx",
     "components/partner/vehicle-list.tsx",
     "components/ops/driver-table.tsx",
     "components/ops/vehicle-table.tsx",
-    "components/ops/partner-fleet-table.tsx",
   ];
-  for (const path of lists) {
+  for (const path of inlineLists) {
     const text = source(path);
     assert.match(text, /uetdsCompanyColumn/);
-    assert.match(text, /formatUetdsCompanyListLabel/);
+    assert.match(text, /FleetInlineSelect/);
+    assert.match(text, /companyChoicesForRow\(companies,/);
+    assert.match(text, /fleetChoicesForPartner\(fleetChoices,/);
     assert.doesNotMatch(text, CREDENTIAL_LEAK);
     assert.doesNotMatch(text, /UetdsCompanySelect/);
   }
+  const partnerFleet = source("components/ops/partner-fleet-table.tsx");
+  assert.match(partnerFleet, /uetdsCompanyColumn/);
+  assert.match(partnerFleet, /formatUetdsCompanyListLabel/);
+  assert.doesNotMatch(partnerFleet, CREDENTIAL_LEAK);
+  assert.doesNotMatch(partnerFleet, /UetdsCompanySelect/);
 });

@@ -13,6 +13,8 @@ import {
   isUetdsNewStartSafe,
 } from "@/lib/uetds/edit-policy";
 import { normalizeUetdsPersonName } from "@/lib/uetds/passenger-name";
+import { isUetdsDriverSubscriptionEntitled } from "@/lib/uetds/driver-subscription";
+import { loadDriverUetdsSubscriptionEntitlement } from "@/lib/uetds/driver-subscription-store";
 import { diffUetdsEdit } from "@/lib/uetds/manage-diff";
 import {
   applyUetdsPassengerCountWindow,
@@ -76,6 +78,7 @@ export type UetdsManageError =
   | "not-ready"
   | "company-mismatch"
   | "driver-identity"
+  | "subscription"
   | "reservation-scope"
   | "fleet-verify"
   | "assignment-sync"
@@ -468,6 +471,17 @@ export async function updateUetdsNotification(input: {
     });
     if (!fleet.ok) {
       return { ok: false, error: fleet.error };
+    }
+    if (nextDriver) {
+      const subscription = await loadDriverUetdsSubscriptionEntitlement(nextDriver.id);
+      if (
+        !isUetdsDriverSubscriptionEntitled({
+          enrolled: subscription.enrolled,
+          periods: subscription.periods,
+        })
+      ) {
+        return { ok: false, error: "subscription" };
+      }
     }
     if (!nextVehicle) {
       return { ok: false, error: "invalid" };

@@ -4,6 +4,11 @@ import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import {
+  DriverUetdsSubscriptionSection,
+  driverSubscriptionDraftFromState,
+} from "@/components/uetds/driver-uetds-subscription-section";
+import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
@@ -25,12 +30,23 @@ import {
   type PartnerDriverRecord,
 } from "@/lib/partner/fleet-view";
 import { joinPartnerContactName } from "@/lib/partner/contact-name";
+import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
+import {
+  authoritiesForCompany,
+  type AuthorityChoice,
+  type FleetChoice,
+} from "@/lib/partner/fleet-pairing-rules";
 
 type PartnerDriverDetailProps = {
   locale: Locale;
   copy: PartnerCopy;
   driver: PartnerDriverRecord;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
+  subscription: UetdsDriverSubscriptionState;
+  vehicles: readonly FleetChoice[];
+  authorities: readonly AuthorityChoice[];
+  defaultVehicleId: string;
+  defaultAuthorityId: string;
 };
 
 type DriverDraft = {
@@ -41,9 +57,19 @@ type DriverDraft = {
   phoneNational: string;
   languages: string[];
   uetdsCompanyId: string;
+  defaultVehicleId: string;
+  defaultAuthorityId: string;
 };
 
-type EditableField = "fullName" | "nationalId" | "email" | "phone" | "languages" | "uetdsCompany";
+type EditableField =
+  | "fullName"
+  | "nationalId"
+  | "email"
+  | "phone"
+  | "languages"
+  | "uetdsCompany"
+  | "defaultVehicle"
+  | "defaultAuthority";
 
 const ERROR_COPY: Record<
   Exclude<PartnerDriverFormState["error"], null>,
@@ -59,10 +85,19 @@ const ERROR_COPY: Record<
   "not-found": "driverSaveFailed",
   "in-use": "driverSaveFailed",
   "invalid-uetds-company": "invalidUetdsCompany",
+  "invalid-fleet-pair": "invalidFleetPair",
+  "invalid-edevlet-authority": "invalidEdevletAuthority",
   failed: "driverSaveFailed",
 };
 
-function draftFromDriver(driver: PartnerDriverRecord): DriverDraft {
+function choiceLabel(options: readonly FleetChoice[], id: string, emptyLabel: string) {
+  return options.find((item) => item.id === id)?.label || emptyLabel;
+}
+
+function draftFromDriver(
+  driver: PartnerDriverRecord,
+  links: { defaultVehicleId: string; defaultAuthorityId: string },
+): DriverDraft {
   const storedPhone = fromStoredPhone(driver.phoneCountryCode, driver.phone);
   return {
     fullName: joinPartnerContactName(driver.firstName, driver.lastName) || driver.fullName,
@@ -72,6 +107,8 @@ function draftFromDriver(driver: PartnerDriverRecord): DriverDraft {
     phoneNational: storedPhone.national,
     languages: driver.languageCodes,
     uetdsCompanyId: driver.uetdsCompanyId ?? "",
+    defaultVehicleId: links.defaultVehicleId,
+    defaultAuthorityId: links.defaultAuthorityId,
   };
 }
 
@@ -83,7 +120,9 @@ function draftsEqual(left: DriverDraft, right: DriverDraft) {
     left.phoneCountry === right.phoneCountry &&
     left.phoneNational.replace(/\D/g, "") === right.phoneNational.replace(/\D/g, "") &&
     left.languages.join(",") === right.languages.join(",") &&
-    left.uetdsCompanyId === right.uetdsCompanyId
+    left.uetdsCompanyId === right.uetdsCompanyId &&
+    left.defaultVehicleId === right.defaultVehicleId &&
+    left.defaultAuthorityId === right.defaultAuthorityId
   );
 }
 
@@ -138,11 +177,21 @@ export function PartnerDriverDetail({
   copy,
   driver,
   activeUetdsCompanies,
+  subscription,
+  vehicles,
+  authorities,
+  defaultVehicleId,
+  defaultAuthorityId,
 }: PartnerDriverDetailProps) {
-  const baseline = useMemo(() => draftFromDriver(driver), [driver]);
+  const baseline = useMemo(
+    () => draftFromDriver(driver, { defaultVehicleId, defaultAuthorityId }),
+    [driver, defaultVehicleId, defaultAuthorityId],
+  );
   const [draft, setDraft] = useState(baseline);
   const [editing, setEditing] = useState<Partial<Record<EditableField, boolean>>>({});
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
+  const subscriptionDraft = driverSubscriptionDraftFromState(subscription);
   const [saveState, saveAction, saving] = useActionState<PartnerDriverFormState, FormData>(
     async (prev, formData) => {
       const result = await partnerUpdateDriverAction(prev, formData);
@@ -190,7 +239,7 @@ export function PartnerDriverDetail({
         </span>
       </div>
 
-      <form action={saveAction} className="partner-profile-form">
+      <form action={saveAction} className="partner-profile-form partner-fleet-form">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="id" value={driver.id} />
         <input type="hidden" name="fullName" value={draft.fullName} />
@@ -336,7 +385,15 @@ export function PartnerDriverDetail({
               emptyLabel={copy.uetdsCompanyEmpty}
               hideLabel
               onChange={(uetdsCompanyId) =>
-                setDraft((current) => ({ ...current, uetdsCompanyId }))
+                setDraft((current) => ({
+                  ...current,
+                  uetdsCompanyId,
+                  defaultAuthorityId: authoritiesForCompany(authorities, uetdsCompanyId).some(
+                    (item) => item.id === current.defaultAuthorityId,
+                  )
+                    ? current.defaultAuthorityId
+                    : "",
+                }))
               }
             />
           ) : (
@@ -350,6 +407,87 @@ export function PartnerDriverDetail({
             </p>
           )}
         </DetailRow>
+
+        <DetailRow
+          label={copy.defaultVehicle}
+          editLabel={`${copy.editField}: ${copy.defaultVehicle}`}
+          editing={Boolean(editing.defaultVehicle)}
+          onEdit={() =>
+            setEditing((current) => ({ ...current, defaultVehicle: !current.defaultVehicle }))
+          }
+        >
+          {editing.defaultVehicle ? (
+            <FleetOptionalSelect
+              name="defaultVehicleId"
+              value={draft.defaultVehicleId}
+              emptyLabel={copy.fleetPairNone}
+              options={vehicles}
+              onChange={(defaultVehicleId) =>
+                setDraft((current) => ({ ...current, defaultVehicleId }))
+              }
+            />
+          ) : (
+            <>
+              <input type="hidden" name="defaultVehicleId" value={draft.defaultVehicleId} />
+              <p className="partner-billing-value">
+                {choiceLabel(vehicles, draft.defaultVehicleId, copy.fleetPairNone)}
+              </p>
+            </>
+          )}
+        </DetailRow>
+
+        <DetailRow
+          label={copy.defaultEdevletAuthority}
+          editLabel={`${copy.editField}: ${copy.defaultEdevletAuthority}`}
+          editing={Boolean(editing.defaultAuthority)}
+          onEdit={() =>
+            setEditing((current) => ({ ...current, defaultAuthority: !current.defaultAuthority }))
+          }
+        >
+          {editing.defaultAuthority ? (
+            <FleetOptionalSelect
+              name="defaultAuthorityId"
+              value={draft.defaultAuthorityId}
+              emptyLabel={copy.fleetPairNone}
+              options={authoritiesForCompany(authorities, draft.uetdsCompanyId)}
+              onChange={(defaultAuthorityId) =>
+                setDraft((current) => ({ ...current, defaultAuthorityId }))
+              }
+            />
+          ) : (
+            <>
+              <input type="hidden" name="defaultAuthorityId" value={draft.defaultAuthorityId} />
+              <p className="partner-billing-value">
+                {choiceLabel(
+                  authoritiesForCompany(authorities, draft.uetdsCompanyId),
+                  draft.defaultAuthorityId,
+                  copy.fleetPairNone,
+                )}
+              </p>
+            </>
+          )}
+        </DetailRow>
+
+        <DriverUetdsSubscriptionSection
+          locale={panelLocale}
+          value={subscriptionDraft}
+          readOnly
+          disabled
+          sectionTitle={copy.uetdsSubscriptionTitle}
+          enrollLabel=""
+          enrollHint={copy.uetdsSubscriptionNotManaged}
+          feeLabel={copy.uetdsSubscriptionFee}
+          currencyLabel=""
+          monthsLabel={copy.uetdsSubscriptionMonths}
+          statusLabels={{
+            unpaid: copy.uetdsSubscriptionUnpaid,
+            paid: copy.uetdsSubscriptionPaid,
+            free: copy.uetdsSubscriptionFree,
+          }}
+          onChange={() => {
+            /* Partner read-only */
+          }}
+        />
 
         {saveState.ok && mode === "view" ? (
           <p className="ops-form-ok" role="status">

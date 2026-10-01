@@ -57,6 +57,7 @@ export type DriverTaskField = {
 
 export type DriverTaskPublicView = {
   valid: true;
+  departureBlocked: boolean;
   stage: DriverTaskStage;
   nextStage: DriverTaskStage | null;
   actionLabel: string | null;

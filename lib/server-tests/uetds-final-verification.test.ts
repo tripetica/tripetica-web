@@ -24,7 +24,7 @@ test("create final verification and read-only reconciliation with all network mo
   draft.fare = "0";
   draft.startDate = draft.endDate = "2030-01-01";
   draft.startTime = "19:00"; draft.endTime = "22:00";
-  draft.passengers = [createPassengerDraft({ firstName: "Fixture", lastName: "Passenger", identityNumber: "FAKE-TEST", nationality: "TR", gender: "male" })];
+  draft.passengers = [createPassengerDraft({ firstName: "Johanna", lastName: "Huedo-Gonzalez", identityNumber: "FAKE-TEST", nationality: "TR", gender: "male" })];
   let operations: string[] = [];
   let summaryXml = summary;
   let timeout = false;
@@ -37,6 +37,12 @@ test("create final verification and read-only reconciliation with all network mo
     assert.equal(user, expectedUsername);
     const action = String((init?.headers as Record<string,string>).SOAPAction).replaceAll('"', '').split('/').pop()!;
     operations.push(action);
+    if (action === "yolcuEkle") {
+      assert.match(String(init?.body), /<adi>Johanna<\/adi>/);
+      assert.match(String(init?.body), /<soyadi>Huedo Gonzalez<\/soyadi>/);
+      assert.doesNotMatch(String(init?.body), /Huedo-Gonzalez/);
+    }
+
     if (action === "bildirimOzeti") {
       assert.ok(init?.signal, "final summary has a bounded timeout");
       if (timeout) throw new DOMException("Fixture timeout", "TimeoutError");

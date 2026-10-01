@@ -1,3 +1,4 @@
+import { notificationHasGoldDriver } from "@/lib/uetds/ai-edit-visibility";
 import { notFound } from "next/navigation";
 import { UetdsNotificationDetailView } from "@/components/uetds/uetds-notification-detail";
 import { isLocale } from "@/lib/i18n/config";
@@ -27,9 +28,11 @@ export default async function OpsUetdsNotificationDetailPage({
   if (!notification) {
     notFound();
   }
+  const showAiEdit = await notificationHasGoldDriver(notification.id, notification.partnerId);
   return (
     <UetdsNotificationDetailView
       notification={notification}
+      showAiEdit={showAiEdit}
       copy={uetdsFormCopyFor(locale)}
       listHref={localizedPath(locale, "/ops/uetds/notifications")}
       pdfHref={
@@ -41,6 +44,11 @@ export default async function OpsUetdsNotificationDetailPage({
         notification.status === "cancelled"
           ? null
           : localizedPath(locale, `/ops/uetds/notifications/${notification.id}/edit`)
+      }
+      aiEditHref={
+        showAiEdit && notification.status !== "cancelled"
+          ? localizedPath(locale, `/ops/uetds/notifications/${notification.id}/ai-edit`)
+          : null
       }
       openEditMethod={query.editMethod === "1"}
       actor="ops"

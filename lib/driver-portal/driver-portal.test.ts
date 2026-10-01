@@ -44,10 +44,13 @@ test("driver portal session cookie is isolated from ops, partner, and customer a
   assert.notEqual(DRIVER_PORTAL_SESSION_COOKIE, PARTNER_SESSION_COOKIE);
   assert.notEqual(DRIVER_PORTAL_SESSION_COOKIE, OPS_SESSION_COOKIE);
   assert.notEqual(DRIVER_PORTAL_SESSION_COOKIE, ACCOUNT_SESSION_COOKIE);
-  assert.match(source("proxy.ts"), /DRIVER_PORTAL_SESSION_COOKIE/);
-  assert.match(source("proxy.ts"), /resolveLegacyDriverRedirect/);
-  assert.match(source("proxy.ts"), /\/driver/);
-  assert.doesNotMatch(source("proxy.ts"), /sofor-gorevi/);
+  const proxy = source("proxy.ts");
+  assert.match(proxy, /DRIVER_PORTAL_SESSION_COOKIE/);
+  assert.match(proxy, /resolveLegacyDriverRedirect/);
+  assert.match(proxy, /\/driver/);
+  assert.equal((proxy.match(/sofor-gorevi/g) ?? []).length, 1);
+  assert.match(proxy, /sofor\|sofor-gorevi/);
+  assert.doesNotMatch(proxy, /\/\(tr\|en\|ru\)\/sofor-gorevi/);
 });
 
 test("canonical driver routes replace legacy sofor paths without changing tokens", () => {

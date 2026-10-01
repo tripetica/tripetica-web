@@ -32,6 +32,7 @@ import { scheduleFlightTrackingCheck } from "@/lib/ops/flight-tracking-schedule"
 import {
   driverAssignmentFingerprint,
   driverTaskPath,
+  isDriverTaskDepartureBlocked,
   isDriverTaskProgressStage,
   isDriverTaskPublicAccessOpen,
   isDriverTaskStage,
@@ -472,6 +473,7 @@ export async function loadDriverTaskByToken(
   return {
     valid: true,
     stage: row.current_stage,
+    departureBlocked: isDriverTaskDepartureBlocked(row.current_stage, row.pickup_at),
     nextStage: closedOutcome ? null : nextDriverTaskStage(row.current_stage),
     actionLabel: closedOutcome ? null : driverTaskActionLabel(row.current_stage),
     completed: row.current_stage === "completed",
@@ -559,7 +561,7 @@ export async function advanceDriverTaskByToken(
   requestedStage: string,
 ): Promise<
   | { ok: true; stage: DriverTaskStage }
-  | { ok: false; reason: "revoked" | "completed" | "conflict" }
+  | { ok: false; reason: "revoked" | "completed" | "conflict" | "too-early" }
 > {
   const trimmed = token.trim();
   if (!trimmed || !isDriverTaskProgressStage(requestedStage)) {
@@ -572,6 +574,7 @@ export async function advanceDriverTaskByToken(
     const locked = await client.query<
       TaskRow & {
         status: string;
+        pickup_at: Date | null;
         assigned_driver_kind: string | null;
         assigned_driver_id: string | null;
         assigned_driver_snapshot: unknown;
@@ -580,7 +583,7 @@ export async function advanceDriverTaskByToken(
       `SELECT
           t.reservation_id, t.access_token, t.current_stage, t.driver_fingerprint,
           ${COMPLETED_AT_SQL} AS completed_at,
-          r.status, r.assigned_driver_kind, r.assigned_driver_id, r.assigned_driver_snapshot
+          r.status, r.pickup_at, r.assigned_driver_kind, r.assigned_driver_id, r.assigned_driver_snapshot
        FROM reservation_driver_tasks t
        JOIN reservations r ON r.id = t.reservation_id
        WHERE t.access_token = $1
@@ -612,6 +615,10 @@ export async function advanceDriverTaskByToken(
     if (nextDriverTaskStage(row.current_stage) !== requestedStage) {
       await client.query("ROLLBACK");
       return { ok: false, reason: "conflict" };
+    }
+    if (isDriverTaskDepartureBlocked(row.current_stage, row.pickup_at)) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "too-early" };
     }
     const updated = await client.query<TaskRow>(
       `UPDATE reservation_driver_tasks

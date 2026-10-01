@@ -321,6 +321,8 @@ test("draft requires official locations, end time and passenger gender", () => {
   draft.passengers[0]!.gender = "";
   assert.ok(missingMandatoryFields(draft).includes("passenger.0.gender"));
   draft.passengers[0]!.gender = "male";
+  assert.deepEqual(missingMandatoryFields(syncDraftLocations(draft)), ["fare"]);
+  draft.fare = "0";
   assert.deepEqual(missingMandatoryFields(syncDraftLocations(draft)), []);
 });
 

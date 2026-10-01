@@ -22,7 +22,8 @@ export type UetdsEligibilityReason =
   | "incomplete"
   | "mismatch"
   | "inactive"
-  | "not-ready";
+  | "not-ready"
+  | "subscription";
 
 export type UetdsEligibility = {
   ok: boolean;

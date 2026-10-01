@@ -16,6 +16,7 @@ import { loadUetdsReservationContext } from "@/lib/uetds/reservation-context";
 import { findActiveUetdsNotificationForReservation } from "@/lib/uetds/reservation-notification";
 import { resolveUetdsMinistryRuntime } from "@/lib/uetds/ministry-env";
 import { defaultUetdsEndFromStart } from "@/lib/uetds/trip-time";
+import { listAssignableEdevletAuthorities } from "@/lib/partner/fleet-pairing";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +66,10 @@ export default async function PartnerUetdsNewNotificationPage({
       ? mergeSavedReservationDraft(saved, fresh)
       : fresh
     : (saved ?? createEmptyDraft("manual"));
-  const [listedDrivers, listedVehicles] = await Promise.all([
+  const [listedDrivers, listedVehicles, authorities] = await Promise.all([
     listUetdsDriverOptions({ scope: "partner", partnerId: actor.partnerId }),
     listUetdsVehicleOptions({ scope: "partner", partnerId: actor.partnerId }),
+    listAssignableEdevletAuthorities({ partnerId: actor.partnerId }),
   ]);
   const { drivers, vehicles } = await withSelectedUetdsOptions({
     scope: "partner",
@@ -86,6 +88,7 @@ export default async function PartnerUetdsNewNotificationPage({
       initialDraft={draft}
       drivers={drivers}
       vehicles={vehicles}
+      authorities={authorities}
       listHref={localizedPath(locale, "/partner/uetds/notifications")}
     />
   );

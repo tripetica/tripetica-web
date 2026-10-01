@@ -28,6 +28,7 @@ type PartnerProfileFormProps = {
   locale: Locale;
   copy: PartnerCopy;
   profile: PartnerSelfProfile;
+  authoritySection?: ReactNode;
 };
 
 type ProfileDraft = {
@@ -155,7 +156,7 @@ function ProfileRow({
   );
 }
 
-export function PartnerProfileForm({ locale, copy, profile }: PartnerProfileFormProps) {
+export function PartnerProfileForm({ locale, copy, profile, authoritySection }: PartnerProfileFormProps) {
   const baseline = useMemo(() => draftFromProfile(profile), [profile]);
   const [draft, setDraft] = useState(baseline);
   const [editing, setEditing] = useState<Partial<Record<EditableField, boolean>>>({});
@@ -435,6 +436,8 @@ export function PartnerProfileForm({ locale, copy, profile }: PartnerProfileForm
               {copy.emailChanged}
             </p>
           ) : null}
+
+          {authoritySection}
 
           <div className="partner-password-trigger">
             {passwordOpen ? (

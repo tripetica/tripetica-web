@@ -12,6 +12,9 @@ Environment=NODE_ENV=production
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3001
 Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/var/lib/tripetica-prod
+Environment=TMPDIR=/var/lib/tripetica-prod/tmp
+Environment=TRIPETICA_CHROMIUM=/var/lib/tripetica-prod/pw-browsers/chromium-1243/chrome-linux64/chrome
 ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3001
 Restart=on-failure
 RestartSec=5
@@ -21,7 +24,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/srv/tripetica
+ReadWritePaths=/srv/tripetica /var/lib/tripetica-prod
 StandardOutput=journal
 StandardError=journal
 

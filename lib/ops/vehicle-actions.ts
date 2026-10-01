@@ -9,7 +9,7 @@ export async function searchOpsVehiclesAction(input: {
 }) {
   const actor = await getOpsActor();
   if (!actor || !actorCan(actor, "partners.view")) {
-    return { items: [], total: 0, page: 1, pageSize: OPS_VEHICLES_PAGE_SIZE };
+    return { items: [], total: 0, page: 1, pageSize: OPS_VEHICLES_PAGE_SIZE, fleetChoices: {} };
   }
   return listOpsVehicles({
     query: input.query,

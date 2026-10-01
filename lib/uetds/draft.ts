@@ -226,6 +226,22 @@ export function purposeForTripKind(kind: UetdsTripKind) {
   return "";
 }
 
+/** Group description is only Transfer, Tur, or Tahsis. Anything else, including an empty or "Diğer" value, is Transfer. */
+export function canonicalGroupPurpose(input: { tripKind?: string | null; purpose?: string | null }): {
+  tripKind: "transfer" | "tour" | "charter";
+  purpose: "Transfer" | "Tur" | "Tahsis";
+} {
+  const kind = (input.tripKind ?? "").trim().toLocaleLowerCase("tr-TR");
+  const purpose = (input.purpose ?? "").trim().toLocaleLowerCase("tr-TR");
+  if (kind === "tour" || purpose === "tur" || purpose === "tour") {
+    return { tripKind: "tour", purpose: "Tur" };
+  }
+  if (kind === "charter" || purpose === "tahsis" || purpose === "charter") {
+    return { tripKind: "charter", purpose: "Tahsis" };
+  }
+  return { tripKind: "transfer", purpose: "Transfer" };
+}
+
 export function countSuggestedFields(draft: UetdsDraft) {
   let count = 0;
   for (const value of Object.values(draft.fieldProvenance)) {

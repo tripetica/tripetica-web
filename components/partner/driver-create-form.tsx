@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { PhoneField } from "@/components/booking/phone-field";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type Locale } from "@/lib/i18n/config";
@@ -13,11 +14,18 @@ import {
 } from "@/lib/partner/driver-actions";
 import { PARTNER_DEFAULT_COUNTRY_CODE } from "@/lib/partner/constants";
 import { type PartnerCopy } from "@/lib/partner/copy";
+import {
+  authoritiesForCompany,
+  type AuthorityChoice,
+  type FleetChoice,
+} from "@/lib/partner/fleet-pairing-rules";
 
 type PartnerDriverCreateFormProps = {
   locale: Locale;
   copy: PartnerCopy;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
+  vehicles: readonly FleetChoice[];
+  authorities: readonly AuthorityChoice[];
 };
 
 const ERROR_COPY: Record<
@@ -34,6 +42,8 @@ const ERROR_COPY: Record<
   "not-found": "driverSaveFailed",
   "in-use": "driverSaveFailed",
   "invalid-uetds-company": "invalidUetdsCompany",
+  "invalid-fleet-pair": "invalidFleetPair",
+  "invalid-edevlet-authority": "invalidEdevletAuthority",
   failed: "driverSaveFailed",
 };
 
@@ -41,6 +51,8 @@ export function PartnerDriverCreateForm({
   locale,
   copy,
   activeUetdsCompanies,
+  vehicles,
+  authorities,
 }: PartnerDriverCreateFormProps) {
   const [state, action, pending] = useActionState<PartnerDriverFormState, FormData>(
     partnerCreateDriverAction,
@@ -50,9 +62,12 @@ export function PartnerDriverCreateForm({
   const [phoneNational, setPhoneNational] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
   const [uetdsCompanyId, setUetdsCompanyId] = useState("");
+  const [defaultVehicleId, setDefaultVehicleId] = useState("");
+  const [defaultAuthorityId, setDefaultAuthorityId] = useState("");
+  const authorityOptions = authoritiesForCompany(authorities, uetdsCompanyId);
 
   return (
-    <form action={action} className="partner-profile-form">
+    <form action={action} className="partner-profile-form partner-fleet-form">
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="phoneCountryCode" value={phoneCountry} />
       <input type="hidden" name="phoneNational" value={phoneNational} />
@@ -100,7 +115,28 @@ export function PartnerDriverCreateForm({
         noneLabel={copy.uetdsNotifyNone}
         searchPlaceholder={copy.uetdsCompanySearch}
         emptyLabel={copy.uetdsCompanyEmpty}
-        onChange={setUetdsCompanyId}
+        onChange={(companyId) => {
+          setUetdsCompanyId(companyId);
+          if (!authoritiesForCompany(authorities, companyId).some((item) => item.id === defaultAuthorityId)) {
+            setDefaultAuthorityId("");
+          }
+        }}
+      />
+      <FleetOptionalSelect
+        name="defaultVehicleId"
+        label={copy.defaultVehicle}
+        value={defaultVehicleId}
+        emptyLabel={copy.fleetPairNone}
+        options={vehicles}
+        onChange={setDefaultVehicleId}
+      />
+      <FleetOptionalSelect
+        name="defaultAuthorityId"
+        label={copy.defaultEdevletAuthority}
+        value={authorityOptions.some((item) => item.id === defaultAuthorityId) ? defaultAuthorityId : ""}
+        emptyLabel={copy.fleetPairNone}
+        options={authorityOptions}
+        onChange={setDefaultAuthorityId}
       />
       {state.error ? (
         <p className="ops-form-error" role="alert">

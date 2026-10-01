@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
+import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type PartnerCopy } from "@/lib/partner/copy";
 import { filterPartnerVehicles } from "@/lib/partner/driver-list-view";
 import {
-  formatUetdsCompanyListLabel,
+  patchPartnerVehicleCompanyAction,
+  patchPartnerVehicleDriverAction,
+} from "@/lib/partner/fleet-list-actions";
+import {
+  companyChoicesForRow,
+  fleetChoicesForPartner,
+  type FleetChoicesByPartner,
+} from "@/lib/partner/fleet-pairing-rules";
+import {
   partnerVehicleBrandModel,
   partnerVehicleCapacityLabel,
   vehicleStatusBadgeClass,
@@ -19,6 +29,8 @@ type PartnerVehicleListProps = {
   locale: Locale;
   copy: PartnerCopy;
   vehicles: PartnerVehicleRecord[];
+  companies: readonly UetdsCompanyRef[];
+  fleetChoices: FleetChoicesByPartner;
   addHref: string;
   justAdded?: boolean;
 };
@@ -27,10 +39,23 @@ export function PartnerVehicleList({
   locale,
   copy,
   vehicles,
+  companies,
+  fleetChoices,
   addHref,
   justAdded = false,
 }: PartnerVehicleListProps) {
   const [query, setQuery] = useState("");
+  const [rows, setRows] = useState(vehicles);
+  const rowSignature = vehicles
+    .map((vehicle) =>
+      [vehicle.id, vehicle.uetdsCompanyId ?? "", vehicle.defaultDriverId ?? ""].join(":"),
+    )
+    .join("|");
+  const [seenRows, setSeenRows] = useState(rowSignature);
+  if (seenRows !== rowSignature) {
+    setSeenRows(rowSignature);
+    setRows(vehicles);
+  }
 
   useEffect(() => {
     if (!justAdded || typeof window === "undefined") {
@@ -45,7 +70,7 @@ export function PartnerVehicleList({
     window.history.replaceState({}, "", `${url.pathname}${search ? `?${search}` : ""}${url.hash}`);
   }, [justAdded]);
 
-  const visible = useMemo(() => filterPartnerVehicles(vehicles, query), [vehicles, query]);
+  const visible = useMemo(() => filterPartnerVehicles(rows, query), [rows, query]);
 
   return (
     <>
@@ -68,7 +93,7 @@ export function PartnerVehicleList({
           {copy.vehicleAdded}
         </p>
       ) : null}
-      {vehicles.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="partner-empty">
           <p className="partner-empty-lead">{copy.vehicleEmpty}</p>
           <a className="ops-btn-primary" href={addHref}>
@@ -89,6 +114,7 @@ export function PartnerVehicleList({
                 <th>{copy.vehicleClass}</th>
                 <th>{copy.vehicleCapacity}</th>
                 <th>{copy.uetdsCompanyColumn}</th>
+                <th>{copy.defaultDriver}</th>
                 <th>{copy.vehicleStatus}</th>
                 <th>{copy.vehicleDetail}</th>
               </tr>
@@ -106,7 +132,63 @@ export function PartnerVehicleList({
                       : "—"}
                   </td>
                   <td>{partnerVehicleCapacityLabel(vehicle, copy)}</td>
-                  <td>{formatUetdsCompanyListLabel(vehicle.uetdsCompany, copy.uetdsCompanyExternal)}</td>
+                  <td>
+                    <FleetInlineSelect
+                      value={vehicle.uetdsCompanyId ?? ""}
+                      options={companyChoicesForRow(companies, vehicle.uetdsCompany)}
+                      emptyLabel={copy.uetdsNotifyNone}
+                      label={copy.uetdsCompanyColumn}
+                      saveFailedLabel={copy.vehicleSaveFailed}
+                      onSave={async (next) => {
+                        const result = await patchPartnerVehicleCompanyAction({
+                          locale,
+                          vehicleId: vehicle.id,
+                          companyId: next,
+                        });
+                        if (!result.ok) return false;
+                        setRows((current) =>
+                          current.map((item) =>
+                            item.id === vehicle.id
+                              ? { ...item, uetdsCompanyId: result.companyId, uetdsCompany: result.company }
+                              : item,
+                          ),
+                        );
+                        return true;
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <FleetInlineSelect
+                      value={vehicle.defaultDriverId ?? ""}
+                      options={fleetChoicesForPartner(fleetChoices, vehicle.partnerId).drivers}
+                      emptyLabel={copy.fleetPairNone}
+                      label={copy.defaultDriver}
+                      saveFailedLabel={copy.vehicleSaveFailed}
+                      onSave={async (next) => {
+                        const result = await patchPartnerVehicleDriverAction({
+                          locale,
+                          vehicleId: vehicle.id,
+                          driverId: next,
+                        });
+                        if (!result.ok) return false;
+                        setRows((current) =>
+                          current.map((item) => {
+                            if (item.id === vehicle.id) {
+                              return { ...item, defaultDriverId: result.driverId };
+                            }
+                            if (result.releasedVehicleId && item.id === result.releasedVehicleId) {
+                              return { ...item, defaultDriverId: null };
+                            }
+                            if (result.driverId && item.defaultDriverId === result.driverId) {
+                              return { ...item, defaultDriverId: null };
+                            }
+                            return item;
+                          }),
+                        );
+                        return true;
+                      }}
+                    />
+                  </td>
                   <td>
                     <span className={`ops-status-badge ${vehicleStatusBadgeClass(vehicle.status)}`}>
                       {vehicleStatusLabel(vehicle.status, copy)}

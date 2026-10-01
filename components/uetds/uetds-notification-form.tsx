@@ -21,6 +21,7 @@ import {
   createPassengerDraft,
   markUserEdited,
   missingMandatoryFields,
+  canonicalGroupPurpose,
   purposeForTripKind,
   syncDraftLocations,
   type UetdsDraft,
@@ -32,14 +33,25 @@ import {
 import { applyUetdsStartToEnd, isUetdsEndAfterStart } from "@/lib/uetds/trip-time";
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
 import { extractionHasStructuredFields } from "@/lib/uetds/extract";
-import { AI_EXTRACTION_MAX_TEXT, mergeAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
+import { cloneUetdsDraft } from "@/lib/uetds/ai-edit";
+import { captureAiEditSnapshot, planAiEditContinue, portalNextDraftFromSnapshot, type AiEditChangePlan, type AiEditSnapshot, type PortalNextDraft } from "@/lib/uetds/ai-edit-snapshot";
+import { AiEditLunaWorkspace } from "@/components/uetds/ai-edit-luna-workspace";
+import { AI_EXTRACTION_MAX_TEXT, mergeAiUetdsExtraction, type AiExtractionMergeOptions } from "@/lib/uetds/ai-extraction-schema";
 import {
   createBrowserUetdsPlacesLookup,
   enrichUetdsDraftLocationsFromText,
 } from "@/lib/uetds/resolve-location";
 import { initialUetdsFleetSelection, selectedFleetCompany, type UetdsFleetOption, type UetdsFleetScope } from "@/lib/uetds/fleet-options";
 import {
+  allowedAuthorityIds,
+  applyDriverVehicleDefault,
+  authorityForNotificationForm,
+  initialVehicleForSelectedDriver,
+  type AuthorityChoice,
+} from "@/lib/partner/fleet-pairing-rules";
+import {
   extractUetdsDocumentAction,
+  persistAiEditTargetAction,
   saveUetdsFormDraftAction,
   submitUetdsNotificationAction,
   type UetdsSubmitFormState,
@@ -61,7 +73,22 @@ type UetdsNotificationFormProps = {
   initialDraft: UetdsDraft;
   drivers: UetdsFleetOption[];
   vehicles: UetdsFleetOption[];
+  authorities?: readonly AuthorityChoice[];
   listHref: string;
+  /** Prefilled edit of an existing notification. Original stays untouched in memory. */
+  aiEdit?: {
+    originalDraft: UetdsDraft;
+    meta: {
+      notificationId: string;
+      partnerId: string;
+      companyId: string | null;
+      companyName: string;
+      seferReference: string | null;
+      plate: string;
+      driverName: string;
+      vehicleLabel: string;
+    };
+  };
 };
 
 function provenanceHint(value: UetdsFieldProvenance, copy: UetdsFormCopy) {
@@ -99,17 +126,45 @@ export function UetdsNotificationForm({
   initialDraft,
   drivers,
   vehicles,
+  authorities = [],
   listHref,
+  aiEdit,
 }: UetdsNotificationFormProps) {
-  const [draft, setDraft] = useState(() => syncDraftLocations({
-    ...initialDraft,
-    ...initialUetdsFleetSelection(initialDraft, drivers, vehicles),
-  }));
+  const originalDraftRef = useRef(aiEdit ? cloneUetdsDraft(aiEdit.originalDraft) : null);
+  const oldSnapshotRef = useRef<AiEditSnapshot | null>(aiEdit ? captureAiEditSnapshot(aiEdit.originalDraft, aiEdit.meta) : null);
+  const newSnapshotRef = useRef<AiEditSnapshot | null>(null);
+  const aiMergeOptions: AiExtractionMergeOptions | undefined = aiEdit
+    ? { lockPassengerCount: true, preserveUntouchedTimes: true, replaceMissingDocument: true }
+    : undefined;
+  const [draft, setDraft] = useState(() => {
+    const selected = syncDraftLocations({
+      ...initialDraft,
+      ...initialUetdsFleetSelection(initialDraft, drivers, vehicles),
+    });
+    const driver = drivers.find((item) => item.id === selected.driverId);
+    return initialVehicleForSelectedDriver(
+      selected,
+      initialDraft.vehicleId,
+      driver?.defaultVehicleId,
+      vehicles.map((item) => item.id),
+    );
+  });
+  const [authorityId, setAuthorityId] = useState(() => {
+    const selected = drivers.find((item) => item.id === draft.driverId);
+    return authorityForNotificationForm({
+      previousDriverId: "",
+      nextDriverId: selected?.id ?? "",
+      currentAuthorityId: "",
+      defaultAuthorityId: selected?.defaultAuthorityId,
+      allowedAuthorityIds: selected ? allowedAuthorityIds(selected, authorities) : [],
+    });
+  });
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const [conflicts, setConflicts] = useState<UetdsFieldConflict[]>([]);
   const [extractHint, setExtractHint] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [locationPrefillVersion, setLocationPrefillVersion] = useState(0);
   const extractionInFlight = useRef(false);
   const extractionValidationPending = useRef(false);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -118,6 +173,10 @@ export function UetdsNotificationForm({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const selectedFiles = [...documentFiles, ...imageFiles];
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editPlan, setEditPlan] = useState<AiEditChangePlan | null>(null);
+  const [lunaOpen, setLunaOpen] = useState(false);
+  const [lunaDraft, setLunaDraft] = useState<PortalNextDraft | null>(null);
+  const [aiContinueHint, setAiContinueHint] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const [state, action, pending] = useActionState<UetdsSubmitFormState, FormData>(
@@ -137,6 +196,43 @@ export function UetdsNotificationForm({
       : null;
 
   const skipFirstSave = useRef(true);
+
+  function snapshotMeta(nextDraft: UetdsDraft) {
+    if (!aiEdit) return null;
+    const driver = drivers.find((item) => item.id === nextDraft.driverId);
+    const vehicle = vehicles.find((item) => item.id === nextDraft.vehicleId);
+    return {
+      ...aiEdit.meta,
+      driverName: nextDraft.driverId === aiEdit.originalDraft.driverId ? aiEdit.meta.driverName : driver?.label || aiEdit.meta.driverName,
+      vehicleLabel: vehicle?.label || aiEdit.meta.vehicleLabel,
+      plate: nextDraft.vehicleId === aiEdit.originalDraft.vehicleId ? aiEdit.meta.plate : vehicle?.label || aiEdit.meta.plate,
+    };
+  }
+
+  function rememberNewSnapshot(nextDraft: UetdsDraft) {
+    if (!aiEdit || !originalDraftRef.current) return null;
+    const meta = snapshotMeta(nextDraft);
+    if (!meta) return null;
+    const planned = planAiEditContinue({
+      existingOld: oldSnapshotRef.current,
+      originalDraft: originalDraftRef.current,
+      currentDraft: nextDraft,
+      meta,
+      authorityId,
+    });
+    if (!oldSnapshotRef.current) oldSnapshotRef.current = planned.old;
+    newSnapshotRef.current = planned.next;
+    setEditPlan(planned.plan);
+    return planned;
+  }
+
+  function clearEditMemory() {
+    oldSnapshotRef.current = null;
+    newSnapshotRef.current = null;
+    setEditPlan(null);
+    setLunaOpen(false);
+    setLunaDraft(null);
+  }
   const draftRef = useRef(draft);
   draftRef.current = draft;
 
@@ -165,7 +261,7 @@ export function UetdsNotificationForm({
   }, [timeAdjustment]);
 
   useEffect(() => {
-    if (!draft.reservationId || submittedOk || storedAttempt) {
+    if (aiEdit || !draft.reservationId || submittedOk || storedAttempt) {
       return;
     }
     if (skipFirstSave.current) {
@@ -179,10 +275,10 @@ export function UetdsNotificationForm({
       void saveUetdsFormDraftAction(formData);
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, [actor, draft, submittedOk, storedAttempt]);
+  }, [actor, aiEdit, draft, submittedOk, storedAttempt]);
 
   useEffect(() => {
-    if (!draft.reservationId) return;
+    if (aiEdit || !draft.reservationId) return;
     function flushDraft() {
       if (submittedOk || storedAttempt) {
         return;
@@ -203,7 +299,7 @@ export function UetdsNotificationForm({
       window.removeEventListener("pagehide", flushDraft);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [actor, draft.reservationId, submittedOk, storedAttempt]);
+  }, [actor, aiEdit, draft.reservationId, submittedOk, storedAttempt]);
 
   const countryOptions = useMemo(
     () =>
@@ -224,6 +320,13 @@ export function UetdsNotificationForm({
     [vehicles],
   );
   const driver = drivers.find((item) => item.id === draft.driverId) ?? null;
+  const authorityOptions = useMemo(() => {
+    const allowed = new Set(driver ? allowedAuthorityIds(driver, authorities) : []);
+    return authorities
+      .filter((item) => allowed.has(item.id))
+      .map((item) => ({ value: item.id, label: item.label }));
+  }, [authorities, driver]);
+  const visibleAuthorityId = authorityOptions.some((item) => item.value === authorityId) ? authorityId : "";
   const vehicle = vehicles.find((item) => item.id === draft.vehicleId) ?? null;
   const company = selectedFleetCompany(driver, vehicle);
   const eligibility = evaluateUetdsEligibility({
@@ -293,17 +396,34 @@ export function UetdsNotificationForm({
   }
 
   function purposeChipSelected(tripKind: UetdsTripKind) {
-    const purpose = draft.purpose.trim();
-    if (tripKind === "transfer") {
-      return purpose === "Transfer";
+    const canonical = canonicalGroupPurpose({ tripKind: draft.tripKind, purpose: draft.purpose });
+    if (tripKind === "transfer") return canonical.purpose === "Transfer";
+    if (tripKind === "tour") return canonical.purpose === "Tur";
+    if (tripKind === "charter") return canonical.purpose === "Tahsis";
+    return false;
+  }
+
+  async function continueAiEdit() {
+    if (!aiEdit) return;
+    const planned = rememberNewSnapshot(draft);
+    if (!planned?.openLogin) {
+      setAiContinueHint(copy.edevletAuthority);
+      return;
     }
-    if (tripKind === "tour") {
-      return purpose === "Tur";
+    const formData = new FormData();
+    formData.set("actor", actor);
+    formData.set("locale", locale);
+    formData.set("id", aiEdit.meta.notificationId);
+    formData.set("draft", JSON.stringify(draft));
+    const saved = await persistAiEditTargetAction(formData);
+    if (!saved.ok) {
+      setAiContinueHint(copy.saveFailed);
+      return;
     }
-    if (tripKind === "charter") {
-      return purpose === "Tahsis";
-    }
-    return purpose !== "Transfer" && purpose !== "Tur" && purpose !== "Tahsis";
+    setExtractHint(null);
+    setAiContinueHint(null);
+    setLunaDraft(planned.next ? portalNextDraftFromSnapshot(planned.next) : null);
+    setLunaOpen(true);
   }
 
   const visibleFieldErrors = fieldErrors.filter((message) => message !== copy.endBeforeStart);
@@ -478,13 +598,16 @@ export function UetdsNotificationForm({
         setExtractHint(copy.extractNone);
         return false;
       }
-      const merged = mergeAiUetdsExtraction(draftRef.current, result.extracted ?? {});
+      const merged = mergeAiUetdsExtraction(draftRef.current, result.extracted ?? {}, Date.now(), aiMergeOptions);
       const enriched = await enrichUetdsDraftLocationsFromText(
         merged.draft,
         createBrowserUetdsPlacesLookup(locale),
       );
       extractionValidationPending.current = true;
-      setDraft({ ...merged.draft, ...enriched });
+      const applied = { ...merged.draft, ...enriched };
+      setDraft(applied);
+      rememberNewSnapshot(applied);
+      setLocationPrefillVersion((version) => version + 1);
       setConflicts(merged.conflicts);
       const missingAfter = missingMandatoryFields({ ...merged.draft, ...enriched });
       setExtractHint(
@@ -535,17 +658,14 @@ export function UetdsNotificationForm({
       const merged = mergeAiUetdsExtraction(
         { ...draft, fieldProvenance: { ...draft.fieldProvenance, [key]: "missing" } },
         { [key]: conflict.incoming },
+        Date.now(),
+        aiMergeOptions,
       ).draft;
       const enriched = await enrichUetdsDraftLocationsFromText(
         merged,
         createBrowserUetdsPlacesLookup(locale),
       );
       setDraft({ ...merged, ...enriched });
-      setConflicts((current) => current.filter((item) => item.path !== conflict.path));
-      return;
-    }
-    if (choice === "incoming" && conflict.path === "tripKind") {
-      setDraft((current) => ({ ...current, tripKind: conflict.incoming as UetdsTripKind }));
       setConflicts((current) => current.filter((item) => item.path !== conflict.path));
       return;
     }
@@ -711,6 +831,8 @@ export function UetdsNotificationForm({
             locale={locale}
             copy={copy}
             label={copy.origin}
+            key={`origin-${locationPrefillVersion}`}
+            suggestOnMount={locationPrefillVersion > 0}
             fieldId="uetds-origin"
             value={draft.originLocation}
             invalid={missing.includes("origin")}
@@ -720,6 +842,8 @@ export function UetdsNotificationForm({
             locale={locale}
             copy={copy}
             label={copy.destination}
+            key={`destination-${locationPrefillVersion}`}
+            suggestOnMount={locationPrefillVersion > 0}
             fieldId="uetds-destination"
             value={draft.destinationLocation}
             invalid={missing.includes("destination")}
@@ -784,7 +908,6 @@ export function UetdsNotificationForm({
                   ["transfer", copy.tripTransfer],
                   ["tour", copy.tripTour],
                   ["charter", copy.tripCharter],
-                  ["other", copy.tripOther],
                 ] as const
               ).map(([kind, label]) => (
                 <button
@@ -876,6 +999,7 @@ export function UetdsNotificationForm({
                   </button>
                 </span>
               </label>
+              {aiEdit ? null : (
               <UetdsPassengerRemoveButton
                 passenger={passenger}
                 nationalityLabel={countryOptions.find((country) => country.value === passenger.nationality)?.label ?? passenger.nationality}
@@ -890,9 +1014,11 @@ export function UetdsNotificationForm({
                   }))
                 }
               />
+              )}
             </div>
           ))}
         </div>
+        {aiEdit ? null : (
         <button
           type="button"
           className="ops-btn-secondary"
@@ -905,6 +1031,7 @@ export function UetdsNotificationForm({
         >
           {copy.addPassenger}
         </button>
+        )}
       </div>
 
       <div className="uetds-form-section">
@@ -918,7 +1045,46 @@ export function UetdsNotificationForm({
               options={driverOptions}
               placeholder={copy.selectDriver}
               emptyLabel={copy.noDrivers}
-              onChange={(value) => updateTrip("driverId", value)}
+              onChange={(value) => {
+                const nextDriver = drivers.find((item) => item.id === value);
+                const previousDriverId = draft.driverId;
+                setAuthorityId((currentAuthority) =>
+                  authorityForNotificationForm({
+                    previousDriverId,
+                    nextDriverId: value,
+                    currentAuthorityId: currentAuthority,
+                    defaultAuthorityId: nextDriver?.defaultAuthorityId,
+                    allowedAuthorityIds: nextDriver ? allowedAuthorityIds(nextDriver, authorities) : [],
+                  }),
+                );
+                setDraft((current) => {
+                  const next = applyDriverVehicleDefault(
+                    current,
+                    value,
+                    nextDriver?.defaultVehicleId,
+                    vehicles.map((item) => item.id),
+                  );
+                  if (next === current) {
+                    return current;
+                  }
+                  return {
+                    ...next,
+                    fieldProvenance: {
+                      ...current.fieldProvenance,
+                      driverId: markUserEdited(
+                        current.fieldProvenance.driverId,
+                        next.driverId,
+                        current.driverId,
+                      ),
+                      vehicleId: markUserEdited(
+                        current.fieldProvenance.vehicleId,
+                        next.vehicleId,
+                        current.vehicleId,
+                      ),
+                    },
+                  };
+                });
+              }}
             />
           </label>
           <label data-uetds-field="vehicleId">
@@ -931,6 +1097,19 @@ export function UetdsNotificationForm({
               emptyLabel={copy.noVehicles}
               onChange={(value) => updateTrip("vehicleId", value)}
             />
+          </label>
+          <label data-uetds-field="edevletAuthorityId">
+            {copy.edevletAuthority}
+            <SearchableSelect
+              fieldId="uetds-edevlet-authority"
+              value={visibleAuthorityId}
+              options={authorityOptions}
+              placeholder={copy.selectEdevletAuthority}
+              emptyLabel={copy.noEdevletAuthorities}
+              onChange={setAuthorityId}
+            />
+            <p className="uetds-field-hint">{copy.edevletAuthorityOptional}</p>
+            <span hidden data-edevlet-authority-id={visibleAuthorityId} />
           </label>
         </div>
         {eligibility.ok && eligibility.companyShortName ? (
@@ -984,6 +1163,10 @@ export function UetdsNotificationForm({
                   ? copy.missingLiveCredentials
                   : state.error === "driver-identity"
                     ? copy.missingDriverIdentity
+                    : state.error === "subscription"
+                      ? actor === "partner"
+                        ? copy.reasonSubscriptionPartner
+                        : copy.reasonSubscription
                     : state.error === "location" || state.error === "missing"
                       ? copy.fieldErrorsTitle
                       : state.error === "ministry"
@@ -995,6 +1178,29 @@ export function UetdsNotificationForm({
         </p>
       ) : null}
 
+      {aiEdit ? (
+        <>
+          <button
+            type="button"
+            className="ops-btn-primary"
+            data-ai-original-passengers={oldSnapshotRef.current?.passengers.length ?? 0}
+            data-ai-change-count={editPlan?.passenger_changes.length ?? 0}
+            onClick={() => { void continueAiEdit(); }}
+          >
+            {copy.aiEditContinue}
+          </button>
+          {aiContinueHint ? <p className="uetds-field-hint" role="status">{aiContinueHint}</p> : null}
+          <AiEditLunaWorkspace
+            open={lunaOpen}
+            locale={locale}
+            notificationId={aiEdit.meta.notificationId}
+            authorityId={authorityId}
+            nextDraft={lunaDraft}
+            onClose={clearEditMemory}
+          />
+        </>
+      ) : (
+      <>
       <form ref={formRef} action={action} id="uetds-notification-submit">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="actor" value={actor} />
@@ -1008,6 +1214,8 @@ export function UetdsNotificationForm({
       >
         {copy.send}
       </button>
+      </>
+      )}
 
       {confirmOpen ? (
         <OpsConfirmDialog

@@ -1,5 +1,8 @@
 "use server";
 
+import { isDriverMembershipStatus } from "@/lib/ops/driver-membership";
+import { saveDriverMembership } from "@/lib/ops/driver-membership-store";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
@@ -20,6 +23,12 @@ import {
   updatePartnerDriver,
   updatePartnerVehicle,
 } from "@/lib/partner/fleet";
+import {
+  isUetdsSubscriptionCurrency,
+  parseSubscriptionPeriodsFromForm,
+  parseUetdsSubscriptionFee,
+} from "@/lib/uetds/driver-subscription";
+import { saveDriverUetdsSubscription } from "@/lib/uetds/driver-subscription-store";
 
 export type OpsFleetFormState = {
   error:
@@ -46,6 +55,8 @@ export type OpsFleetFormState = {
     | "invalid-fields"
     | "in-use"
     | "invalid-uetds-company"
+    | "invalid-subscription-fee"
+    | "invalid-subscription-currency"
     | "failed"
     | null;
   ok: boolean;
@@ -115,6 +126,28 @@ export async function updateOpsPartnerDriverAction(
     if (!resolved.ok) {
       return { error: "invalid-uetds-company", ok: false };
     }
+    const membership = formData.get("membershipStatus");
+    if (membership !== null && !isDriverMembershipStatus(membership)) {
+      return { error: "invalid-fields", ok: false };
+    }
+    const enrolled = String(formData.get("uetdsSubscriptionEnrolled") ?? "0") === "1";
+    const currencyRaw = String(formData.get("uetdsSubscriptionCurrency") ?? "USD").trim().toUpperCase();
+    const currency = isUetdsSubscriptionCurrency(currencyRaw) ? currencyRaw : null;
+    const monthlyFee = parseUetdsSubscriptionFee(
+      String(formData.get("uetdsSubscriptionMonthlyFee") ?? ""),
+    );
+    if (enrolled) {
+      if (monthlyFee == null) {
+        return { error: "invalid-subscription-fee", ok: false };
+      }
+      if (!currency) {
+        return { error: "invalid-subscription-currency", ok: false };
+      }
+    }
+    const periods = parseSubscriptionPeriodsFromForm(
+      String(formData.get("uetdsSubscriptionPeriods") ?? ""),
+    );
+
     const result = await updatePartnerDriver({
       partnerId,
       driverId: recordId,
@@ -133,6 +166,27 @@ export async function updateOpsPartnerDriverAction(
     if (!result.ok) {
       logFleetFailure("update-driver", result.error, { partnerId, recordId });
       return { error: result.error, ok: false };
+    }
+
+    const subscriptionResult = await saveDriverUetdsSubscription({
+      driverId: recordId,
+      partnerId,
+      opsUserId: actor.id,
+      enrolled,
+      monthlyFee: enrolled ? monthlyFee : null,
+      currency: enrolled ? currency : null,
+      periods,
+    });
+    if (!subscriptionResult.ok) {
+      logFleetFailure("update-driver-subscription", subscriptionResult.error, {
+        partnerId,
+        recordId,
+      });
+      return { error: subscriptionResult.error, ok: false };
+    }
+
+    if (membership !== null && !await saveDriverMembership(partnerId, recordId, membership)) {
+      return { error: "failed", ok: false };
     }
     const saved = await getPartnerDriver(partnerId, recordId);
     if (!saved) {

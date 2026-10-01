@@ -1,5 +1,7 @@
 "use client";
 
+import { DRIVER_TASK_DEPARTURE_HINT } from "@/lib/ops/driver-task-stages";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   advanceDriverTaskAction,
@@ -103,12 +105,17 @@ export function DriverTaskScreen({
 
   function advance() {
     const requested = view.nextStage;
-    if (!view.actionLabel || !requested || view.completed || view.closedOutcome || pending) {
+    if (!view.actionLabel || !requested || view.completed || view.closedOutcome || view.departureBlocked || pending) {
       return;
     }
     startTransition(async () => {
       const result = await advanceDriverTaskAction(token, requested);
       if (!result.ok) {
+        if (result.reason === "too-early") {
+          setView((current) => ({ ...current, departureBlocked: true }));
+          setError(null);
+          return;
+        }
         if (result.reason === "revoked") {
           window.location.reload();
           return;
@@ -130,6 +137,7 @@ export function DriverTaskScreen({
       setView((current) => ({
         ...current,
         stage: result.stage,
+        departureBlocked: false,
         nextStage: nextDriverTaskStage(result.stage),
         actionLabel: driverTaskActionLabel(result.stage),
         completed: result.stage === "completed",
@@ -221,11 +229,12 @@ export function DriverTaskScreen({
           <button
             type="button"
             className="driver-task-action"
-            disabled={pending}
+            disabled={pending || view.departureBlocked}
             onClick={advance}
           >
             {pending ? "Kaydediliyor…" : view.actionLabel}
           </button>
+          {view.departureBlocked ? <p className="driver-task-noshow-hint">{DRIVER_TASK_DEPARTURE_HINT}</p> : null}
           {view.noShow?.canReport ? (
             <>
               <button

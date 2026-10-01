@@ -35,7 +35,8 @@ test("partner session uses 30-day sliding renewal, not 12-hour absolute", () => 
     source("lib/partner/constants.ts"),
     /PARTNER_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 12/,
   );
-  assert.match(source("lib/ops/constants.ts"), /OPS_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 12/);
+  assert.match(source("lib/ops/constants.ts"), /OPS_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 24 \* 30/);
+  assert.doesNotMatch(source("lib/ops/constants.ts"), /OPS_SESSION_MAX_AGE_SECONDS = 60 \* 60 \* 12/);
 });
 
 test("primary partner is a database flag, not a hardcoded name check", () => {

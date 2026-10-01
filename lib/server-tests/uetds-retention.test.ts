@@ -3,21 +3,24 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { filterUetdsList, parseUetdsListFilters, uetdsTripTimestamp, isUetdsRetentionExpired } from '../uetds/list-policy';
+import { filterUetdsList, parseUetdsListFilters, uetdsTripTimestamp, isUetdsRetentionExpired, UETDS_ARCHIVE_AFTER_MS } from '../uetds/list-policy';
 import { deleteExpiredUetdsNotifications } from '../uetds/retention';
 import type { UetdsNotificationListItem } from '../uetds/notification-view';
 const end = uetdsTripTimestamp('2026-09-21', '18:00')!;
 const item = { id:'fixture', status:'submitted', endTimestamp:end, startTimestamp:end-3600000, createdAt:new Date(end).toISOString() } as UetdsNotificationListItem;
 
-test('Istanbul +6h boundary moves from current/completed to archive without state changes', () => {
-  const before = end+6*3600000-1;
-  assert.equal(filterUetdsList([item],parseUetdsListFilters(),before).length,1);
-  assert.equal(filterUetdsList([item],parseUetdsListFilters({status:'completed'}),before).length,1);
-  assert.equal(filterUetdsList([item],parseUetdsListFilters({status:'archive'}),before).length,0);
-  const midnight = uetdsTripTimestamp('2026-09-22','00:00')!;
-  for(const status of ['active','completed','cancelled','all']) assert.equal(filterUetdsList([item],parseUetdsListFilters({status}),midnight).length,0);
-  assert.equal(filterUetdsList([item],parseUetdsListFilters({status:'archive'}),midnight).length,1);
-  assert.equal(item.status,'submitted');
+test('archive starts at trip end plus 2 hours and does not change the notification status', () => {
+  assert.equal(UETDS_ARCHIVE_AFTER_MS, 2 * 60 * 60 * 1000);
+  const before = end + (2 * 60 - 1) * 60 * 1000;
+  assert.equal(filterUetdsList([item], parseUetdsListFilters(), before).length, 1);
+  assert.equal(filterUetdsList([item], parseUetdsListFilters({ status: 'archive' }), before).length, 0);
+  const exact = end + 2 * 60 * 60 * 1000;
+  assert.equal(filterUetdsList([item], parseUetdsListFilters(), exact).length, 0);
+  assert.equal(filterUetdsList([item], parseUetdsListFilters({ status: 'archive' }), exact).length, 1);
+  const after = exact + 60 * 1000;
+  assert.equal(filterUetdsList([item], parseUetdsListFilters({ status: 'archive' }), after).length, 1);
+  assert.equal(filterUetdsList([item], parseUetdsListFilters(), after).length, 0);
+  assert.equal(item.status, 'submitted');
 });
 test('30-day strict cutoff and malformed dates fail closed', () => {
   const cutoff = uetdsTripTimestamp('2026-10-21','18:00')!;

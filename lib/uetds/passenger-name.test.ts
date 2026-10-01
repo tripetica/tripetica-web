@@ -78,9 +78,9 @@ test("repair only when lastName empty; never overwrite structured surname", () =
   );
 });
 
-test("ministry normalize still transliterates without ASCII-folding Turkish letters", () => {
+test("ministry normalize reuses ASCII folding while preserving casing", () => {
   assert.equal(normalizeUetdsPersonName("Алексей"), "Aleksey");
-  assert.equal(normalizeUetdsPersonName("Çiğdem"), "Çiğdem");
+  assert.equal(normalizeUetdsPersonName("Çiğdem"), "Cigdem");
 });
 
 test("AI extracted names fold to English ASCII A-Z/a-z", () => {
@@ -126,8 +126,23 @@ test("AI repair folds Højris Louens and keeps particle splits", () => {
   );
 });
 
-test("hyphen and apostrophe in AI names are preserved as ASCII separators", () => {
-  assert.equal(normalizeUetdsExtractedPersonName("Jean-Pierre"), "Jean-Pierre");
-  assert.equal(normalizeUetdsExtractedPersonName("O'Connor"), "O'Connor");
-  assert.equal(normalizeUetdsExtractedPersonName("O’Connor"), "O'Connor");
+test("hyphen and apostrophe in AI names become spaces", () => {
+  assert.equal(normalizeUetdsExtractedPersonName("Jean-Pierre"), "Jean Pierre");
+  assert.equal(normalizeUetdsExtractedPersonName("O'Connor"), "O Connor");
+  assert.equal(normalizeUetdsExtractedPersonName("O’Connor"), "O Connor");
 });
+
+for (const [input, expected] of [
+  ["Huedo-Gonzalez", "Huedo Gonzalez"], ["Anne-Marie", "Anne Marie"],
+  ["O'Connor", "O Connor"], ["D’Angelo", "D Angelo"], ["Jean.Pierre", "Jean Pierre"],
+  ["Ali,Yılmaz", "Ali Yilmaz"], ["Anne--Marie", "Anne Marie"], ["Ali...Veli", "Ali Veli"],
+  [" /Ali\\Veli_(Can)+$123 ", "Ali Veli Can"],
+]) {
+  test(`shared AI/SOAP name cleanup: ${input}`, () => {
+    for (const normalize of [normalizeUetdsExtractedPersonName, normalizeUetdsPersonName]) {
+      assert.equal(normalize(input), expected);
+      assert.match(normalize(input), /^[A-Za-z]+(?: [A-Za-z]+)*$/);
+      assert.equal(normalize(normalize(input)), expected);
+    }
+  });
+}

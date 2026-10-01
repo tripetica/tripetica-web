@@ -47,6 +47,20 @@ async function maybeAttachRenewedPartnerSessionCookie(
   }
 }
 
+async function maybeAttachRenewedOpsSessionCookie(request: NextRequest, response: NextResponse, token: string) {
+  try {
+    const { renewOpsSessionIfNeeded } = await import("@/lib/ops/session");
+    const expiresAt = await renewOpsSessionIfNeeded(token);
+    if (expiresAt) {
+      response.cookies.set(OPS_SESSION_COOKIE, token, {
+        httpOnly: true, sameSite: "lax", secure: requestIsHttps(request), path: "/", expires: expiresAt,
+      });
+    }
+  } catch {
+    // getOpsActor still validates the session; renewal failure must not bypass auth.
+  }
+}
+
 export async function proxy(request: NextRequest) {
   if (isGoneLegacyLangRoot(request.nextUrl.pathname, request.nextUrl.searchParams)) {
     return new NextResponse(null, { status: LEGACY_LANG_GONE_STATUS });
@@ -89,14 +103,17 @@ export async function proxy(request: NextRequest) {
     const locale = opsMatch[1];
     const rest = opsMatch[2] ?? "";
     const isLogin = rest === "login" || rest === "login/";
-    const hasSession = Boolean(request.cookies.get(OPS_SESSION_COOKIE)?.value);
+    const token = request.cookies.get(OPS_SESSION_COOKIE)?.value;
+    const hasSession = Boolean(token);
     if (!isLogin && !hasSession) {
       const url = request.nextUrl.clone();
       url.pathname = `/${locale}/ops/login`;
       url.search = "";
       return NextResponse.redirect(url);
     }
-    return withPathnameHeader(request, "x-ops-pathname", pathname);
+    const response = withPathnameHeader(request, "x-ops-pathname", pathname);
+    if (token && !isLogin) await maybeAttachRenewedOpsSessionCookie(request, response, token);
+    return response;
   }
 
   const driverPortalMatch = pathname.match(/^\/(tr|en|ru)\/driver(?:\/(.*))?$/);

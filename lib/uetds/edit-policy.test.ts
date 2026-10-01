@@ -331,12 +331,12 @@ test("edit form surfaces Ministry sonucMesaji instead of generic saveFailed", ()
   const form = source("components/uetds/uetds-notification-edit-form.tsx");
   assert.match(form, /error === "ministry"/);
   assert.match(form, /ministryFailed/);
-  assert.match(form, /manageMessage\(state\.error, copy, state\.message, ministryEnv\)/);
+  assert.match(form, /manageMessage\(state\.error, copy, state\.message, ministryEnv, actor\)/);
   assert.doesNotMatch(form, /suppressHydrationWarning/);
 });
 
 test("person names drop iOS invisible characters before Ministry", () => {
-  assert.equal(normalizeUetdsPersonName("Çiğdem\u200B"), "Çiğdem");
+  assert.equal(normalizeUetdsPersonName("Çiğdem\u200B"), "Cigdem");
   assert.equal(normalizeUetdsPersonName("Hakan\u00A0Kemal"), "Hakan Kemal");
   assert.equal(normalizeUetdsPersonName("  TESTDORT  YOLCU  "), "TESTDORT YOLCU");
   assert.equal(normalizeUetdsPersonName("Алексей"), "Aleksey");

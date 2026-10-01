@@ -17,6 +17,13 @@ import {
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
 import { selectedFleetCompany, type UetdsFleetOption } from "@/lib/uetds/fleet-options";
 import {
+  allowedAuthorityIds,
+  applyDriverVehicleDefault,
+  authorityForDriverChange,
+  showGoldAuthorityField,
+  type AuthorityChoice,
+} from "@/lib/partner/fleet-pairing-rules";
+import {
   createPassengerDraft,
   missingMandatoryFields,
   type UetdsDraft,
@@ -44,6 +51,7 @@ type UetdsNotificationEditFormProps = {
   editWindow: UetdsEditWindow;
   drivers: UetdsFleetOption[];
   vehicles: UetdsFleetOption[];
+  authorities: AuthorityChoice[];
   seferCompanyId: string | null;
   listHref: string;
 };
@@ -53,6 +61,7 @@ function manageMessage(
   copy: UetdsFormCopy,
   detail?: string | null,
   ministryEnv?: "test" | "live" | null,
+  actor?: "partner" | "ops",
 ) {
   if (error === "start-locked") {
     return copy.editStartLocked;
@@ -118,6 +127,9 @@ function manageMessage(
   if (error === "driver-identity") {
     return copy.missingDriverIdentity;
   }
+  if (error === "subscription") {
+    return actor === "partner" ? copy.reasonSubscriptionPartner : copy.reasonSubscription;
+  }
   if (error === "reservation-scope") {
     return copy.forbidden;
   }
@@ -157,10 +169,22 @@ export function UetdsNotificationEditForm({
   editWindow,
   drivers,
   vehicles,
+  authorities,
   seferCompanyId,
   listHref,
 }: UetdsNotificationEditFormProps) {
   const [draft, setDraft] = useState(initialDraft);
+  const [authorityId, setAuthorityId] = useState(() => {
+    const driver = drivers.find((item) => item.id === initialDraft.driverId);
+    return authorityForDriverChange({
+      previousDriverId: "",
+      nextDriverId: initialDraft.driverId,
+      currentAuthorityId: "",
+      membershipStatus: driver?.membershipStatus,
+      defaultAuthorityId: driver?.defaultAuthorityId,
+      allowedAuthorityIds: allowedAuthorityIds(driver, authorities),
+    });
+  });
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -193,6 +217,13 @@ export function UetdsNotificationEditForm({
   );
   const selectedDriver = drivers.find((item) => item.id === draft.driverId) ?? null;
   const selectedVehicle = vehicles.find((item) => item.id === draft.vehicleId) ?? null;
+  const goldAuthority = showGoldAuthorityField(selectedDriver?.membershipStatus);
+  const authorityOptions = useMemo(() => {
+    const allowed = new Set(allowedAuthorityIds(selectedDriver, authorities));
+    return authorities
+      .filter((item) => allowed.has(item.id))
+      .map((item) => ({ value: item.id, label: item.label }));
+  }, [authorities, selectedDriver]);
   const eligibility = evaluateUetdsEligibility({
     driverId: draft.driverId,
     vehicleId: draft.vehicleId,
@@ -272,7 +303,7 @@ export function UetdsNotificationEditForm({
       <section className="uetds-form" ref={validation.rootRef}>
         <p className="uetds-form-info" role="status">
           {state.warning
-            ? manageMessage(state.warning, copy, state.message, ministryEnv)
+            ? manageMessage(state.warning, copy, state.message, ministryEnv, actor)
             : state.status === "partial_update"
               ? state.message || copy.editPartial
               : copy.editUpdated}
@@ -522,7 +553,27 @@ export function UetdsNotificationEditForm({
               options={driverOptions}
               placeholder={copy.selectDriver}
               emptyLabel={copy.noDrivers}
-              onChange={(value) => setDraft((current) => ({ ...current, driverId: value }))}
+              onChange={(value) => {
+                const nextDriver = drivers.find((item) => item.id === value);
+                setDraft((current) =>
+                  applyDriverVehicleDefault(
+                    current,
+                    value,
+                    nextDriver?.defaultVehicleId,
+                    vehicles.map((item) => item.id),
+                  ),
+                );
+                setAuthorityId((currentAuthority) =>
+                  authorityForDriverChange({
+                    previousDriverId: draft.driverId,
+                    nextDriverId: value,
+                    currentAuthorityId: currentAuthority,
+                    membershipStatus: nextDriver?.membershipStatus,
+                    defaultAuthorityId: nextDriver?.defaultAuthorityId,
+                    allowedAuthorityIds: allowedAuthorityIds(nextDriver, authorities),
+                  }),
+                );
+              }}
             />
           </label>
           <label data-uetds-field="vehicleId">
@@ -536,6 +587,19 @@ export function UetdsNotificationEditForm({
               onChange={(value) => setDraft((current) => ({ ...current, vehicleId: value }))}
             />
           </label>
+          {goldAuthority ? (
+            <label data-uetds-field="edevletAuthorityId">
+              {copy.edevletAuthority}
+              <SearchableSelect
+                fieldId="uetds-edit-authority"
+                value={authorityId}
+                options={authorityOptions}
+                placeholder={copy.selectEdevletAuthority}
+                emptyLabel={copy.noEdevletAuthorities}
+                onChange={setAuthorityId}
+              />
+            </label>
+          ) : null}
         </div>
         {eligibility.ok && !seferCompanyMismatch && eligibility.companyShortName ? (
           <p className="uetds-eligible">{replaceCompany(copy.eligibleVia, eligibility.companyShortName)}</p>
@@ -552,7 +616,7 @@ export function UetdsNotificationEditForm({
 
       {endBeforeStart ? <p className="ops-form-error">{copy.endBeforeStart}</p> : null}
       {state.error ? (
-        <p className="ops-form-error">{manageMessage(state.error, copy, state.message, ministryEnv)}</p>
+        <p className="ops-form-error">{manageMessage(state.error, copy, state.message, ministryEnv, actor)}</p>
       ) : null}
 
       <form ref={formRef} action={action} id="uetds-edit-submit">

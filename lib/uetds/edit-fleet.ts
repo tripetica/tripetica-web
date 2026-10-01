@@ -12,7 +12,8 @@ export type UetdsEditFleetIssue =
   | "not-ready"
   | "company-mismatch"
   | "driver-identity"
-  | "reservation-scope";
+  | "reservation-scope"
+  | "subscription";
 
 export function ministryPlateEquals(left: string | null | undefined, right: string | null | undefined) {
   const a = foldUetdsSearchPlate(left ?? "");

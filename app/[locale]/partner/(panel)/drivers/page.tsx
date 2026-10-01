@@ -5,6 +5,8 @@ import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { listPartnerDrivers } from "@/lib/partner/fleet";
+import { listFleetChoicesForPartners } from "@/lib/partner/fleet-pairing";
+import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 
 export const dynamic = "force-dynamic";
 
@@ -21,15 +23,21 @@ export default async function PartnerDriversPage({
   const added = query.added;
   const justAdded = (Array.isArray(added) ? added[0] : added) === "1";
   const copy = partnerCopy[asPanelLocale(locale)];
-  const drivers = await listPartnerDrivers(actor.partnerId);
+  const [drivers, companies, fleetChoices] = await Promise.all([
+    listPartnerDrivers(actor.partnerId),
+    listActiveUetdsCompanyOptions(),
+    listFleetChoicesForPartners([actor.partnerId]),
+  ]);
   const addHref = localizedPath(locale, "/partner/drivers/new");
 
   return (
-    <div className="ops-page partner-drivers-page">
+    <div className="ops-page partner-drivers-page partner-drivers-list-page">
       <PartnerDriverList
         locale={locale}
         copy={copy}
         drivers={drivers}
+        companies={companies}
+        fleetChoices={fleetChoices}
         addHref={addHref}
         justAdded={justAdded}
       />

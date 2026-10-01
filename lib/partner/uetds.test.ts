@@ -21,6 +21,7 @@ test("partner uetds sits between vehicles and profile", () => {
       "/partner/drivers",
       "/partner/vehicles",
       "/partner/uetds",
+      "/partner/edevlet-authorities",
       "/partner/profile",
       "/partner/employer-billing",
     ],

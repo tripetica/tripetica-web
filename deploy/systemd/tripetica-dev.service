@@ -19,6 +19,9 @@ Environment=HOME=/var/lib/tripetica-dev
 Environment=npm_config_cache=/var/lib/tripetica-dev/npm-cache
 Environment=NODE_ENV=development
 Environment=EXPECTED_DATABASE=tripetica_dev
+Environment=TRIPETICA_CHROMIUM=/var/lib/tripetica-dev/pw-browsers/chromium-1243/chrome-linux64/chrome
+Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/tripetica-dev/pw-browsers
+Environment=TMPDIR=/var/lib/tripetica-dev/tmp
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -38,6 +41,7 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 SystemCallArchitectures=native
 BindPaths=/root/tripetica-web:/var/lib/tripetica-dev/app
+BindReadOnlyPaths=/tmp/pw-browsers:/var/lib/tripetica-dev/pw-browsers
 ReadWritePaths=/var/lib/tripetica-dev
 InaccessiblePaths=/srv/tripetica
 BindReadOnlyPaths=/dev/null:/var/lib/tripetica-dev/app/.env.local

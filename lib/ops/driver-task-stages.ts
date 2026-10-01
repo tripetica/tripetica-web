@@ -49,6 +49,20 @@ export function canAdvanceDriverTask(
   return nextDriverTaskStage(current) === requested;
 }
 
+/** Uses canonical reservation pickup_at and the server clock; only the first transition is gated. */
+export function isDriverTaskDepartureBlocked(
+  stage: DriverTaskStage,
+  pickupAt: Date | null,
+  nowMs = Date.now(),
+): boolean {
+  if (stage !== "planned") return false;
+  const pickupMs = pickupAt?.getTime() ?? Number.NaN;
+  return !Number.isFinite(pickupMs) || pickupMs - nowMs > 6 * 60 * 60 * 1000;
+}
+
+export const DRIVER_TASK_DEPARTURE_HINT =
+  "Yola çıktım işlemi rezervasyon saatinden 6 saat önce aktif olur.";
+
 /** Public Driver Task stays open this long after BIRAKTIM / completed_at. */
 export const DRIVER_TASK_PUBLIC_GRACE_MS = 2 * 60 * 1000;
 

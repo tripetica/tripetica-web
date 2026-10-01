@@ -9,6 +9,7 @@ import {
   type UetdsPassengerDraft,
 } from "@/lib/uetds/draft";
 import { normalizeUetdsPurposeText } from "@/lib/uetds/form-language";
+import { parseDescribedTripDates } from "@/lib/uetds/extracted-datetime";
 import { normalizeUetdsPersonName } from "@/lib/uetds/passenger-name";
 
 export type UetdsExtractedPassenger = {
@@ -189,7 +190,7 @@ export function extractionHasStructuredFields(extracted: UetdsExtractedDraft | n
   );
 }
 
-export function extractUetdsFromText(text: string): UetdsExtractedDraft {
+export function extractUetdsFromText(text: string, nowUtcMs = Date.now()): UetdsExtractedDraft {
   const source = text.replace(/\u0000/g, " ").slice(0, 200_000);
   const extracted: UetdsExtractedDraft = {};
   const nationalityMatch = source.match(NATIONALITY_LABEL);
@@ -259,6 +260,27 @@ export function extractUetdsFromText(text: string): UetdsExtractedDraft {
     );
   } else if (firstPassenger) {
     extracted.passengers = [firstPassenger];
+  }
+  const described = parseDescribedTripDates(source, nowUtcMs);
+  if (described.start?.status === "resolved") {
+    extracted.startDate = described.start.date;
+    if (described.start.time) {
+      extracted.startTime = described.start.time;
+    }
+  } else if (described.start?.status === "rejected") {
+    delete extracted.startDate;
+    delete extracted.startTime;
+  }
+  if (described.end?.status === "resolved") {
+    if (described.end.date) {
+      extracted.endDate = described.end.date;
+    }
+    if (described.end.time) {
+      extracted.endTime = described.end.time;
+    }
+  } else if (described.end?.status === "rejected") {
+    delete extracted.endDate;
+    delete extracted.endTime;
   }
   return extracted;
 }
@@ -354,6 +376,7 @@ function applyPassengerField(
 export function mergeExtractedDraft(
   current: UetdsDraft,
   extracted: UetdsExtractedDraft,
+  options?: { lockPassengerCount?: boolean },
 ): { draft: UetdsDraft; conflicts: UetdsFieldConflict[] } {
   const draft: UetdsDraft = {
     ...current,
@@ -395,15 +418,20 @@ export function mergeExtractedDraft(
     draft.destinationReview = true;
   }
 
-  const count = Math.max(
-    extracted.passengerCount ?? 0,
-    extracted.passengers?.length ?? 0,
-    draft.passengers.length,
-  );
-  if (count > 0) {
-    draft.passengers = ensurePassengerCount(draft.passengers, count);
+  const incomingPassengers = options?.lockPassengerCount
+    ? (extracted.passengers ?? []).slice(0, draft.passengers.length)
+    : extracted.passengers ?? [];
+  if (!options?.lockPassengerCount) {
+    const count = Math.max(
+      extracted.passengerCount ?? 0,
+      incomingPassengers.length,
+      draft.passengers.length,
+    );
+    if (count > 0) {
+      draft.passengers = ensurePassengerCount(draft.passengers, count);
+    }
   }
-  (extracted.passengers ?? []).forEach((incoming, index) => {
+  incomingPassengers.forEach((incoming, index) => {
     const passenger = draft.passengers[index] ?? createPassengerDraft();
     if (!draft.passengers[index]) {
       draft.passengers[index] = passenger;

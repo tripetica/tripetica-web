@@ -4,6 +4,7 @@ import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { partnerCopy } from "@/lib/partner/copy";
+import { listPartnerDriverChoices } from "@/lib/partner/fleet-pairing";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,12 @@ export default async function PartnerVehicleNewPage({
   if (!isLocale(locale)) {
     notFound();
   }
-  await requirePartnerPage(locale);
+  const actor = await requirePartnerPage(locale);
   const copy = partnerCopy[asPanelLocale(locale)];
-  const activeUetdsCompanies = await listActiveUetdsCompanyOptions();
+  const [activeUetdsCompanies, drivers] = await Promise.all([
+    listActiveUetdsCompanyOptions(),
+    listPartnerDriverChoices(actor.partnerId),
+  ]);
 
   return (
     <div className="ops-page partner-profile-page">
@@ -28,6 +32,7 @@ export default async function PartnerVehicleNewPage({
           locale={locale}
           copy={copy}
           activeUetdsCompanies={activeUetdsCompanies}
+          drivers={drivers}
         />
       </section>
     </div>

@@ -5,6 +5,7 @@ import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getPartnerVehicle } from "@/lib/partner/fleet";
+import { getVehicleFleetLink, listPartnerDriverChoices } from "@/lib/partner/fleet-pairing";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,11 @@ export default async function PartnerVehicleDetailPage({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const [vehicle, activeUetdsCompanies] = await Promise.all([
+  const [vehicle, activeUetdsCompanies, drivers, link] = await Promise.all([
     getPartnerVehicle(actor.partnerId, id),
     listActiveUetdsCompanyOptions(),
+    listPartnerDriverChoices(actor.partnerId),
+    getVehicleFleetLink(actor.partnerId, id),
   ]);
   if (!vehicle) {
     notFound();
@@ -32,6 +35,8 @@ export default async function PartnerVehicleDetailPage({
         copy={partnerCopy[asPanelLocale(locale)]}
         vehicle={vehicle}
         activeUetdsCompanies={activeUetdsCompanies}
+        drivers={drivers}
+        defaultDriverId={link.defaultDriverId}
       />
     </div>
   );

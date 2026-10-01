@@ -14,6 +14,7 @@ import {
 import { snapshotToUetdsDraft } from "@/lib/uetds/manage";
 import { resolveUetdsMinistryRuntime } from "@/lib/uetds/ministry-env";
 import { getUetdsNotification } from "@/lib/uetds/notifications";
+import { listAssignableEdevletAuthorities } from "@/lib/partner/fleet-pairing";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +34,10 @@ export default async function OpsUetdsNotificationEditPage({
     notFound();
   }
   await prefillUetdsFare(notification, draft);
-  const [listedDrivers, listedVehicles] = await Promise.all([
+  const [listedDrivers, listedVehicles, authorities] = await Promise.all([
     listUetdsDriverOptions({ scope: "ops" }),
     listUetdsVehicleOptions({ scope: "ops" }),
+    listAssignableEdevletAuthorities({}),
   ]);
   const { drivers, vehicles } = await withSelectedUetdsOptions({
     scope: "ops",
@@ -57,6 +59,7 @@ export default async function OpsUetdsNotificationEditPage({
       editWindow={evaluateUetdsEditWindow(draft.startDate, draft.startTime, Date.now())}
       drivers={drivers}
       vehicles={vehicles}
+      authorities={authorities}
       seferCompanyId={notification.companyId}
       listHref={localizedPath(locale, `/ops/uetds/notifications/${notification.id}`)}
     />

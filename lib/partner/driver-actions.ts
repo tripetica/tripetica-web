@@ -13,6 +13,7 @@ import {
   updatePartnerDriver,
 } from "@/lib/partner/fleet";
 import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
+import { saveDriverAuthority, saveDriverVehiclePair } from "@/lib/partner/fleet-pairing";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerDriverFormState = {
@@ -27,6 +28,8 @@ export type PartnerDriverFormState = {
     | "not-found"
     | "in-use"
     | "invalid-uetds-company"
+    | "invalid-fleet-pair"
+    | "invalid-edevlet-authority"
     | "failed"
     | null;
   ok: boolean;
@@ -53,6 +56,37 @@ function refreshPartnerDrivers(locale: Locale, partnerId: string, driverId?: str
   if (driverId) {
     revalidatePath(localizedPath(locale, `/ops/partners/${partnerId}/drivers/${driverId}`));
   }
+}
+
+function submittedId(formData: FormData, key: string) {
+  if (!formData.has(key)) {
+    return undefined;
+  }
+  const value = String(formData.get(key) ?? "").trim();
+  return value || null;
+}
+
+async function applyDriverLinks(
+  formData: FormData,
+  partnerId: string,
+  driverId: string,
+  companyId: string | null,
+): Promise<PartnerDriverFormState | null> {
+  const vehicleId = submittedId(formData, "defaultVehicleId");
+  if (vehicleId !== undefined) {
+    const paired = await saveDriverVehiclePair({ partnerId, driverId, vehicleId });
+    if (!paired.ok) {
+      return { error: "invalid-fleet-pair", ok: false };
+    }
+  }
+  const authorityId = submittedId(formData, "defaultAuthorityId");
+  if (authorityId !== undefined) {
+    const linked = await saveDriverAuthority({ partnerId, driverId, authorityId, companyId });
+    if (!linked.ok) {
+      return { error: "invalid-edevlet-authority", ok: false };
+    }
+  }
+  return null;
 }
 
 async function requirePartnerActor(locale: Locale) {
@@ -95,6 +129,15 @@ export async function partnerCreateDriverAction(
   if (!result.ok) {
     return { error: result.error === "failed" ? "failed" : result.error, ok: false };
   }
+  const linkError = await applyDriverLinks(
+    formData,
+    actor.partnerId,
+    result.driverId,
+    resolved.companyId,
+  );
+  if (linkError) {
+    return linkError;
+  }
   refreshPartnerDrivers(locale, actor.partnerId, result.driverId);
   redirect(localizedPath(locale, "/partner/drivers?added=1"));
 }
@@ -132,6 +175,15 @@ export async function partnerUpdateDriverAction(
     });
     if (!result.ok) {
       return { error: result.error, ok: false };
+    }
+    const linkError = await applyDriverLinks(
+      formData,
+      actor.partnerId,
+      driverId,
+      resolved.companyId,
+    );
+    if (linkError) {
+      return linkError;
     }
     refreshPartnerDrivers(locale, actor.partnerId, driverId);
     return { error: null, ok: true };

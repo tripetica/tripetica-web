@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { PartnerInfoForm } from "@/components/ops/partner-info-form";
@@ -6,6 +7,7 @@ import { type PartnerDriverRecord, type PartnerVehicleRecord } from "@/lib/partn
 import { type PartnerJobRecord } from "@/lib/partner/job-types";
 
 type PartnerDetailProps = {
+  authoritySection?: ReactNode;
   locale: Locale;
   copy: OpsCopy;
   partner: OpsPartnerDetail;
@@ -18,6 +20,7 @@ type PartnerDetailProps = {
 };
 
 export function PartnerDetail({
+  authoritySection,
   locale,
   copy,
   partner,
@@ -31,6 +34,7 @@ export function PartnerDetail({
   return (
     <section className="ops-page ops-partner-detail">
       <PartnerInfoForm
+        authoritySection={authoritySection}
         locale={locale}
         copy={copy}
         partner={partner}

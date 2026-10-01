@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
 import {
   emptyVehicleDraft,
   VehicleFields,
@@ -11,6 +12,7 @@ import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { type PartnerCopy } from "@/lib/partner/copy";
+import { type FleetChoice } from "@/lib/partner/fleet-pairing-rules";
 import {
   partnerCreateVehicleAction,
   type PartnerVehicleFormState,
@@ -25,6 +27,7 @@ type PartnerVehicleCreateFormProps = {
   locale: Locale;
   copy: PartnerCopy;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
+  drivers: readonly FleetChoice[];
 };
 
 const ERROR_COPY: Record<
@@ -45,6 +48,7 @@ const ERROR_COPY: Record<
   "not-found": "vehicleSaveFailed",
   "in-use": "vehicleSaveFailed",
   "invalid-uetds-company": "invalidUetdsCompany",
+  "invalid-fleet-pair": "invalidFleetPair",
   failed: "vehicleSaveFailed",
 };
 
@@ -52,6 +56,7 @@ export function PartnerVehicleCreateForm({
   locale,
   copy,
   activeUetdsCompanies,
+  drivers,
 }: PartnerVehicleCreateFormProps) {
   const [state, action, pending] = useActionState<PartnerVehicleFormState, FormData>(
     partnerCreateVehicleAction,
@@ -60,6 +65,7 @@ export function PartnerVehicleCreateForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<VehicleDraft>(emptyVehicleDraft);
   const [uetdsCompanyId, setUetdsCompanyId] = useState("");
+  const [defaultDriverId, setDefaultDriverId] = useState("");
   const [clientErrors, setClientErrors] = useState<Partial<Record<PartnerVehicleField, string>>>({});
   const [cleared, setCleared] = useState<Partial<Record<PartnerVehicleField, true>>>({});
   const [ignoreServer, setIgnoreServer] = useState(false);
@@ -101,7 +107,7 @@ export function PartnerVehicleCreateForm({
       ref={formRef}
       action={action}
       noValidate
-      className="partner-profile-form"
+      className="partner-profile-form partner-fleet-form"
       onSubmit={handleSubmit}
       onReset={(event) => event.preventDefault()}
     >
@@ -140,6 +146,14 @@ export function PartnerVehicleCreateForm({
         searchPlaceholder={copy.uetdsCompanySearch}
         emptyLabel={copy.uetdsCompanyEmpty}
         onChange={setUetdsCompanyId}
+      />
+      <FleetOptionalSelect
+        name="defaultDriverId"
+        label={copy.defaultDriver}
+        value={defaultDriverId}
+        emptyLabel={copy.fleetPairNone}
+        options={drivers}
+        onChange={setDefaultDriverId}
       />
       {state.error && !partnerVehicleErrorField(state.error) ? (
         <p className="ops-form-error" role="alert">

@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { VehicleFields, type VehicleDraft } from "@/components/partner/vehicle-fields";
 import { type Locale } from "@/lib/i18n/config";
@@ -29,12 +30,15 @@ import {
   vehicleStatusLabel,
 } from "@/lib/partner/vehicle-labels";
 import { partnerVehicleErrorField } from "@/lib/partner/vehicle-policy";
+import { type FleetChoice } from "@/lib/partner/fleet-pairing-rules";
 
 type PartnerVehicleDetailProps = {
   locale: Locale;
   copy: PartnerCopy;
   vehicle: PartnerVehicleRecord;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
+  drivers: readonly FleetChoice[];
+  defaultDriverId: string;
 };
 
 const ERROR_COPY: Record<
@@ -55,6 +59,7 @@ const ERROR_COPY: Record<
   "not-found": "vehicleSaveFailed",
   "in-use": "vehicleSaveFailed",
   "invalid-uetds-company": "invalidUetdsCompany",
+  "invalid-fleet-pair": "invalidFleetPair",
   failed: "vehicleSaveFailed",
 };
 
@@ -129,11 +134,15 @@ export function PartnerVehicleDetail({
   copy,
   vehicle,
   activeUetdsCompanies,
+  drivers,
+  defaultDriverId: linkedDriverId,
 }: PartnerVehicleDetailProps) {
   const baseline = useMemo(() => draftFromVehicle(vehicle), [vehicle]);
   const [draft, setDraft] = useState(baseline);
   const [uetdsCompanyId, setUetdsCompanyId] = useState(vehicle.uetdsCompanyId ?? "");
+  const [defaultDriverId, setDefaultDriverId] = useState(linkedDriverId);
   const baselineUetdsCompanyId = vehicle.uetdsCompanyId ?? "";
+  const baselineDriverId = linkedDriverId;
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [saveState, saveAction, saving] = useActionState<PartnerVehicleFormState, FormData>(
@@ -158,7 +167,10 @@ export function PartnerVehicleDetail({
     error: null,
     ok: false,
   });
-  const dirty = !draftsEqual(draft, baseline) || uetdsCompanyId !== baselineUetdsCompanyId;
+  const dirty =
+    !draftsEqual(draft, baseline) ||
+    uetdsCompanyId !== baselineUetdsCompanyId ||
+    defaultDriverId !== baselineDriverId;
   const mode = partnerDriverDetailMode(editing, dirty);
   const listHref = localizedPath(locale, "/partner/vehicles");
   const fieldError =
@@ -170,6 +182,7 @@ export function PartnerVehicleDetail({
   function discardEdits() {
     setDraft(baseline);
     setUetdsCompanyId(baselineUetdsCompanyId);
+    setDefaultDriverId(baselineDriverId);
     setEditing(false);
   }
 
@@ -184,7 +197,7 @@ export function PartnerVehicleDetail({
         </span>
       </div>
 
-      <form action={saveAction} className="partner-profile-form" noValidate>
+      <form action={saveAction} className="partner-profile-form partner-fleet-form" noValidate>
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="id" value={vehicle.id} />
         <input type="hidden" name="uetdsCompanyId" value={uetdsCompanyId} />
@@ -200,17 +213,27 @@ export function PartnerVehicleDetail({
           />
         ) : null}
         {editing ? (
-          <UetdsCompanySelect
-            name=""
-            value={uetdsCompanyId}
-            activeCompanies={activeUetdsCompanies}
-            currentCompany={vehicle.uetdsCompany ?? null}
-            fieldLabel={copy.uetdsNotifyCompany}
-            noneLabel={copy.uetdsNotifyNone}
-            searchPlaceholder={copy.uetdsCompanySearch}
-            emptyLabel={copy.uetdsCompanyEmpty}
-            onChange={setUetdsCompanyId}
-          />
+          <>
+            <UetdsCompanySelect
+              name=""
+              value={uetdsCompanyId}
+              activeCompanies={activeUetdsCompanies}
+              currentCompany={vehicle.uetdsCompany ?? null}
+              fieldLabel={copy.uetdsNotifyCompany}
+              noneLabel={copy.uetdsNotifyNone}
+              searchPlaceholder={copy.uetdsCompanySearch}
+              emptyLabel={copy.uetdsCompanyEmpty}
+              onChange={setUetdsCompanyId}
+            />
+            <FleetOptionalSelect
+              name="defaultDriverId"
+              label={copy.defaultDriver}
+              value={defaultDriverId}
+              emptyLabel={copy.fleetPairNone}
+              options={drivers}
+              onChange={setDefaultDriverId}
+            />
+          </>
         ) : (
           <>
             <input type="hidden" name="plate" value={draft.plate} />
@@ -298,6 +321,17 @@ export function PartnerVehicleDetail({
             >
               <p className="partner-billing-value">
                 {vehicle.uetdsCompany?.shortName ?? copy.uetdsNotifyNone}
+              </p>
+            </DetailRow>
+            <input type="hidden" name="defaultDriverId" value={defaultDriverId} />
+            <DetailRow
+              label={copy.defaultDriver}
+              editLabel={`${copy.editField}: ${copy.defaultDriver}`}
+              editing={false}
+              onEdit={() => setEditing(true)}
+            >
+              <p className="partner-billing-value">
+                {drivers.find((item) => item.id === defaultDriverId)?.label || copy.fleetPairNone}
               </p>
             </DetailRow>
           </>

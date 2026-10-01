@@ -21,6 +21,7 @@ type UetdsLocationFieldProps = {
   fieldId: string;
   value: UetdsLocation;
   invalid?: boolean;
+  suggestOnMount?: boolean;
   onChange: (value: UetdsLocation) => void;
 };
 
@@ -31,6 +32,7 @@ export function UetdsLocationField({
   fieldId,
   value,
   invalid,
+  suggestOnMount = false,
   onChange,
 }: UetdsLocationFieldProps) {
   const listId = useId();
@@ -40,7 +42,9 @@ export function UetdsLocationField({
   const inputRef = useRef<HTMLInputElement>(null);
   const ignoreFocusRef = useRef(false);
   const [query, setQuery] = useState(value.placeName);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() =>
+    suggestOnMount && Boolean(value.placeName.trim()) && !isOfficialUetdsLocationReady(value),
+  );
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [placesError, setPlacesError] = useState<string | null>(null);

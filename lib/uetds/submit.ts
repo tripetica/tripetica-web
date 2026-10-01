@@ -10,6 +10,8 @@ import {
 import { deleteUetdsFormDraft } from "@/lib/uetds/form-drafts";
 import { shouldDeleteUetdsFormDraftAfterMinistry } from "@/lib/uetds/form-draft-policy";
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
+import { isUetdsDriverSubscriptionEntitled } from "@/lib/uetds/driver-subscription";
+import { loadDriverUetdsSubscriptionEntitlement } from "@/lib/uetds/driver-subscription-store";
 import { adjustUetdsTripTimesForSubmit, type UetdsTripTimeAdjustment } from "@/lib/uetds/trip-time";
 import { selectedFleetCompany, type UetdsFleetScope } from "@/lib/uetds/fleet-options";
 import { getUetdsDriverOption, getUetdsVehicleOption } from "@/lib/uetds/fleet-scope";
@@ -28,6 +30,7 @@ export type UetdsSubmitError =
   | "forbidden"
   | "invalid"
   | "ineligible"
+  | "subscription"
   | "missing"
   | "location"
   | "driver-identity"
@@ -130,6 +133,15 @@ export async function submitUetdsNotification(input: {
   });
   if (!eligibility.ok || !company) {
     return { ok: false, error: "ineligible" };
+  }
+  const subscription = await loadDriverUetdsSubscriptionEntitlement(driver.id);
+  if (
+    !isUetdsDriverSubscriptionEntitled({
+      enrolled: subscription.enrolled,
+      periods: subscription.periods,
+    })
+  ) {
+    return { ok: false, error: "subscription" };
   }
   const missing = blockingUetdsDraftIssues(draft);
   if (missing.length > 0) {

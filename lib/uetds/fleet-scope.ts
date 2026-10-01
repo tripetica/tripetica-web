@@ -21,6 +21,9 @@ type DriverRow = {
   company_short_name: string | null;
   company_status: string | null;
   company_integration_status: string | null;
+  membership_status: string | null;
+  default_vehicle_id: string | null;
+  default_authority_id: string | null;
 };
 
 type VehicleRow = {
@@ -58,6 +61,9 @@ function mapDriver(row: DriverRow, scope: UetdsFleetScope): UetdsFleetOption {
     uetdsCompanyId: row.uetds_company_id,
     company,
     hasNationalId: Boolean(row.national_id?.trim()),
+    membershipStatus: row.membership_status === "gold" ? "gold" : "standard",
+    defaultVehicleId: row.default_vehicle_id,
+    defaultAuthorityId: row.default_authority_id,
     label: uetdsDriverOptionLabel({
       firstName: row.first_name,
       lastName: row.last_name,
@@ -89,7 +95,32 @@ const DRIVER_SELECT = `
   p.name AS partner_name,
   uc.short_name AS company_short_name,
   uc.status AS company_status,
-  uc.integration_status AS company_integration_status
+  uc.integration_status AS company_integration_status,
+  d.membership_status,
+  dv.id AS default_vehicle_id,
+  CASE
+    WHEN ea.id IS NULL THEN NULL
+    WHEN d.uetds_company_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM partner_uetds_authority_companies ac
+      WHERE ac.authority_id = ea.id AND ac.company_id = d.uetds_company_id
+    ) THEN NULL
+    ELSE ea.id
+  END AS default_authority_id
+`;
+
+const DRIVER_JOINS = `
+  LEFT JOIN partner_fleet_defaults fd
+    ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
+  LEFT JOIN partner_vehicles dv
+    ON dv.id = fd.vehicle_id
+   AND dv.partner_id = d.partner_id
+   AND dv.deleted_at IS NULL
+   AND dv.status = 'active'
+  LEFT JOIN partner_uetds_authorities ea
+    ON ea.id = d.default_edevlet_authority_id
+   AND ea.partner_id = d.partner_id
+   AND ea.deleted_at IS NULL
+   AND ea.status = 'active'
 `;
 
 const VEHICLE_SELECT = `
@@ -112,6 +143,7 @@ export async function listUetdsDriverOptions(input: {
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id AND p.deleted_at IS NULL
      LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
+     ${DRIVER_JOINS}
      WHERE d.deleted_at IS NULL
        AND d.status = 'active'
        AND ($1::uuid IS NULL OR d.partner_id = $1)
@@ -155,6 +187,7 @@ export async function getUetdsDriverOption(input: {
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id AND p.deleted_at IS NULL
      LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
+     ${DRIVER_JOINS}
      WHERE d.id = $1
        AND d.deleted_at IS NULL
        AND ($2::uuid IS NULL OR d.partner_id = $2)

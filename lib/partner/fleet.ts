@@ -17,12 +17,19 @@ import {
   type PartnerVehicleRecord,
   type PartnerVehicleStatus,
 } from "@/lib/partner/fleet-view";
+import { isDriverMembershipStatus } from "@/lib/ops/driver-membership";
+import {
+  addSubscriptionMonths,
+  istanbulSubscriptionPeriodKey,
+  mapUetdsSubscriptionListSummary,
+} from "@/lib/uetds/driver-subscription";
 import {
   nextPartnerVehicleStatus,
   parsePartnerVehicleInput,
   partnerCreateVehicleStatus,
 } from "@/lib/partner/vehicle-policy";
 import { vehicleClassRequiresApproval } from "@/lib/partner/vehicle-class";
+import { releaseFleetPair } from "@/lib/partner/fleet-pairing";
 
 export type {
   PartnerDriverRecord,
@@ -54,6 +61,14 @@ type DriverRow = {
   updated_at: Date;
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
+  uetds_subscription_enrolled_at?: Date | null;
+  uetds_subscription_monthly_fee?: string | null;
+  uetds_subscription_currency?: string | null;
+  current_period_status?: string | null;
+  next_period_status?: string | null;
+  membership_status?: string | null;
+  default_vehicle_id?: string | null;
+  default_authority_id?: string | null;
 };
 
 type VehicleRow = {
@@ -81,10 +96,11 @@ type VehicleRow = {
   updated_at: Date;
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
+  default_driver_id?: string | null;
 };
 
 function mapDriver(row: DriverRow): PartnerDriverRecord {
-  return {
+  const base = {
     id: row.id,
     partnerId: row.partner_id,
     firstName: row.first_name,
@@ -96,9 +112,39 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
     email: row.email,
     languageCodes: normalizePartnerDriverLanguageCodes(row.languages ?? []),
     status: row.status,
+    ...(row.membership_status !== undefined
+      ? {
+          membershipStatus: isDriverMembershipStatus(row.membership_status)
+            ? row.membership_status
+            : ("standard" as const),
+        }
+      : {}),
     deletedAt: row.deleted_at?.toISOString() ?? null,
     updatedAt: row.updated_at.toISOString(),
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
+    ...(row.default_vehicle_id !== undefined || row.default_authority_id !== undefined
+      ? {
+          defaultVehicleId: row.default_vehicle_id ?? null,
+          defaultAuthorityId: row.default_authority_id ?? null,
+        }
+      : {}),
+  };
+  if (
+    row.uetds_subscription_enrolled_at === undefined &&
+    row.uetds_subscription_monthly_fee === undefined &&
+    row.current_period_status === undefined
+  ) {
+    return base;
+  }
+  return {
+    ...base,
+    uetdsSubscription: mapUetdsSubscriptionListSummary({
+      enrolledAt: row.uetds_subscription_enrolled_at ?? null,
+      monthlyFee: row.uetds_subscription_monthly_fee ?? null,
+      currency: row.uetds_subscription_currency ?? null,
+      currentPeriodStatus: row.current_period_status ?? null,
+      nextPeriodStatus: row.next_period_status ?? null,
+    }),
   };
 }
 
@@ -127,6 +173,7 @@ function mapVehicle(row: VehicleRow): PartnerVehicleRecord {
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
+    ...(row.default_driver_id !== undefined ? { defaultDriverId: row.default_driver_id } : {}),
   };
 }
 
@@ -157,13 +204,47 @@ const VEHICLE_FROM = `
 export async function listPartnerDrivers(
   partnerId: string,
 ): Promise<PartnerDriverRecord[]> {
+  const period = istanbulSubscriptionPeriodKey();
+  const nextPeriod = addSubscriptionMonths(period, 1);
   const result = await query<DriverRow>(
-    `SELECT ${DRIVER_SELECT}
+    `SELECT ${DRIVER_SELECT},
+            d.membership_status,
+            d.uetds_subscription_enrolled_at,
+            d.uetds_subscription_monthly_fee,
+            d.uetds_subscription_currency,
+            per.status AS current_period_status,
+            next_per.status AS next_period_status,
+            dv.id AS default_vehicle_id,
+            CASE
+              WHEN ea.id IS NULL THEN NULL
+              WHEN d.uetds_company_id IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM partner_uetds_authority_companies ac
+                WHERE ac.authority_id = ea.id AND ac.company_id = d.uetds_company_id
+              ) THEN NULL
+              ELSE ea.id
+            END AS default_authority_id
      ${DRIVER_FROM}
+     LEFT JOIN partner_fleet_defaults fd
+       ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
+     LEFT JOIN partner_vehicles dv
+       ON dv.id = fd.vehicle_id AND dv.partner_id = d.partner_id AND dv.deleted_at IS NULL
+     LEFT JOIN partner_uetds_authorities ea
+       ON ea.id = d.default_edevlet_authority_id
+      AND ea.partner_id = d.partner_id
+      AND ea.deleted_at IS NULL
+      AND ea.status = 'active'
+     LEFT JOIN partner_driver_uetds_subscription_periods per
+       ON per.driver_id = d.id
+      AND per.period_year = $2
+      AND per.period_month = $3
+     LEFT JOIN partner_driver_uetds_subscription_periods next_per
+       ON next_per.driver_id = d.id
+      AND next_per.period_year = $4
+      AND next_per.period_month = $5
      WHERE d.partner_id = $1
        AND d.deleted_at IS NULL
      ORDER BY d.last_name ASC, d.first_name ASC, d.created_at ASC`,
-    [partnerId],
+    [partnerId, period.year, period.month, nextPeriod.year, nextPeriod.month],
   );
   return result.rows.map(mapDriver);
 }
@@ -172,8 +253,13 @@ export async function listPartnerVehicles(
   partnerId: string,
 ): Promise<PartnerVehicleRecord[]> {
   const result = await query<VehicleRow>(
-    `SELECT ${VEHICLE_SELECT}
+    `SELECT ${VEHICLE_SELECT},
+            dd.id AS default_driver_id
      ${VEHICLE_FROM}
+     LEFT JOIN partner_fleet_defaults fd
+       ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
+     LEFT JOIN partner_drivers dd
+       ON dd.id = fd.driver_id AND dd.partner_id = v.partner_id AND dd.deleted_at IS NULL
      WHERE v.partner_id = $1
        AND v.deleted_at IS NULL
      ORDER BY v.created_at DESC, v.id DESC`,
@@ -883,6 +969,7 @@ export async function deletePartnerDriver(input: {
   if (!updated.rows[0]) {
     return { ok: false as const, error: "not-found" as const };
   }
+  await releaseFleetPair({ partnerId: input.partnerId, driverId: input.driverId });
   return { ok: true as const };
 }
 
@@ -917,6 +1004,7 @@ export async function deletePartnerVehicle(input: {
   if (!updated.rows[0]) {
     return { ok: false as const, error: "not-found" as const };
   }
+  await releaseFleetPair({ partnerId: input.partnerId, vehicleId: input.vehicleId });
   return { ok: true as const };
 }
 

@@ -19,7 +19,7 @@ export function uetdsTripTimestamp(date: string, time: string): number | null {
   const stamp = istanbulLocalToUtcMs(`${date}T${time}`);
   return Number.isFinite(stamp) && formatUtcToIstanbulLocal(stamp) === `${date}T${time}` ? stamp : null;
 }
-export const UETDS_ARCHIVE_AFTER_MS = 6 * 60 * 60 * 1000;
+export const UETDS_ARCHIVE_AFTER_MS = 2 * 60 * 60 * 1000;
 export const UETDS_RETENTION_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 export function isUetdsArchived(endTimestamp: number | null | undefined, now = Date.now()) {
   return endTimestamp != null && Number.isFinite(endTimestamp) && endTimestamp + UETDS_ARCHIVE_AFTER_MS <= now;

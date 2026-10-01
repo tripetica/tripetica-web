@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { CountryPicker } from "@/components/booking/country-picker";
 import { PhoneField } from "@/components/booking/phone-field";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
@@ -47,6 +47,7 @@ import {
 } from "@/lib/ops/partner-priority";
 
 type PartnerInfoFormProps = {
+  authoritySection?: ReactNode;
   locale: Locale;
   copy: OpsCopy;
   partner: OpsPartnerDetail;
@@ -136,6 +137,7 @@ export function PartnerInfoForm(props: PartnerInfoFormProps) {
 }
 
 function PartnerInfoFormEditor({
+  authoritySection,
   locale,
   copy,
   partner,
@@ -518,6 +520,8 @@ function PartnerInfoFormEditor({
           </label>
         </div>
       </form>
+
+      {activeTab === "info" ? authoritySection : null}
 
       {activeTab === "jobs" ? (
         <PartnerJobTable

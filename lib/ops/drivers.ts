@@ -2,7 +2,7 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import { type OpsDriverListFilters } from "@/lib/ops/driver-filters";
-import { foldDriverSearchText } from "@/lib/partner/driver-list-view";
+import { buildOpsDriverListQueryPlan } from "@/lib/ops/driver-list-query";
 import { normalizePartnerDriverLanguageCodes } from "@/lib/partner/driver-languages";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import {
@@ -11,6 +11,16 @@ import {
   type PartnerDriverRecord,
   type PartnerFleetStatus,
 } from "@/lib/partner/fleet-view";
+import {
+  isDriverMembershipStatus,
+  type DriverMembershipStatus,
+} from "@/lib/ops/driver-membership";
+import {
+  istanbulSubscriptionPeriodKey,
+  mapUetdsSubscriptionListSummary,
+  type UetdsDriverSubscriptionListSummary,
+} from "@/lib/uetds/driver-subscription";
+import { listFleetChoicesForPartners, type FleetChoicesByPartner } from "@/lib/partner/fleet-pairing";
 
 export const OPS_DRIVERS_PAGE_SIZE = 25;
 
@@ -20,10 +30,15 @@ export type OpsDriverListItem = {
   phone: string | null;
   languageCodes: string[];
   status: PartnerFleetStatus;
+  membershipStatus: DriverMembershipStatus;
   partnerId: string;
   partnerName: string;
   partnerCode: string;
+  uetdsCompanyId: string | null;
   uetdsCompany: UetdsCompanyRef | null;
+  defaultVehicleId: string | null;
+  defaultAuthorityId: string | null;
+  uetdsSubscription: UetdsDriverSubscriptionListSummary;
 };
 
 export type OpsDriverRecord = PartnerDriverRecord & {
@@ -43,19 +58,34 @@ type DriverListRow = {
   partner_code: string;
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
+  uetds_subscription_enrolled_at: Date | null;
+  uetds_subscription_monthly_fee: string | null;
+  uetds_subscription_currency: string | null;
+  current_period_status: string | null;
+  next_period_status: string | null;
+  membership_status: string | null;
+  default_vehicle_id: string | null;
+  default_authority_id: string | null;
 };
 
-type DriverDetailRow = DriverListRow & {
+type DriverDetailRow = {
+  id: string;
+  partner_id: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  languages: string[] | null;
+  status: PartnerFleetStatus;
+  partner_name: string;
+  partner_code: string;
+  uetds_company_id: string | null;
+  uetds_company_short_name: string | null;
   national_id: string | null;
   phone_country_code: string | null;
   email: string | null;
   deleted_at: Date | null;
   updated_at: Date;
 };
-
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, "");
-}
 
 function mapListItem(row: DriverListRow): OpsDriverListItem {
   return {
@@ -64,43 +94,23 @@ function mapListItem(row: DriverListRow): OpsDriverListItem {
     phone: row.phone,
     languageCodes: normalizePartnerDriverLanguageCodes(row.languages ?? []),
     status: row.status,
+    membershipStatus: isDriverMembershipStatus(row.membership_status)
+      ? row.membership_status
+      : "standard",
     partnerId: row.partner_id,
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
-    uetdsCompany: mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name)
-      .uetdsCompany,
+    ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
+    defaultVehicleId: row.default_vehicle_id,
+    defaultAuthorityId: row.default_authority_id,
+    uetdsSubscription: mapUetdsSubscriptionListSummary({
+      enrolledAt: row.uetds_subscription_enrolled_at,
+      monthlyFee: row.uetds_subscription_monthly_fee,
+      currency: row.uetds_subscription_currency,
+      currentPeriodStatus: row.current_period_status,
+      nextPeriodStatus: row.next_period_status,
+    }),
   };
-}
-
-function foldedSql(expr: string) {
-  return `translate(lower(${expr}), 'ıİğĞüÜşŞöÖçÇ', 'iigguussoocc')`;
-}
-
-function searchFilters(query: string, values: unknown[]) {
-  const q = query.trim();
-  if (!q) {
-    return;
-  }
-  values.push(`%${q}%`);
-  const like = `$${values.length}`;
-  values.push(`%${foldDriverSearchText(q)}%`);
-  const folded = `$${values.length}`;
-  const clauses = [
-    `(d.first_name || ' ' || d.last_name) ILIKE ${like}`,
-    `d.first_name ILIKE ${like}`,
-    `d.last_name ILIKE ${like}`,
-    `${foldedSql("d.first_name || ' ' || d.last_name")} LIKE ${folded}`,
-    `COALESCE(d.phone, '') ILIKE ${like}`,
-    `p.name ILIKE ${like}`,
-    `${foldedSql("p.name")} LIKE ${folded}`,
-    `p.partner_code ILIKE ${like}`,
-  ];
-  const digits = digitsOnly(q);
-  if (digits) {
-    values.push(`%${digits}%`);
-    clauses.push(`regexp_replace(COALESCE(d.phone, ''), '[^0-9]', '', 'g') LIKE $${values.length}`);
-  }
-  return `(${clauses.join(" OR ")})`;
 }
 
 export async function listOpsDrivers(input: {
@@ -110,49 +120,24 @@ export async function listOpsDrivers(input: {
   pageSize?: number;
 }) {
   const pageSize = input.pageSize ?? OPS_DRIVERS_PAGE_SIZE;
-  const values: unknown[] = [];
-  const filters = ["d.deleted_at IS NULL", "p.deleted_at IS NULL"];
-  const search = searchFilters(input.query, values);
-  if (search) {
-    filters.push(search);
-  }
-  const where = filters.join(" AND ");
-  const direction = input.dir === "desc" ? "DESC" : "ASC";
-  const orderBy = `(d.first_name || ' ' || d.last_name) COLLATE "tr-x-icu" ${direction}, d.id ASC`;
-  const count = await query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count
-     FROM partner_drivers d
-     JOIN partners p ON p.id = d.partner_id
-     WHERE ${where}`,
-    values,
-  );
+  const period = istanbulSubscriptionPeriodKey();
+  const plan = buildOpsDriverListQueryPlan({
+    query: input.query,
+    dir: input.dir,
+    page: input.page,
+    pageSize,
+    period,
+  });
+  const count = await query<{ count: string }>(plan.count.sql, plan.count.values);
   const total = Number(count.rows[0]?.count ?? 0);
   const page = Math.max(1, input.page);
-  const offset = (page - 1) * pageSize;
-  values.push(pageSize, offset);
-  const result = await query<DriverListRow>(
-    `SELECT
-        d.id,
-        d.partner_id,
-        d.first_name,
-        d.last_name,
-        d.phone,
-        d.languages,
-        d.status,
-        d.uetds_company_id,
-        uc.short_name AS uetds_company_short_name,
-        p.name AS partner_name,
-        p.partner_code
-     FROM partner_drivers d
-     JOIN partners p ON p.id = d.partner_id
-     LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
-     WHERE ${where}
-     ORDER BY ${orderBy}
-     LIMIT $${values.length - 1} OFFSET $${values.length}`,
-    values,
-  );
-  return { items: result.rows.map(mapListItem), total, page, pageSize };
+  const result = await query<DriverListRow>(plan.list.sql, plan.list.values);
+  const items = result.rows.map(mapListItem);
+  const fleetChoices = await listFleetChoicesForPartners(items.map((item) => item.partnerId));
+  return { items, total, page, pageSize, fleetChoices };
 }
+
+export type { FleetChoicesByPartner };
 
 export async function getOpsDriver(driverId: string): Promise<OpsDriverRecord | null> {
   const result = await query<DriverDetailRow>(

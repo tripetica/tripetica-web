@@ -15,6 +15,7 @@ import {
   updatePartnerVehicle,
 } from "@/lib/partner/fleet";
 import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
+import { saveVehicleDriverPair } from "@/lib/partner/fleet-pairing";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerVehicleFormState = {
@@ -33,6 +34,7 @@ export type PartnerVehicleFormState = {
     | "not-found"
     | "in-use"
     | "invalid-uetds-company"
+    | "invalid-fleet-pair"
     | "failed"
     | null;
   ok: boolean;
@@ -64,6 +66,30 @@ function vehicleFieldsFromForm(formData: FormData) {
     featureCodes: featureCodesFromForm(formData),
     featureOther: String(formData.get("featureOther") ?? ""),
   };
+}
+
+function submittedDriverId(formData: FormData) {
+  if (!formData.has("defaultDriverId")) {
+    return undefined;
+  }
+  const value = String(formData.get("defaultDriverId") ?? "").trim();
+  return value || null;
+}
+
+async function applyVehicleDriver(
+  formData: FormData,
+  partnerId: string,
+  vehicleId: string,
+): Promise<PartnerVehicleFormState | null> {
+  const driverId = submittedDriverId(formData);
+  if (driverId === undefined) {
+    return null;
+  }
+  const paired = await saveVehicleDriverPair({ partnerId, vehicleId, driverId });
+  if (!paired.ok) {
+    return { error: "invalid-fleet-pair", ok: false };
+  }
+  return null;
 }
 
 function refreshPartnerVehicles(locale: Locale, partnerId: string, vehicleId?: string) {
@@ -114,6 +140,10 @@ export async function partnerCreateVehicleAction(
   if (!result.ok) {
     return { error: result.error, ok: false };
   }
+  const linkError = await applyVehicleDriver(formData, actor.partnerId, result.vehicleId);
+  if (linkError) {
+    return linkError;
+  }
   if (result.needsApproval) {
     scheduleOpsPush("partner-vehicle-approval-requested", () =>
       notifyOpsVehicleApprovalRequested(result.vehicleId),
@@ -151,6 +181,10 @@ export async function partnerUpdateVehicleAction(
     });
     if (!result.ok) {
       return { error: result.error, ok: false };
+    }
+    const linkError = await applyVehicleDriver(formData, actor.partnerId, vehicleId);
+    if (linkError) {
+      return linkError;
     }
     if (result.needsApproval) {
       scheduleOpsPush("partner-vehicle-approval-requested", () =>

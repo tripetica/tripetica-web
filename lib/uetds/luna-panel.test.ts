@@ -1,0 +1,53 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { clampLunaDockLift, lunaDockDragIntent } from "@/lib/uetds/luna-dock";
+
+test("the mobile Luna panel keeps the input and drops the unused controls", () => {
+  const panel = readFileSync("components/uetds/ai-edit-luna-workspace.tsx", "utf8");
+  const css = readFileSync("components/uetds/ai-edit-luna-workspace.module.css", "utf8");
+  assert.doesNotMatch(panel, /Klavyeyi Aç|Open keyboard|Открыть клавиатуру/);
+  assert.doesNotMatch(panel, /Sonraki Alan|Next field|Следующее поле/);
+  assert.doesNotMatch(panel, />\{copy\.mobile\}<|>\{copy\.desktop\}</);
+  assert.doesNotMatch(panel, /send\("viewport"/);
+  assert.match(panel, /name="keys"/);
+  assert.match(panel, /aria-label=\{copy\.keys\}/);
+  assert.match(panel, /Tripetica AI’ya Devret/);
+  assert.match(panel, /Kontrolü Geri Al/);
+  assert.match(panel, /Oturumu Sonlandır/);
+  assert.match(panel, />\{copy\.enter\}</);
+  assert.match(panel, />\{copy\.delete\}</);
+  assert.match(panel, />\{copy\.up\}</);
+  assert.match(panel, />\{copy\.down\}</);
+  assert.match(panel, /onPointerDown=\{onDockDragStart\}/);
+  assert.match(panel, /HTMLInputElement/);
+  assert.match(panel, /lunaDockDragIntent/);
+  assert.match(panel, /clampLunaDockLift/);
+  assert.match(panel, /setPanelOpen/);
+  assert.doesNotMatch(panel, /setDockLift\(0\)/);
+  assert.equal(panel.match(/\{copy\.enter\}/g)?.length, 1);
+  assert.match(panel, /<button type="submit">\{copy\.enter\}<\/button>\s*<input/);
+  assert.doesNotMatch(panel, /send\("key", \{ key: "Enter" \}\)/);
+  assert.match(css, /grid-template-columns:\s*repeat\(3/);
+  assert.doesNotMatch(css, /button:nth-child\(n \+ 5\)|button:nth-child\(9\)|button:nth-child\(10\)/);
+  const mobile = css.slice(css.indexOf("@media (max-width: 959px)"));
+  assert.match(mobile, /width:\s*min\(440px,\s*calc\(100% - 28px\)\)/);
+  assert.match(mobile, /left:\s*50%/);
+  assert.match(mobile, /translate\(-50%/);
+  assert.match(mobile, /\.grip[\s\S]*touch-action:\s*none/);
+  assert.match(mobile, /min-height:\s*48px/);
+  assert.match(css, /\.stage[\s\S]*touch-action:\s*pan-y/);
+  assert.match(css, /\.grip\s*\{\s*display:\s*none/);
+});
+
+test("a dragged Luna panel stays inside the viewport", () => {
+  assert.equal(clampLunaDockLift(-40, 800, 180), 0);
+  assert.equal(clampLunaDockLift(20, 800, 180), 20);
+  assert.equal(clampLunaDockLift(900, 800, 180, 8), 800 - 180 - 8);
+  assert.equal(clampLunaDockLift(40, 120, 180), 0);
+  assert.equal(clampLunaDockLift(Number.NaN, 800, 180), 0);
+  assert.equal(lunaDockDragIntent(0, 4), false);
+  assert.equal(lunaDockDragIntent(30, 8), false);
+  assert.equal(lunaDockDragIntent(2, 12), true);
+  assert.equal(lunaDockDragIntent(0, -12), true);
+});

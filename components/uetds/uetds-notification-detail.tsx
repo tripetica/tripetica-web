@@ -5,10 +5,7 @@ import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsEditMethodModal } from "@/components/uetds/uetds-edit-method-modal";
 import { uetdsStatusLabel, type UetdsFormCopy } from "@/lib/uetds/copy";
 import { formatUetdsSnapshotDateTime } from "@/lib/uetds/edit-policy";
-import {
-  kamuEditDeepLinkFirmaHint,
-  resolveKamuEditDeepLink,
-} from "@/lib/uetds/kamu-portal/deep-link";
+import { resolveKamuEditDeepLink } from "@/lib/uetds/kamu-portal/deep-link";
 import { type UetdsNotificationDetail } from "@/lib/uetds/notification-view";
 import {
   cancelUetdsNotificationAction,
@@ -23,8 +20,10 @@ type UetdsNotificationDetailViewProps = {
   listHref: string;
   pdfHref: string | null;
   editHref: string | null;
+  aiEditHref?: string | null;
   /** Open the edit-method chooser on mount (reservation “Düzenle” deep-link). */
   openEditMethod?: boolean;
+  showAiEdit?: boolean;
   actor: "partner" | "ops";
   locale: string;
 };
@@ -46,7 +45,9 @@ export function UetdsNotificationDetailView({
   listHref,
   pdfHref,
   editHref,
+  aiEditHref = null,
   openEditMethod = false,
+  showAiEdit = false,
   actor,
   locale,
 }: UetdsNotificationDetailViewProps) {
@@ -69,7 +70,6 @@ export function UetdsNotificationDetailView({
     ministrySeferRef: seferRef,
     plate: notification.plate,
   });
-  const firmaSeferHint = kamuEditDeepLinkFirmaHint(edevletLink);
 
   const needsVerification = notification.finalVerificationResult === "final-verification-failed";
   const [verificationState, verifyAction, verifying] = useActionState(retryUetdsFinalVerificationAction, { ok: false, verified: false });
@@ -258,10 +258,12 @@ export function UetdsNotificationDetailView({
       {editHref && !cancelled ? (
         <UetdsEditMethodModal
           open={editMethodOpen}
+          showAiEdit={showAiEdit}
           copy={copy}
           formHref={editHref}
+          aiEditHref={aiEditHref}
           edevletUrl={edevletLink.url}
-          firmaSeferHint={firmaSeferHint}
+          seferReferansNo={seferRef}
           onClose={() => setEditMethodOpen(false)}
         />
       ) : null}

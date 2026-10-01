@@ -1,11 +1,20 @@
 "use client";
 
+import { type DriverMembershipStatus } from "@/lib/ops/driver-membership";
+
 import { useActionState, useState } from "react";
 import { PhoneField } from "@/components/booking/phone-field";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
+import {
+  DriverUetdsSubscriptionSection,
+  driverSubscriptionDraftEquals,
+  driverSubscriptionDraftFromState,
+  type DriverSubscriptionDraft,
+} from "@/components/uetds/driver-uetds-subscription-section";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
+import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
 import { useOpsStickyOffset } from "@/components/ops/use-ops-sticky-offset";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { type Locale } from "@/lib/i18n/config";
@@ -28,6 +37,8 @@ type PartnerDriverFormProps = {
   copy: OpsCopy;
   driver: PartnerDriverRecord;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
+  subscription: UetdsDriverSubscriptionState;
+  membership?: DriverMembershipStatus;
   canManage: boolean;
   linkedPartner?: { id: string; name: string; code: string };
   backHref?: string;
@@ -65,10 +76,16 @@ function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: 
   if (error === "invalid-uetds-company") {
     return copy.invalidUetdsCompany;
   }
+  if (error === "invalid-subscription-fee") {
+    return copy.invalidSubscriptionFee;
+  }
+  if (error === "invalid-subscription-currency") {
+    return copy.invalidSubscriptionCurrency;
+  }
   return fallback;
 }
 
-function driverStamp(driver: PartnerDriverRecord) {
+function driverStamp(driver: PartnerDriverRecord, subscription: UetdsDriverSubscriptionState) {
   return [
     driver.id,
     driver.updatedAt,
@@ -79,11 +96,21 @@ function driverStamp(driver: PartnerDriverRecord) {
     driver.email,
     driver.languageCodes.join(","),
     driver.uetdsCompanyId ?? "",
+    subscription.enrolled ? "1" : "0",
+    subscription.enrolledAt ?? "",
+    subscription.monthlyFee ?? "",
+    subscription.currency ?? "",
+    subscription.periods.map((p) => `${p.year}-${p.month}:${p.status}`).join(","),
   ].join(":");
 }
 
 export function PartnerDriverForm(props: PartnerDriverFormProps) {
-  return <PartnerDriverFormEditor key={driverStamp(props.driver)} {...props} />;
+  return (
+    <PartnerDriverFormEditor
+      key={`${driverStamp(props.driver, props.subscription)}:${props.membership ?? "standard"}`}
+      {...props}
+    />
+  );
 }
 
 function PartnerDriverFormEditor({
@@ -91,6 +118,8 @@ function PartnerDriverFormEditor({
   copy,
   driver,
   activeUetdsCompanies,
+  subscription,
+  membership = "standard",
   canManage,
   linkedPartner,
   backHref,
@@ -106,8 +135,14 @@ function PartnerDriverFormEditor({
     languages: driver.languageCodes,
     uetdsCompanyId: driver.uetdsCompanyId ?? "",
   };
+  const [membershipDraft, setMembershipDraft] = useState<DriverMembershipStatus>(membership);
+  const initialSubscription = driverSubscriptionDraftFromState(subscription);
   const [values, setValues] = useState(initial);
   const [baseline] = useState(initial);
+  const [subscriptionDraft, setSubscriptionDraft] = useState<DriverSubscriptionDraft>(
+    initialSubscription,
+  );
+  const [subscriptionBaseline] = useState(initialSubscription);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const scrolled = useOpsStickyOffset();
   const [saveState, saveAction, savePending] = useActionState<OpsFleetFormState, FormData>(
@@ -135,7 +170,9 @@ function PartnerDriverFormEditor({
     values.phoneNational.replace(/[\s-]+/g, "") !==
       baseline.phoneNational.replace(/[\s-]+/g, "") ||
     values.languages.join(",") !== baseline.languages.join(",") ||
-    values.uetdsCompanyId !== baseline.uetdsCompanyId;
+    values.uetdsCompanyId !== baseline.uetdsCompanyId ||
+    !driverSubscriptionDraftEquals(subscriptionDraft, subscriptionBaseline) || membershipDraft !== membership;
+  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
   const resolvedBackHref =
     backHref ?? `${localizedPath(locale, `/ops/partners/${driver.partnerId}`)}?tab=drivers`;
 
@@ -318,6 +355,33 @@ function PartnerDriverFormEditor({
             onChange={(uetdsCompanyId) =>
               setValues((current) => ({ ...current, uetdsCompanyId }))
             }
+          />
+          <DriverUetdsSubscriptionSection
+            membershipControl={
+              <label className="ops-field">
+                <span>Üyelik Statüsü</span>
+                <select name="membershipStatus" value={membershipDraft} disabled={!canManage || savePending}
+                  onChange={(event) => setMembershipDraft(event.target.value as DriverMembershipStatus)}>
+                  <option value="standard">Standart Üye</option>
+                  <option value="gold">Gold Üye</option>
+                </select>
+              </label>
+            }
+            locale={panelLocale}
+            value={subscriptionDraft}
+            disabled={!canManage}
+            sectionTitle={copy.uetdsSubscriptionTitle}
+            enrollLabel={copy.uetdsSubscriptionEnroll}
+            enrollHint={copy.uetdsSubscriptionEnrollHint}
+            feeLabel={copy.uetdsSubscriptionFee}
+            currencyLabel={copy.uetdsSubscriptionCurrency}
+            monthsLabel={copy.uetdsSubscriptionMonths}
+            statusLabels={{
+              unpaid: copy.uetdsSubscriptionUnpaid,
+              paid: copy.uetdsSubscriptionPaid,
+              free: copy.uetdsSubscriptionFree,
+            }}
+            onChange={setSubscriptionDraft}
           />
         </div>
       </form>

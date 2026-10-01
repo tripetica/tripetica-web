@@ -102,11 +102,13 @@ test("partner and ops driver screens share partner_drivers and ops cannot create
   );
   assert.ok(list.indexOf("copy.driverLanguages") < list.indexOf("copy.uetdsCompanyColumn"));
   assert.ok(list.indexOf("copy.uetdsCompanyColumn") < list.indexOf("copy.driverStatus"));
-  assert.match(list, /formatUetdsCompanyListLabel\(driver\.uetdsCompany/);
+  assert.match(list, /FleetInlineSelect/);
+  assert.match(list, /companyChoicesForRow\(companies, driver\.uetdsCompany\)/);
   const vehicleList = source("components/partner/vehicle-list.tsx");
   assert.ok(vehicleList.indexOf("copy.vehicleCapacity") < vehicleList.indexOf("copy.uetdsCompanyColumn"));
   assert.ok(vehicleList.indexOf("copy.uetdsCompanyColumn") < vehicleList.indexOf("copy.vehicleStatus"));
-  assert.match(vehicleList, /formatUetdsCompanyListLabel\(vehicle\.uetdsCompany/);
+  assert.match(vehicleList, /FleetInlineSelect/);
+  assert.match(vehicleList, /companyChoicesForRow\(companies, vehicle\.uetdsCompany\)/);
   assert.doesNotMatch(source("lib/ops/partner-fleet-actions.ts"), /createPartnerDriver/);
   assert.doesNotMatch(source("components/ops/partner-info-form.tsx"), /addDriver|Sürücü Ekle/);
   assert.match(source("components/ops/partner-info-form.tsx"), /driverSearchPlaceholder/);

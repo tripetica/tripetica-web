@@ -68,27 +68,24 @@ const UETDS_SURNAME_PARTICLES = new Set([
 
 /**
  * Strip iOS/invisible characters, then Latinize non-Latin scripts.
- * Never translates person names into Turkish. Turkish letters stay as-is.
+ * Never translates names; reuse the existing ASCII fold and separator cleanup.
  * Used by Ops and Partner ministry payload paths (manual/ministry submit).
  */
 export function normalizeUetdsPersonName(value: string) {
-  return transliterateUetdsPersonName(
+  return foldUetdsPersonNameToEnglishAscii(transliterateUetdsPersonName(
     value
       .normalize("NFC")
       .replace(INVISIBLE_OR_FORMAT, "")
       .replace(NON_ASCII_SPACE, " ")
       .replace(/\s+/g, " ")
       .trim(),
-  )
-    .replace(/\s+/g, " ")
-    .trim();
+  ));
 }
 
 /**
- * Deterministic English-ASCII fold for AI-extracted passenger names only.
+ * Shared deterministic English-ASCII fold for U-ETDS names.
  * After script transliteration, maps special Latin letters (ø, æ, ı, …) and
- * strips remaining diacritics so the result is A–Z / a–z plus spaces and the
- * name separators hyphen / apostrophe (preserved; not blindly deleted).
+ * strips remaining diacritics and replaces separators with spaces.
  */
 export function foldUetdsPersonNameToEnglishAscii(value: string) {
   let out = "";
@@ -107,17 +104,17 @@ export function foldUetdsPersonNameToEnglishAscii(value: string) {
   out = out
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "");
-  // Keep English letters, spaces, hyphen, apostrophe only.
-  out = out.replace(/[^A-Za-z\s\-']/g, "");
+  // Replace non-letter separators with spaces so words never join.
+  out = out.replace(/[^A-Za-z\s]/g, " ");
   return out.replace(/\s+/g, " ").trim();
 }
 
 /**
  * AI extraction pipeline only: transliterate non-Latin scripts, then fold to
- * English ASCII A–Z/a–z. Does not replace normalizeUetdsPersonName for SOAP.
+ * English ASCII A–Z/a–z using the same normalization as SOAP.
  */
 export function normalizeUetdsExtractedPersonName(value: string) {
-  return foldUetdsPersonNameToEnglishAscii(normalizeUetdsPersonName(value));
+  return normalizeUetdsPersonName(value);
 }
 
 export function uetdsPersonNameTooLong(value: string) {
@@ -172,12 +169,25 @@ export function splitUetdsFullPersonName(fullName: string): {
  * never invents a surname for a single-token given name.
  * Applies English-ASCII normalization to AI-extracted given/surname fields only.
  */
+/** Airline and voucher form SURNAME/GIVEN, e.g. SUN/CHONG → surname SUN, given CHONG. */
+export function splitUetdsSurnameSlashGiven(value: string): { firstName: string; lastName: string } | null {
+  const withoutDocument = value.trim().replace(/\s*[=:#]\s*[A-Za-z0-9][A-Za-z0-9-]{4,20}\s*$/u, "").trim();
+  const match = withoutDocument.match(/^([A-Za-z]{2,40})\s*\/\s*([A-Za-z]+(?:\s+[A-Za-z]+){0,4})$/);
+  if (!match) return null;
+  const lastName = normalizeUetdsExtractedPersonName(match[1]!);
+  const firstName = normalizeUetdsExtractedPersonName(match[2]!);
+  if (!lastName || !firstName) return null;
+  return { firstName, lastName };
+}
+
 export function repairUetdsExtractedPersonNames(input: {
   firstName?: string | null;
   lastName?: string | null;
 }): { firstName?: string; lastName?: string } {
   const rawFirst = input.firstName?.trim() ?? "";
   const rawLast = input.lastName?.trim() ?? "";
+  const slash = [rawFirst, rawLast].map(splitUetdsSurnameSlashGiven).find((item) => item != null);
+  if (slash) return slash;
 
   if (rawLast) {
     return {
