@@ -84,6 +84,7 @@ type UetdsNotificationFormProps = {
       companyId: string | null;
       companyName: string;
       seferReference: string | null;
+      firmaSeferNo: string | null;
       plate: string;
       driverName: string;
       vehicleLabel: string;
@@ -404,8 +405,17 @@ export function UetdsNotificationForm({
   }
 
   async function continueAiEdit() {
-    if (!aiEdit) return;
-    const planned = rememberNewSnapshot(draft);
+    if (!aiEdit || !originalDraftRef.current) return;
+    const source = originalDraftRef.current;
+    const current = {
+      ...draft,
+      startDate: source.startDate,
+      startTime: source.startTime,
+      endDate: source.endDate,
+      endTime: source.endTime,
+    };
+    setDraft(current);
+    const planned = rememberNewSnapshot(current);
     if (!planned?.openLogin) {
       setAiContinueHint(copy.edevletAuthority);
       return;
@@ -414,7 +424,7 @@ export function UetdsNotificationForm({
     formData.set("actor", actor);
     formData.set("locale", locale);
     formData.set("id", aiEdit.meta.notificationId);
-    formData.set("draft", JSON.stringify(draft));
+    formData.set("draft", JSON.stringify(current));
     const saved = await persistAiEditTargetAction(formData);
     if (!saved.ok) {
       setAiContinueHint(copy.saveFailed);
@@ -478,13 +488,15 @@ export function UetdsNotificationForm({
     setDraft((current) => {
       const startDate = next.startDate ?? current.startDate;
       const startTime = next.startTime ?? current.startTime;
-      const end = applyUetdsStartToEnd({
-        startDate,
-        startTime,
-        endDate: current.endDate,
-        endTime: current.endTime,
-        endManual: current.endManual,
-      });
+      const end = aiEdit
+        ? { endDate: current.endDate, endTime: current.endTime }
+        : applyUetdsStartToEnd({
+            startDate,
+            startTime,
+            endDate: current.endDate,
+            endTime: current.endTime,
+            endManual: current.endManual,
+          });
       return {
         ...current,
         startDate,
@@ -737,6 +749,14 @@ export function UetdsNotificationForm({
 
   return (
     <section className="uetds-form uetds-new-form" ref={validation.rootRef}>
+      {aiEdit ? (
+        <dl className="uetds-confirm-dl">
+          <div>
+            <dt>{copy.firmaSeferNo}</dt>
+            <dd>{aiEdit.meta.firmaSeferNo || "—"}</dd>
+          </div>
+        </dl>
+      ) : null}
       <div className="uetds-form-section">
         <h2>{copy.fillFromDocument}</h2>
         <div className="uetds-document-actions">

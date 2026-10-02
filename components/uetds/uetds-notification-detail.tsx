@@ -6,6 +6,7 @@ import { UetdsEditMethodModal } from "@/components/uetds/uetds-edit-method-modal
 import { uetdsStatusLabel, type UetdsFormCopy } from "@/lib/uetds/copy";
 import { formatUetdsSnapshotDateTime } from "@/lib/uetds/edit-policy";
 import { resolveKamuEditDeepLink } from "@/lib/uetds/kamu-portal/deep-link";
+import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
 import { type UetdsNotificationDetail } from "@/lib/uetds/notification-view";
 import {
   cancelUetdsNotificationAction,
@@ -58,6 +59,7 @@ export function UetdsNotificationDetailView({
   const start = formatUetdsSnapshotDateTime(text(trip?.startDate), text(trip?.startTime));
   const end = formatUetdsSnapshotDateTime(text(trip?.endDate), text(trip?.endTime));
   const seferRef = notification.ministryReference || text(ministry?.seferReferansNo);
+  const displayedFirmaSeferNo = readStoredFirmaSeferNo(snapshot);
   const lastNotify = text(ministry?.lastPassengerNotifiedAt);
   const lastNotifySource = text(ministry?.lastPassengerNotifiedSource);
   const firmaSeferNo =
@@ -133,6 +135,10 @@ export function UetdsNotificationDetailView({
         </div>
       ) : null}
       <dl className="uetds-confirm-dl">
+        <div>
+          <dt>{copy.firmaSeferNo}</dt>
+          <dd>{displayedFirmaSeferNo || "—"}</dd>
+        </div>
         <div>
           <dt>{copy.seferRef}</dt>
           <dd>{seferRef || "—"}</dd>

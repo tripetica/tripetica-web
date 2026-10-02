@@ -24,6 +24,7 @@ export type UetdsMinistrySubmission = {
   finalVerification?: UetdsFinalVerification;
   env: "test" | "live";
   seferReferansNo: string | null;
+  firmaSeferNo?: string | null;
   grupReferansNo: string | null;
   passengerRefs: Array<{ index: number; reference: string | null; sonucKodu: number | null; sonucMesaji: string }>;
   stages: UetdsMinistryStageResult[];
@@ -120,6 +121,7 @@ export async function submitUetdsTestNotification(input: {
       status: "failed",
       env: ministryEnv,
       seferReferansNo: seferRef || null,
+      firmaSeferNo,
       grupReferansNo: null,
       passengerRefs: [],
       stages,
@@ -154,6 +156,7 @@ export async function submitUetdsTestNotification(input: {
       status: "partial",
       env: ministryEnv,
       seferReferansNo: seferRef,
+      firmaSeferNo,
       grupReferansNo: null,
       passengerRefs: [],
       stages,
@@ -196,6 +199,7 @@ export async function submitUetdsTestNotification(input: {
       status: "partial",
       env: ministryEnv,
       seferReferansNo: seferRef,
+      firmaSeferNo,
       grupReferansNo: grupRef || null,
       passengerRefs: [],
       stages,
@@ -240,6 +244,7 @@ export async function submitUetdsTestNotification(input: {
       status: "partial",
       env: ministryEnv,
       seferReferansNo: seferRef,
+      firmaSeferNo,
       grupReferansNo: grupRef,
       passengerRefs,
       stages,
@@ -255,6 +260,7 @@ export async function submitUetdsTestNotification(input: {
     status: finalVerification.result === "verified" ? "submitted" : "partial",
     env: ministryEnv,
     seferReferansNo: seferRef,
+    firmaSeferNo,
     grupReferansNo: grupRef,
     passengerRefs,
     stages,

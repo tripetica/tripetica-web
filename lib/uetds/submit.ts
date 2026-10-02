@@ -255,6 +255,7 @@ export async function submitUetdsNotification(input: {
       env: ministry.env,
       status: ministry.status,
       seferReferansNo: ministry.seferReferansNo,
+      firmaSeferNo: ministry.firmaSeferNo ?? null,
       grupReferansNo: ministry.grupReferansNo,
       passengerRefs: ministry.passengerRefs.map((item) => ({
         index: item.index,

@@ -3,6 +3,7 @@ import "server-only";
 import { query } from "@/lib/db/postgres";
 import { isUuid } from "@/lib/ops/process-filters";
 import { applyAiEditTargetSnapshot, finishAiEditPortalSync } from "@/lib/uetds/ai-edit-target";
+import { lockUetdsNotificationIdentities } from "@/lib/uetds/firma-sefer-no";
 import { parseUetdsDraft } from "@/lib/uetds/draft";
 import { getUetdsNotification } from "@/lib/uetds/notifications";
 
@@ -26,7 +27,7 @@ export async function persistAiEditTarget(input: {
   } catch {
     previous = {};
   }
-  const next = applyAiEditTargetSnapshot(previous, edited);
+  const next = lockUetdsNotificationIdentities(previous, applyAiEditTargetSnapshot(previous, edited));
   await query(`UPDATE uetds_notifications SET snapshot = $2::jsonb WHERE id = $1`, [
     notification.id,
     JSON.stringify(next),

@@ -36,6 +36,7 @@ const HTML = [
   row(9, "30/09/2026 16:28", "30/09/2026 19:27", "34EGP847"),
 ].join("");
 
+const FIRMA = "TRP-1790896262139";
 const TARGET = {
   startDate: "2026-09-30",
   startTime: "16:27:00",
@@ -43,6 +44,7 @@ const TARGET = {
   endTime: "19:27",
   plate: "34 EGP 847",
   seferNumber: "ABC123",
+  firmaSeferNo: FIRMA,
 };
 
 test("a sefer row is read from the observed start, end and plate cells", () => {
@@ -52,35 +54,49 @@ test("a sefer row is read from the observed start, end and plate cells", () => {
   assert.equal(rows[1]?.endTime, "19:27");
 });
 
-test("one exact schedule and plate match continues", () => {
-  const rows = parsePortalSeferRows(row(4, "30/09/2026 16:27", "30/09/2026 19:27", "34 EGP 847"));
-  const matched = matchPortalTrip(rows, TARGET);
+test("firma sefer no selects the exact row when the clock and plate differ", () => {
+  const rows = parsePortalSeferRows([
+    row(1, "01/01/2026 01:00", "01/01/2026 02:00", "06AAA111", "TRP-1111111111111"),
+    row(2, "02/02/2026 03:00", "02/02/2026 04:00", "34BBB222", "TRP-1790896262139"),
+    row(3, "03/03/2026 05:00", "03/03/2026 06:00", "35CCC333", "TRP-2222222222222"),
+  ].join(""));
+  const matched = matchPortalTrip(rows, {
+    startDate: "2026-10-02",
+    startTime: "09:00",
+    endDate: "2026-10-02",
+    endTime: "12:00",
+    plate: "99ZZZ999",
+    seferNumber: "2610027214572618",
+    firmaSeferNo: " TRP-1790896262139 ",
+  });
   assert.equal(matched.ok, true);
   if (matched.ok) {
-    assert.equal(matched.listPosition, 4);
-    assert.equal(matched.identity.seferNumber, "ABC123");
-    assert.equal(matched.identity.ministrySeferNumber, "ABC123");
+    assert.equal(matched.listPosition, 2);
+    assert.equal(matched.identity.seferNumber, "2610027214572618");
+    assert.equal(matched.identity.ministrySeferNumber, "2610027214572618");
   }
 });
 
-test("no match and more than one match stop", () => {
-  const rows = parsePortalSeferRows(HTML);
-  assert.equal(matchPortalTrip(rows, TARGET).ok, false);
+test("no firma sefer match and more than one firma sefer match stop", () => {
+  const rows = parsePortalSeferRows([
+    row(1, "01/01/2026 01:00", "01/01/2026 02:00", "06AAA111", FIRMA),
+    row(2, "02/02/2026 03:00", "02/02/2026 04:00", "34BBB222", FIRMA),
+  ].join(""));
   assert.equal(tripError(matchPortalTrip(rows, TARGET)), "ambiguous_trip_match");
-  assert.equal(tripError(matchPortalTrip(rows, { ...TARGET, startTime: "16:00" })), "trip_not_found");
+  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(HTML), TARGET)), "trip_not_found");
+  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 16:27", "30/09/2026 19:27", "34 EGP 847", FIRMA)), { ...TARGET, firmaSeferNo: "TRP-000" })), "trip_not_found");
 });
 
-test("plate alone or a nearby time is not a match", () => {
+test("a different clock still matches the stored firma sefer no", () => {
   const rows: PortalSeferRow[] = [
-    { index: 1, startDate: "30/09/2026", startTime: "16:27", endDate: "30/09/2026", endTime: "19:27", plate: "34AAA111", seferNumbers: ["ABC123"] },
-    { index: 2, startDate: "30/09/2026", startTime: "16:27", endDate: "30/09/2026", endTime: "19:27", plate: "34EGP847", seferNumbers: ["ABC123"] },
-    { index: 3, startDate: "30/09/2026", startTime: "16:28", endDate: "30/09/2026", endTime: "19:27", plate: "34EGP847", seferNumbers: ["ABC123"] },
+    { index: 1, startDate: "01/01/2026", startTime: "01:00", endDate: "01/01/2026", endTime: "02:00", plate: "06AAA111", seferNumbers: ["TRP-1111111111111"] },
+    { index: 2, startDate: "02/02/2026", startTime: "03:00", endDate: "02/02/2026", endTime: "04:00", plate: "34BBB222", seferNumbers: [FIRMA] },
+    { index: 3, startDate: "30/09/2026", startTime: "16:28", endDate: "30/09/2026", endTime: "19:27", plate: "34EGP847", seferNumbers: ["TRP-2222222222222"] },
   ];
-  assert.equal(tripError(matchPortalTrip([rows[0]!], { ...TARGET, plate: "34 EGP 847" })), "trip_not_found");
-  assert.equal(tripError(matchPortalTrip([rows[2]!], TARGET)), "trip_not_found");
-  const plateMatch = matchPortalTrip([rows[1]!], TARGET);
-  assert.equal(plateMatch.ok, true);
-  if (plateMatch.ok) assert.equal(plateMatch.listPosition, 2);
+  assert.equal(tripError(matchPortalTrip([rows[0]!], TARGET)), "trip_not_found");
+  const matched = matchPortalTrip([rows[1]!], { ...TARGET, startTime: "16:00", plate: "99ZZZ999" });
+  assert.equal(matched.ok, true);
+  if (matched.ok) assert.equal(matched.listPosition, 2);
 });
 
 test("only a changed dropoff is marked", () => {
@@ -152,20 +168,21 @@ test("an existing passenger match needs more than the name", () => {
   );
 });
 
-test("the 30/09/2026 20:52 sefer matches 34EGP847 and ignores sefer numbers", () => {
+test("the stored firma sefer no selects its row after duplicate indexes merge", () => {
   const html = [
-    row(2, "30/09/2026 20:51", "30/09/2026 23:52", "34EGP847"),
-    row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847"),
-    row(11, "30/09/2026 20:53", "30/09/2026 23:52", "34 EGP 847"),
+    row(2, "30/09/2026 20:51", "30/09/2026 23:52", "34EGP847", "TRP-1111111111111"),
+    row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", FIRMA),
+    row(11, "30/09/2026 20:53", "30/09/2026 23:52", "34 EGP 847", "TRP-2222222222222"),
   ].join("");
-  const rows = mergePortalSeferRows(parsePortalSeferRows(html).concat(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34 EGP 847"))));
+  const rows = mergePortalSeferRows(parsePortalSeferRows(html).concat(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34 EGP 847", `${FIRMA} ABC123`))));
   const match = matchPortalTrip(rows, {
     startDate: "30.09.2026",
-    startTime: "20:52",
+    startTime: "01:00",
     endDate: "2026-09-30",
-    endTime: "23:52",
-    plate: "34 EGP 847",
+    endTime: "02:00",
+    plate: "99 ZZZ 999",
     seferNumber: "ABC123",
+    firmaSeferNo: FIRMA,
   });
   assert.equal(match.ok, true);
   if (match.ok) {
@@ -173,9 +190,10 @@ test("the 30/09/2026 20:52 sefer matches 34EGP847 and ignores sefer numbers", ()
     assert.equal(match.identity.ministrySeferNumber, "ABC123");
   }
   assert.equal(rows.filter((item) => item.index === 9).length, 1);
-  const oneMinute = matchPortalTrip(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC123")), { startDate: "30.09.2026", startTime: "20:51", endDate: "30.09.2026", endTime: "23:52", plate: "34EGP847", seferNumber: "ABC123" });
-  assert.equal(tripError(oneMinute), "trip_not_found");
-  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847")), { ...TARGET, startTime: "20:52" })), "trip_not_found");
+  const oneMinute = matchPortalTrip(parsePortalSeferRows(row(9, "30/09/2026 20:51", "30/09/2026 23:52", "34EGP847", `${FIRMA} ABC123`)), { startDate: "30.09.2026", startTime: "20:51", endDate: "30.09.2026", endTime: "23:52", plate: "34EGP847", seferNumber: "ABC123", firmaSeferNo: FIRMA });
+  assert.equal(oneMinute.ok, true);
+  if (oneMinute.ok) assert.equal(oneMinute.listPosition, 9);
+  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC123")), { ...TARGET, startTime: "20:52" })), "trip_not_found");
 });
 
 test("group and passenger rows use the observed portal links and do not follow flush", () => {
@@ -207,9 +225,10 @@ test("group and passenger rows use the observed portal links and do not follow f
     "<label>Firma Sefer Numarası</label><input value=\"2609307206518656\">",
   ].join("");
   assert.equal(groupPageIsSameTrip(groupForm, ministryTarget), true);
-  assert.equal(groupPageIsSameTrip(groupForm.replace("34 EGP 847", "34 FDN 767"), ministryTarget), false);
+  assert.equal(groupPageIsSameTrip(groupForm.replace("34 EGP 847", "34 FDN 767"), ministryTarget), true);
   assert.equal(groupPageIsSameTrip(groupForm.replace("2609307206518656", "2609307206519999"), ministryTarget), false);
-  assert.equal(groupPageIsSameTrip(groupForm.replace("02:08", "02:09"), ministryTarget), false);
+  assert.equal(groupPageIsSameTrip(groupForm.replace("02:08", "02:09"), ministryTarget), true);
+  assert.equal(groupPageIsSameTrip("06AAA111 01/01/2026 01:00 TRP-1790896262139", { ...ministryTarget, plate: "99 ZZZ 999", startTime: "09:00", endTime: "10:00", firmaSeferNo: "TRP-1790896262139" }), true);
   assert.equal(groupPageIsSameTrip(`${groupForm}<p>2609307206519999</p>`, ministryTarget), true);
   assert.equal(groupPageIsSameTrip("Araç Plaka Numarası 34FDN767 Sefer Başlangıç Saati 21:10 30/09/2026 23:10", target), false);
   const liveRows = parsePortalPassengerRows(`<tr><td>CN</td><td>EC7094049</td><td>CHONG SUN</td><td>Erkek</td><td><a href="?asama=yeniYolcu&amp;yolcuIndex=0">Güncelle</a></td></tr><tr><td>CN</td><td>EM8294320</td><td>Yİ CAİ</td><td>Kadın</td><td><a href="?asama=yeniYolcu&amp;yolcuIndex=1">Güncelle</a></td></tr>`);
@@ -218,31 +237,31 @@ test("group and passenger rows use the observed portal links and do not follow f
 });
 
 test("two-stage identity requires the exact sefer number and ignores a stale row index", () => {
-  const clock = { startDate: "30.09.2026", startTime: "20:52", endDate: "30.09.2026", endTime: "23:52", plate: "34 EGP 847" };
-  const matched = matchPortalTrip(parsePortalSeferRows(row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC123")), { ...clock, seferNumber: " abc 123 " });
+  const clock = { startDate: "30.09.2026", startTime: "20:52", endDate: "30.09.2026", endTime: "23:52", plate: "34 EGP 847", firmaSeferNo: FIRMA };
+  const matched = matchPortalTrip(parsePortalSeferRows(row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", `${FIRMA} ABC123`)), { ...clock, seferNumber: " abc 123 " });
   assert.equal(matched.ok, true);
   if (matched.ok) {
     assert.equal(matched.listPosition, 14);
     assert.equal(matched.identity.ministrySeferNumber, "ABC123");
     assert.notEqual(matched.identity.seferNumber, String(matched.listPosition));
   }
-  const moved = matchPortalTrip(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34 EGP 847", "ABC123")), { ...clock, seferNumber: "ABC123" });
+  const moved = matchPortalTrip(parsePortalSeferRows(row(9, "30/09/2026 20:52", "30/09/2026 23:52", "34 EGP 847", `${FIRMA} ABC123`)), { ...clock, seferNumber: "ABC123" });
   assert.equal(moved.ok, true);
   if (moved.ok) assert.equal(moved.listPosition, 9);
-  const sameClock = parsePortalSeferRows([
-    row(12, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC124"),
-    row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC123"),
+  const sameFirma = parsePortalSeferRows([
+    row(12, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", FIRMA),
+    row(14, "01/01/2026 01:00", "01/01/2026 02:00", "06AAA111", FIRMA),
   ].join(""));
-  assert.equal(tripError(matchPortalTrip(sameClock, { ...clock, seferNumber: "ABC123" })), "ambiguous_trip_match");
-  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC123")), { ...clock, seferNumber: "ABC124" })), "trip_number_mismatch");
-  const spaced = matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 23:08", "01/10/2026 02:08", "34 EGP 847", "2609 3072 0651 8656")), { startDate: "30.09.2026", startTime: "23:08", endDate: "01.10.2026", endTime: "02:08", plate: "34EGP847", seferNumber: "2609307206518656" });
+  assert.equal(tripError(matchPortalTrip(sameFirma, { ...clock, seferNumber: "ABC123" })), "ambiguous_trip_match");
+  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", `${FIRMA} 2609307206519999`)), { ...clock, seferNumber: "2609307206518656" })), "trip_number_mismatch");
+  const spaced = matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 23:08", "01/10/2026 02:08", "34 EGP 847", `${FIRMA} 2609 3072 0651 8656`)), { startDate: "30.09.2026", startTime: "23:08", endDate: "01.10.2026", endTime: "02:08", plate: "34EGP847", seferNumber: "2609307206518656", firmaSeferNo: FIRMA });
   assert.equal(spaced.ok, true);
   if (spaced.ok) assert.equal(spaced.identity.ministrySeferNumber, "2609307206518656");
-  const firmaColumn = matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 23:08", "01/10/2026 02:08", "34 EGP 847", "TRP-1790794967102")), { startDate: "30.09.2026", startTime: "23:08", endDate: "01.10.2026", endTime: "02:08", plate: "34 EGP 847", seferNumber: "2609307206518656" });
+  const firmaColumn = matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 23:08", "01/10/2026 02:08", "34 EGP 847", "TRP-1790794967102")), { startDate: "30.09.2026", startTime: "23:08", endDate: "01.10.2026", endTime: "02:08", plate: "34 EGP 847", seferNumber: "2609307206518656", firmaSeferNo: "TRP-1790794967102" });
   assert.equal(firmaColumn.ok, true);
   if (firmaColumn.ok) assert.equal(firmaColumn.identity.ministrySeferNumber, "2609307206518656");
-  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 23:08", "01/10/2026 02:08", "34 EGP 847", "2609307206519999")), { startDate: "30.09.2026", startTime: "23:08", endDate: "01.10.2026", endTime: "02:08", plate: "34 EGP 847", seferNumber: "2609307206518656" })), "trip_number_mismatch");
-  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", "ABC123")), { ...clock, seferNumber: "   " })), "trip_number_missing");
+  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(4, "30/09/2026 23:08", "01/10/2026 02:08", "34 EGP 847", `${FIRMA} 2609307206519999`)), { startDate: "30.09.2026", startTime: "23:08", endDate: "01.10.2026", endTime: "02:08", plate: "34 EGP 847", seferNumber: "2609307206518656", firmaSeferNo: FIRMA })), "trip_number_mismatch");
+  assert.equal(tripError(matchPortalTrip(parsePortalSeferRows(row(14, "30/09/2026 20:52", "30/09/2026 23:52", "34EGP847", FIRMA)), { ...clock, seferNumber: "   " })), "trip_number_missing");
 });
 
 test("group rows match the labeled live airport cell and fail closed", () => {

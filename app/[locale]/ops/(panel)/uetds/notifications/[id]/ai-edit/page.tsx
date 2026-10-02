@@ -12,6 +12,7 @@ import {
   listUetdsVehicleOptions,
   withSelectedUetdsOptions,
 } from "@/lib/uetds/fleet-scope";
+import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
 import { snapshotToUetdsDraft } from "@/lib/uetds/manage";
 import { resolveUetdsMinistryRuntime } from "@/lib/uetds/ministry-env";
 import { getUetdsNotification } from "@/lib/uetds/notifications";
@@ -67,6 +68,7 @@ export default async function OpsUetdsNotificationAiEditPage({
           companyId: notification.companyId,
           companyName: notification.companyShortName,
           seferReference: notification.ministryReference,
+          firmaSeferNo: readStoredFirmaSeferNo(notification.snapshotJson),
           plate: notification.plate,
           driverName: notification.driverName,
           vehicleLabel: vehicles.find((item) => item.id === draft.vehicleId)?.label || notification.plate,

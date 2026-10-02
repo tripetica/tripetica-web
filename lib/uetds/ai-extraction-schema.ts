@@ -6,7 +6,7 @@ import { repairUetdsExtractedPersonNames } from "@/lib/uetds/passenger-name";
 import { preferUetdsPlaceQuery } from "@/lib/uetds/place-query";
 import { resolveOfficialUetdsLocation } from "@/lib/uetds/official-locations";
 import { reconcileExtractedTripDates, yearlessSentinelDate } from "@/lib/uetds/extracted-datetime";
-import { applyUetdsAiExtractionTripTimes, ensureUetdsMinimumEnd } from "@/lib/uetds/trip-time";
+import { applyUetdsAiExtractionTripTimes } from "@/lib/uetds/trip-time";
 
 export const AI_EXTRACTION_MAX_TEXT = 30_000;
 export const AI_EXTRACTION_MAX_PASSENGERS = 60;
@@ -192,7 +192,7 @@ export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = 
 export type AiExtractionMergeOptions = {
   /** Keep the notified passenger count. Extra extracted rows are ignored. */
   lockPassengerCount?: boolean;
-  /** Do not replace a start/end the extraction did not actually return. */
+  /** Existing-notification AI edit: keep the record's start/end. No extraction override, +65, or +3h. */
   preserveUntouchedTimes?: boolean;
   /**
    * A replaced passenger row must not keep the previous person's document number.
@@ -279,27 +279,21 @@ export function mergeAiUetdsExtraction(
   } else if (extracted.tripKind && extracted.tripKind !== current.tripKind) {
     merged.conflicts.push({ path: "tripKind", label: "tripKind", current: current.tripKind, incoming: extracted.tripKind });
   }
-  const startProvided = Boolean(extracted.startDate?.trim() && extracted.startTime?.trim());
-  const endProvided = Boolean(extracted.endDate?.trim() && extracted.endTime?.trim());
-  if (options?.preserveUntouchedTimes && !startProvided && !endProvided) {
-    return merged;
-  }
-  if (options?.preserveUntouchedTimes && !startProvided && endProvided) {
-    const end = ensureUetdsMinimumEnd(
-      merged.draft.startDate,
-      merged.draft.startTime,
-      merged.draft.endDate,
-      merged.draft.endTime,
+  if (options?.preserveUntouchedTimes) {
+    merged.draft.startDate = current.startDate;
+    merged.draft.startTime = current.startTime;
+    merged.draft.endDate = current.endDate;
+    merged.draft.endTime = current.endTime;
+    merged.draft.fieldProvenance.startDate = current.fieldProvenance.startDate;
+    merged.draft.fieldProvenance.startTime = current.fieldProvenance.startTime;
+    merged.draft.fieldProvenance.endDate = current.fieldProvenance.endDate;
+    merged.draft.fieldProvenance.endTime = current.fieldProvenance.endTime;
+    merged.conflicts = merged.conflicts.filter(
+      (item) => item.path !== "startDate" && item.path !== "startTime" && item.path !== "endDate" && item.path !== "endTime",
     );
-    if (end.adjusted) {
-      merged.draft.endDate = end.endDate;
-      merged.draft.endTime = end.endTime;
-      merged.draft.fieldProvenance.endDate = "suggested";
-      merged.draft.fieldProvenance.endTime = "suggested";
-    }
     return merged;
   }
-  // Deterministic trip-time post-process: never leave missing/too-short times to model guessing.
+  // Deterministic trip-time post-process for a new notification: never leave missing/too-short times to model guessing.
   const times = applyUetdsAiExtractionTripTimes(merged.draft, nowUtcMs);
   if (
     times.startDate !== merged.draft.startDate ||

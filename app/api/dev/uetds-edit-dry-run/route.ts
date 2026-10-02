@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPartnerActor } from "@/lib/partner/session";
 import { isUuid } from "@/lib/ops/process-filters";
-import { matchPortalTrip, parsePortalSeferRows } from "@/lib/uetds/kamu-portal/edit-plan";
+import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
+import { matchPortalTrip, parsePortalSeferRows, type PortalTripTarget } from "@/lib/uetds/kamu-portal/edit-plan";
 import { kamuLoginDevAllowed, readOpenKamuSeferLists } from "@/lib/uetds/kamu-login-session";
 import { getUetdsNotification } from "@/lib/uetds/notifications";
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   if (!partner) return NextResponse.json({ ok: false }, { status: 404 });
   const owner = `partner:${partner.partnerId}:${partner.userId}`;
   const notificationId = request.nextUrl.searchParams.get("notification") ?? "";
-  let target: { startDate: string; startTime: string; endDate: string; endTime: string; plate: string; seferNumber: string } | null = null;
+  let target: PortalTripTarget | null = null;
   if (isUuid(notificationId)) {
     const notification = await getUetdsNotification({ id: notificationId, partnerId: partner.partnerId });
     if (notification) {
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
         endTime: text(snapshot.trip?.endTime),
         plate: text(snapshot.vehicle?.plate),
         seferNumber: notification.ministryReference?.trim() || text(snapshot.ministry?.seferReferansNo),
+        firmaSeferNo: readStoredFirmaSeferNo(snapshot),
       };
     }
   }

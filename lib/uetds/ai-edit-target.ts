@@ -1,4 +1,5 @@
 import { type UetdsDraft } from "@/lib/uetds/draft";
+import { lockUetdsNotificationIdentities } from "@/lib/uetds/firma-sefer-no";
 
 export type AiEditSyncPassenger = {
   index: number;
@@ -87,7 +88,7 @@ export function applyAiEditTargetSnapshot(previous: unknown, draft: UetdsDraft):
   const kept = readUnfinishedPortalSync(snapshot);
   const source = kept ?? visibleSource(snapshot);
   const previousPassengers = Array.isArray(snapshot.passengers) ? snapshot.passengers : [];
-  return {
+  const next = {
     ...snapshot,
     source: text(snapshot.source) || draft.source,
     reservationId: draft.reservationId,
@@ -97,10 +98,10 @@ export function applyAiEditTargetSnapshot(previous: unknown, draft: UetdsDraft):
       destination: draft.destination.trim(),
       originLocation: draft.originLocation,
       destinationLocation: draft.destinationLocation,
-      startDate: draft.startDate,
-      startTime: draft.startTime,
-      endDate: draft.endDate,
-      endTime: draft.endTime,
+      startDate: text(trip.startDate),
+      startTime: text(trip.startTime),
+      endDate: text(trip.endDate),
+      endTime: text(trip.endTime),
       tripKind: draft.tripKind,
       groupName: draft.groupName.trim(),
       purpose: draft.purpose.trim(),
@@ -125,6 +126,7 @@ export function applyAiEditTargetSnapshot(previous: unknown, draft: UetdsDraft):
       passengers: source.passengers,
     },
   };
+  return lockUetdsNotificationIdentities(snapshot, next);
 }
 
 /** Clears the retry marker only. Visible trip and passengers stay the saved TARGET. */

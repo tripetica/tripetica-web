@@ -7,6 +7,7 @@ import { isUuid } from "@/lib/ops/process-filters";
 import { unsealSecret } from "@/lib/security/sealed-secret";
 import { getUetdsNotification } from "@/lib/uetds/notifications";
 import { runObservedKamuLogin, type KamuPortalCompany } from "@/lib/uetds/kamu-login-flow";
+import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
 import { type PortalLocation, type PortalTripTarget } from "@/lib/uetds/kamu-portal/edit-plan";
 import { type PortalNextDraft } from "@/lib/uetds/ai-edit-snapshot";
 import { readUnfinishedPortalSync } from "@/lib/uetds/ai-edit-target";
@@ -79,6 +80,7 @@ function tripTargetFromSnapshot(snapshotJson: string): PortalTripTarget | null {
       endTime: text(snapshot.trip?.endTime),
       plate: text(snapshot.vehicle?.plate),
       seferNumber: text(snapshot.ministry?.seferReferansNo),
+      firmaSeferNo: readStoredFirmaSeferNo(snapshot),
     };
     if (!target.startDate || !target.startTime || !target.endDate || !target.endTime || !target.plate) return null;
     return target;

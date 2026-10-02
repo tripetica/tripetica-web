@@ -8,10 +8,7 @@
 import {
   matchPortalTrip,
   nextPassengerSyncStep,
-  normalizePortalDate,
-  normalizePortalPlate,
   normalizePortalSeferNumber,
-  normalizePortalTime,
   parsePortalSeferRows,
   planPassengerReplacements,
   portalDocumentNumber,
@@ -286,64 +283,30 @@ function readGroupFormField(text: string, label: RegExp, kind: "date" | "time" |
   return "";
 }
 
-/** Grup Bilgileri Giriş Formu keeps trip identity in labeled fields, not the sefer-list table. */
+/** Opened-trip identity is Firma Sefer No, or the stored ministry sefer number. Clock and plate are not identity. */
 export function groupFormIdentityVerdict(html: string, target: PortalTripTarget): "match" | "mismatch" | "absent" {
   const text = groupFormVisibleText(html);
   const titled = /GRUP\s+B[İI]LG[İI]LER[İI]\s+G[İI]R[İI][ŞS]\s+FORMU/.test(text);
   const present = GROUP_FORM_FIELDS.filter((field) => new RegExp(field.label.source).test(text));
   if (!titled && present.length < GROUP_FORM_FIELDS.length) return "absent";
-  const startDate = normalizePortalDate(target.startDate);
-  const startTime = normalizePortalTime(target.startTime);
-  const endDate = normalizePortalDate(target.endDate);
-  const endTime = normalizePortalTime(target.endTime);
-  const plate = normalizePortalPlate(target.plate);
+  const firmaSeferNo = normalizePortalSeferNumber(target.firmaSeferNo ?? "");
   const seferNumber = normalizePortalSeferNumber(target.seferNumber);
-  if (!startDate || !startTime || !endDate || !endTime || !plate || !seferNumber) return "mismatch";
-  const read = Object.fromEntries(GROUP_FORM_FIELDS.map((field) => [field.key, readGroupFormField(text, field.label, field.kind)]));
-  const same = normalizePortalDate(read.startDate ?? "") === startDate
-    && normalizePortalTime(read.startTime ?? "") === startTime
-    && normalizePortalDate(read.endDate ?? "") === endDate
-    && normalizePortalTime(read.endTime ?? "") === endTime
-    && normalizePortalPlate(read.plate ?? "") === plate
-    && normalizePortalSeferNumber(read.seferNumber ?? "") === seferNumber;
-  return same ? "match" : "mismatch";
-}
-
-function pageHasPlate(html: string, plate: string) {
-  const wanted = normalizePortalPlate(plate);
-  if (!wanted) return false;
-  const folded = html.toLocaleUpperCase("tr-TR");
-  if (folded.includes(wanted)) return true;
-  return [...folded.matchAll(/\d{2}\s*[A-ZÇĞİÖŞÜ]{1,3}\s*\d{2,5}/g)].some((item) => normalizePortalPlate(item[0]) === wanted);
-}
-
-function pageHasDate(html: string, date: string) {
-  const slash = normalizePortalDate(date);
-  const parts = slash.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!parts) return html.includes(date);
-  return html.includes(`${parts[1]}/${parts[2]}/${parts[3]}`)
-    || html.includes(`${parts[1]}.${parts[2]}.${parts[3]}`)
-    || html.includes(`${parts[3]}-${parts[2]}-${parts[1]}`);
+  if (!firmaSeferNo && !seferNumber) return "mismatch";
+  const readSefer = normalizePortalSeferNumber(readGroupFormField(text, /F[İI]RMA\s+SEFER\s+NUMARASI/, "sefer"));
+  if (firmaSeferNo && readSefer === firmaSeferNo) return "match";
+  if (seferNumber && readSefer === seferNumber) return "match";
+  return "mismatch";
 }
 
 export function groupPageIsSameTrip(html: string, target: PortalTripTarget) {
   const form = groupFormIdentityVerdict(html, target);
   if (form === "match") return true;
   if (form === "mismatch") return false;
-  const plate = normalizePortalPlate(target.plate);
-  const startDate = normalizePortalDate(target.startDate);
-  const startTime = normalizePortalTime(target.startTime);
-  const endDate = normalizePortalDate(target.endDate);
-  const endTime = normalizePortalTime(target.endTime);
+  const firmaSeferNo = normalizePortalSeferNumber(target.firmaSeferNo ?? "");
   const seferNumber = normalizePortalSeferNumber(target.seferNumber);
   const compact = html.toLocaleUpperCase("tr-TR").replace(/\s+/g, "");
-  const clocks = Boolean(plate && startDate && startTime && endDate && endTime && seferNumber)
-    && pageHasPlate(html, plate)
-    && pageHasDate(html, startDate)
-    && html.includes(startTime)
-    && pageHasDate(html, endDate)
-    && html.includes(endTime);
-  if (!clocks) return false;
+  if (firmaSeferNo && compact.includes(firmaSeferNo)) return true;
+  if (!seferNumber) return false;
   if (compact.includes(seferNumber)) return true;
   // Firma Sefer No (TRP-…) is a different column. A 16-digit UETDS sefer no must not be a different number.
   if (!/^\d{16}$/.test(seferNumber)) return false;

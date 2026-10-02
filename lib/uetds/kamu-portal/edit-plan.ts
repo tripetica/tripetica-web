@@ -25,6 +25,8 @@ export type PortalTripTarget = {
   endTime: string;
   plate: string;
   seferNumber: string;
+  /** Stored Tripetica Firma Sefer No. List selection uses this value. */
+  firmaSeferNo?: string;
 };
 
 export type PortalTripIdentity = {
@@ -212,8 +214,9 @@ export function matchPortalTrip(rows: PortalSeferRow[], target: PortalTripTarget
   const endDate = normalizePortalDate(target.endDate);
   const endTime = normalizePortalTime(target.endTime);
   const plate = normalizePortalPlate(target.plate);
-  if (!startDate || !startTime || !endDate || !endTime || !plate) return { ok: false, error: "trip_not_found" };
-  const hits = rows.filter((row) => sameClock(row, target));
+  const firmaSeferNo = normalizePortalSeferNumber(target.firmaSeferNo ?? "");
+  if (!firmaSeferNo) return { ok: false, error: "trip_not_found" };
+  const hits = rows.filter((row) => (row.seferNumbers ?? []).some((token) => token === firmaSeferNo));
   if (hits.length === 0) return { ok: false, error: "trip_not_found" };
   if (hits.length > 1) return { ok: false, error: "ambiguous_trip_match" };
   const seferNumber = normalizePortalSeferNumber(target.seferNumber);

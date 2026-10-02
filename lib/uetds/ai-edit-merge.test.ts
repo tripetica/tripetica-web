@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
 import { applyAiEditExtraction, passengerIdentity, prepareAiEditDrafts } from "@/lib/uetds/ai-edit";
-import { mapAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
+import { applyAiEditTargetSnapshot } from "@/lib/uetds/ai-edit-target";
+import { mapAiUetdsExtraction, mergeAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
 import { planAiEditContinue, type AiEditSnapshotMeta } from "@/lib/uetds/ai-edit-snapshot";
 import { createEmptyDraft, createPassengerDraft, type UetdsDraft } from "@/lib/uetds/draft";
 
@@ -332,4 +333,98 @@ test("AI edit tripKind conflict labels are not produced for the choice buttons",
   assert.equal(rendered.includes("Mevcut değeri koru"), false);
   assert.equal(rendered.includes("Belgedeki değeri kullan"), false);
   assert.equal(merged.draft.tripKind, "tour");
+});
+
+test("AI edit keeps the recorded start and end when the document has no clock", () => {
+  const { edited } = notified(1);
+  edited.startDate = "2026-10-02";
+  edited.startTime = "09:20";
+  edited.endDate = "2026-10-02";
+  edited.endTime = "12:20";
+  const next = applyAiEditExtraction(edited, { destination: "Şişli" }, NOW).draft;
+  assert.equal(next.startDate, "2026-10-02");
+  assert.equal(next.startTime, "09:20");
+  assert.equal(next.endDate, "2026-10-02");
+  assert.equal(next.endTime, "12:20");
+  assert.equal(next.destination, "Şişli");
+});
+
+test("AI edit ignores a document clock and does not apply +65 or +3h", () => {
+  const { edited } = notified(1);
+  edited.startDate = "2026-10-02";
+  edited.startTime = "09:20";
+  edited.endDate = "2026-10-02";
+  edited.endTime = "12:20";
+  const now = istanbulLocalToUtcMs("2026-10-02T10:00");
+  const different = applyAiEditExtraction(edited, {
+    startDate: "2026-10-02",
+    startTime: "11:00",
+    endDate: "2026-10-02",
+    endTime: "14:00",
+    origin: "Şişli",
+  }, now).draft;
+  assert.equal(different.startTime, "09:20");
+  assert.equal(different.endTime, "12:20");
+  assert.equal(different.origin, "Şişli");
+
+  edited.startTime = "10:10";
+  edited.endTime = "13:10";
+  const tooSoon = applyAiEditExtraction(edited, { destination: "Hilton" }, now).draft;
+  assert.equal(tooSoon.startTime, "10:10");
+  assert.notEqual(tooSoon.startTime, "11:05");
+
+  edited.startTime = "09:00";
+  edited.endTime = "10:30";
+  const shortEnd = applyAiEditExtraction(edited, {
+    startDate: "2026-10-02",
+    startTime: "09:00",
+    endDate: "2026-10-02",
+    endTime: "10:30",
+  }, now).draft;
+  assert.equal(shortEnd.startTime, "09:00");
+  assert.equal(shortEnd.endTime, "10:30");
+  assert.notEqual(shortEnd.endTime, "12:00");
+});
+
+test("AI edit target save keeps the recorded clock while other fields change", () => {
+  const previous = {
+    trip: {
+      origin: "Zeytinburnu",
+      destination: "Taksim",
+      startDate: "2026-10-02",
+      startTime: "09:20",
+      endDate: "2026-10-02",
+      endTime: "12:20",
+    },
+  };
+  const draft = createEmptyDraft("manual", { applyTripDefaults: false });
+  draft.origin = "Şişli";
+  draft.startDate = "2026-10-02";
+  draft.startTime = "11:05";
+  draft.endDate = "2026-10-02";
+  draft.endTime = "14:05";
+  const saved = applyAiEditTargetSnapshot(previous, draft);
+  const trip = saved.trip as { origin: string; startDate: string; startTime: string; endDate: string; endTime: string };
+  assert.equal(trip.origin, "Şişli");
+  assert.equal(trip.startDate, "2026-10-02");
+  assert.equal(trip.startTime, "09:20");
+  assert.equal(trip.endDate, "2026-10-02");
+  assert.equal(trip.endTime, "12:20");
+});
+
+test("a new notification still applies +65 and +3h", () => {
+  const draft = createEmptyDraft("manual", { applyTripDefaults: false });
+  draft.startDate = "2026-10-02";
+  draft.startTime = "10:10";
+  draft.endDate = "2026-10-02";
+  draft.endTime = "10:30";
+  const now = istanbulLocalToUtcMs("2026-10-02T10:00");
+  const next = mergeAiUetdsExtraction(draft, {
+    startDate: "2026-10-02",
+    startTime: "10:10",
+    endDate: "2026-10-02",
+    endTime: "10:30",
+  }, now).draft;
+  assert.equal(next.startTime, "11:05");
+  assert.equal(next.endTime, "14:05");
 });
