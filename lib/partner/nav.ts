@@ -4,6 +4,7 @@ export type PartnerNavItem = {
     | "/partner/accepted"
     | "/partner/drivers"
     | "/partner/vehicles"
+    | "/partner/gps"
     | "/partner/uetds"
     | "/partner/edevlet-authorities"
     | "/partner/profile"
@@ -13,6 +14,7 @@ export type PartnerNavItem = {
     | "accepted"
     | "drivers"
     | "vehicles"
+    | "gps"
     | "uetds"
     | "edevletAuthorities"
     | "profile"
@@ -24,6 +26,7 @@ export const PARTNER_NAV: PartnerNavItem[] = [
   { href: "/partner/accepted", labelKey: "accepted" },
   { href: "/partner/drivers", labelKey: "drivers" },
   { href: "/partner/vehicles", labelKey: "vehicles" },
+  { href: "/partner/gps", labelKey: "gps" },
   { href: "/partner/uetds", labelKey: "uetds" },
   { href: "/partner/edevlet-authorities", labelKey: "edevletAuthorities" },
   { href: "/partner/profile", labelKey: "profile" },

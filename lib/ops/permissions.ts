@@ -10,6 +10,8 @@ export const OPS_PERMISSIONS = [
   "customers.view",
   "partners.view",
   "partners.manage",
+  "gps.view",
+  "gps.manage",
   "uetds.view",
   "uetds.manage",
   "users.view",

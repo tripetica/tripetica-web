@@ -1,0 +1,82 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { wifiShareConfirmKind, lowBatteryActionPayload } from "@/lib/gps/commands";
+import { parseHeartbeatBody } from "@/lib/gps/contract";
+import { cameraNeedsLowBatteryConfirm, formatGraceClock, graceSecondsRemaining } from "@/lib/gps/low-battery";
+
+test("battery header color and countdown follow the device", () => {
+  assert.equal(formatGraceClock(573), "09:33");
+  assert.equal(formatGraceClock(568), "09:28");
+  assert.equal(formatGraceClock(600), "10:00");
+  const syncedAt = 1_000_000;
+  assert.equal(graceSecondsRemaining(573, syncedAt, syncedAt), 573);
+  assert.equal(graceSecondsRemaining(573, syncedAt, syncedAt + 5_000), 568);
+  assert.equal(formatGraceClock(graceSecondsRemaining(568, syncedAt, syncedAt)), "09:28");
+  assert.notEqual(formatGraceClock(573), "10:00");
+
+  assert.equal(wifiShareConfirmKind("off", 100), "off");
+  assert.equal(wifiShareConfirmKind("off", 19), "off");
+  assert.equal(wifiShareConfirmKind("off", null), "off");
+  assert.equal(wifiShareConfirmKind("on", 100), null);
+  assert.equal(wifiShareConfirmKind("on", 20), null);
+  assert.equal(wifiShareConfirmKind("on", 19), "low");
+  assert.equal(wifiShareConfirmKind("on", null), null);
+  assert.equal(wifiShareConfirmKind("on", 19, "keep_on"), null);
+  assert.equal(wifiShareConfirmKind("on", 19, "grace"), "low");
+  assert.equal(wifiShareConfirmKind("on", 19, "saving"), "low");
+  assert.deepEqual(lowBatteryActionPayload("keep_on"), { action: "keep_on" });
+  assert.deepEqual(lowBatteryActionPayload("save_power"), { action: "save_power" });
+  assert.equal(cameraNeedsLowBatteryConfirm("saving"), true);
+  assert.equal(cameraNeedsLowBatteryConfirm("keep_on"), false);
+  assert.equal(cameraNeedsLowBatteryConfirm("grace"), false);
+  assert.equal(cameraNeedsLowBatteryConfirm(null), false);
+});
+
+test("old and invalid low-battery heartbeats do not replace a valid report", () => {
+  const base = { firmware: "0.3.6", network: "lte" };
+  const old = parseHeartbeatBody(base);
+  assert.equal(old?.lowBattery?.state.kind, "absent");
+  assert.equal(old?.lowBattery?.remaining.kind, "absent");
+  const grace = parseHeartbeatBody({ ...base, low_battery_state: "grace", low_battery_grace_remaining_seconds: 573, battery_percent: 19 });
+  assert.equal(grace?.lowBattery?.state.kind, "set");
+  assert.equal(grace?.battery.percent.kind, "set");
+  const invalid = parseHeartbeatBody({ ...base, low_battery_state: "panic", low_battery_grace_remaining_seconds: -4, battery_percent: null });
+  assert.ok(invalid);
+  assert.equal(invalid?.lowBattery?.state.kind, "keep");
+  assert.equal(invalid?.lowBattery?.remaining.kind, "keep");
+  assert.equal(invalid?.battery.percent.kind, "absent");
+  const cleared = parseHeartbeatBody({ ...base, low_battery_state: "normal", low_battery_grace_remaining_seconds: null });
+  assert.equal(cleared?.lowBattery?.state.kind, "set");
+  assert.equal(cleared?.lowBattery?.remaining.kind, "clear");
+});
+
+test("partner surfaces keep the switch and drop the mode select", () => {
+  const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
+  const header = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("../../components/partner/shell.tsx", import.meta.url), "utf8");
+  const ops = readFileSync(new URL("../../components/ops/shell.tsx", import.meta.url), "utf8");
+  const ingest = readFileSync(new URL("./ingest.ts", import.meta.url), "utf8");
+  const warning = readFileSync(new URL("../../components/partner/low-battery-warning.tsx", import.meta.url), "utf8");
+  const camera = readFileSync(new URL("../../components/gps/camera-live.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /surface === "ops"[\s\S]*<select name="mode"/);
+  assert.match(header, /gps-battery is-low/);
+  assert.match(header, /snapshot\.batteryPercent < 20/);
+  assert.match(header, /gps-battery-icon/);
+  assert.doesNotMatch(header, /🔋/);
+  const copy = readFileSync(new URL("./copy.ts", import.meta.url), "utf8");
+  assert.match(copy, /Seçimleri uygula/);
+  assert.match(copy, /Apply selections/);
+  assert.match(copy, /Применить выбор/);
+  assert.doesNotMatch(copy, /Rotayı göster|Show route|Показать маршрут/);
+  assert.match(shell, /PartnerLowBatteryWarning/);
+  assert.doesNotMatch(ops, /PartnerLowBatteryWarning/);
+  assert.doesNotMatch(ingest, /low_battery_grace_remaining_seconds = 600/);
+  assert.doesNotMatch(ingest, /gps_positions[\s\S]{0,80}low_battery/);
+  assert.match(warning, /keep_on/);
+  assert.match(warning, /save_power/);
+  assert.match(warning, /sessionStorage/);
+  assert.doesNotMatch(warning, /mailto|sendMail|email/);
+  assert.match(camera, /cameraNeedsLowBatteryConfirm/);
+  assert.match(camera, /\/api\/gps\/camera\/sessions/);
+});

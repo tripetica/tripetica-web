@@ -80,6 +80,9 @@ export function firstOpsHome(locale: Locale, actor: OpsActor) {
   if (actorCan(actor, "partners.view")) {
     return localizedPath(locale, "/ops/partners");
   }
+  if (actorCan(actor, "gps.view")) {
+    return localizedPath(locale, "/ops/gps");
+  }
   if (actorCan(actor, "uetds.view")) {
     return localizedPath(locale, "/ops/uetds");
   }

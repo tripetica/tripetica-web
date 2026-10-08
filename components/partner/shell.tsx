@@ -2,6 +2,7 @@ import { partnerLogoutAction } from "@/lib/partner/actions";
 import { type PartnerCopy } from "@/lib/partner/copy";
 import { PARTNER_NAV } from "@/lib/partner/nav";
 import { type PartnerActor } from "@/lib/partner/session";
+import { PartnerLowBatteryWarning } from "@/components/partner/low-battery-warning";
 import { PartnerNav } from "@/components/partner/nav";
 import { PartnerPushControl } from "@/components/partner/push-control";
 import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
@@ -52,7 +53,10 @@ export function PartnerShell({
         </div>
       </header>
       <div className="ops-body">
-        <main className="ops-main">{children}</main>
+        <main className="ops-main">
+          <PartnerLowBatteryWarning locale={locale} />
+          {children}
+        </main>
       </div>
     </div>
   );

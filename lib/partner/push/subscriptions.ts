@@ -146,3 +146,41 @@ export async function listActivePartnerPushSubscriptionsForRank(rank: PartnerJob
     ];
   });
 }
+
+export async function listActivePartnerPushSubscriptionsForPartner(partnerId: string) {
+  const result = await query<SubscriptionRow>(
+    `SELECT
+        s.id,
+        s.partner_id,
+        s.partner_user_id,
+        s.endpoint,
+        s.p256dh,
+        s.auth,
+        s.locale,
+        p.is_primary_partner,
+        p.priority_level
+     FROM partner_push_subscriptions s
+     JOIN partner_users u ON u.id = s.partner_user_id
+     JOIN partners p ON p.id = s.partner_id
+     WHERE s.disabled_at IS NULL
+       AND u.status = 'active'
+       AND p.status = 'active'
+       AND p.deleted_at IS NULL
+       AND s.partner_id = $1`,
+    [partnerId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    partner_id: row.partner_id,
+    partner_user_id: row.partner_user_id,
+    endpoint: row.endpoint,
+    p256dh: row.p256dh,
+    auth: row.auth,
+    locale: normalizeLocale(row.locale),
+    is_primary_partner: row.is_primary_partner,
+    rank: partnerJobRank({
+      isPrimaryPartner: row.is_primary_partner,
+      priorityLevel: row.priority_level,
+    }) ?? 3,
+  } satisfies PartnerPushSubscriptionRecord));
+}

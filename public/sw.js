@@ -14,8 +14,14 @@ self.addEventListener("push", (event) => {
         ? "partner"
         : payload.kind === "partner-job"
           ? "partner-job"
-          : "process";
-  const fallbackUrl = kind === "partner-job" ? "/tr/partner/jobs" : "/tr/ops";
+          : payload.kind === "partner-low-battery"
+            ? "partner-low-battery"
+            : "process";
+  const fallbackUrl = kind === "partner-job"
+    ? "/tr/partner/jobs"
+    : kind === "partner-low-battery"
+      ? "/tr/partner"
+      : "/tr/ops";
   const title = typeof payload.title === "string" ? payload.title : "Tripetica";
   const options = {
     body: typeof payload.body === "string" ? payload.body : "",
@@ -37,7 +43,7 @@ self.addEventListener("push", (event) => {
       });
       for (const client of windows) {
         client.postMessage({
-          type: kind === "partner-job" ? "partner-push" : "ops-push",
+          type: kind === "partner-job" || kind === "partner-low-battery" ? "partner-push" : "ops-push",
           kind,
         });
       }
@@ -49,7 +55,11 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const kind = event.notification.data?.kind;
-  const fallbackUrl = kind === "partner-job" ? "/tr/partner/jobs" : "/tr/ops";
+  const fallbackUrl = kind === "partner-job"
+    ? "/tr/partner/jobs"
+    : kind === "partner-low-battery"
+      ? "/tr/partner"
+      : "/tr/ops";
   const targetUrl =
     event.notification.data && typeof event.notification.data.url === "string"
       ? event.notification.data.url

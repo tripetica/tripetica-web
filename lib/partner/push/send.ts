@@ -3,6 +3,8 @@ import "server-only";
 import webpush from "web-push";
 import { readOpsPushVapidConfig } from "@/lib/ops/push/config";
 import { type PartnerJobPushPayload } from "@/lib/partner/push/payload";
+
+export type PartnerWebPushPayload = Omit<PartnerJobPushPayload, "kind"> & { kind: string };
 import {
   disablePartnerPushSubscription,
   type PartnerPushSubscriptionRecord,
@@ -22,7 +24,7 @@ function errorStatus(error: unknown): number | undefined {
 
 export async function sendPartnerPushToSubscriptions(
   subscriptions: PartnerPushSubscriptionRecord[],
-  payloadFor: (subscription: PartnerPushSubscriptionRecord) => PartnerJobPushPayload,
+  payloadFor: (subscription: PartnerPushSubscriptionRecord) => PartnerWebPushPayload,
 ): Promise<{ sent: number; failed: number; skipped: boolean }> {
   const vapid = readOpsPushVapidConfig();
   if (!vapid) {

@@ -8,6 +8,7 @@ export type OpsNavItem = {
     | "/ops/partners"
     | "/ops/drivers"
     | "/ops/vehicles"
+    | "/ops/gps"
     | "/ops/uetds"
     | "/ops/users"
     | "/ops/account";
@@ -19,6 +20,7 @@ export type OpsNavItem = {
     | "partners"
     | "drivers"
     | "vehicles"
+    | "gps"
     | "uetds"
     | "users"
     | "myAccount";
@@ -54,6 +56,11 @@ export const OPS_NAV: OpsNavItem[] = [
     href: "/ops/vehicles",
     permission: "partners.view",
     labelKey: "vehicles",
+  },
+  {
+    href: "/ops/gps",
+    permission: "gps.view",
+    labelKey: "gps",
   },
   {
     href: "/ops/uetds",

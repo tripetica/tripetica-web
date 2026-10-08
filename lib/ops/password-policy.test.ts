@@ -80,6 +80,7 @@ test("ops nav includes Bilgilerim for every user and keeps Panel Kullanıcılar�
       "partners",
       "drivers",
       "vehicles",
+      "gps",
       "uetds",
       "users",
       "myAccount",
@@ -94,6 +95,10 @@ test("ops nav includes Bilgilerim for every user and keeps Panel Kullanıcılar�
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/partners")?.permission, "partners.view");
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/drivers")?.permission, "partners.view");
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/vehicles")?.permission, "partners.view");
+  assert.equal(OPS_NAV.find((item) => item.href === "/ops/gps")?.permission, "gps.view");
+  assert.equal(OPS_PERMISSIONS.includes("gps.view"), true);
+  assert.equal(OPS_PERMISSIONS.includes("gps.manage"), true);
+  assert.equal(permissionsForRole("owner", []).includes("gps.manage"), true);
   assert.equal(OPS_NAV.find((item) => item.href === "/ops/uetds")?.permission, "uetds.view");
   assert.equal(opsCopy.tr.drivers, "Sürücüler");
   assert.equal(opsCopy.tr.vehicles, "Araçlar");

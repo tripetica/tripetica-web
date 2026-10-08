@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/booking/pricing/*.test.ts lib/booking/fx/*.test.ts lib/booking/*.test.ts lib/db/*.test.ts lib/geo/*.test.ts lib/payments/*.test.ts lib/payments/ledger/*.test.ts lib/account/*.test.ts lib/mail/*.test.ts lib/alerts/*.test.ts lib/view/*.test.ts lib/uetds/*.test.ts lib/ops/push/*.test.ts lib/partner/*.test.ts lib/partner/push/*.test.ts lib/driver-portal/*.test.ts scripts/*.test.ts && tsx --conditions=react-server --test lib/payments/turinvoice/*.test.ts lib/server-tests/*.test.ts lib/seo/*.test.ts && tsx --conditions=react-server --test lib/ops/*.test.ts",
+    "test": "tsx --test lib/booking/pricing/*.test.ts lib/booking/fx/*.test.ts lib/booking/*.test.ts lib/db/*.test.ts lib/geo/*.test.ts lib/payments/*.test.ts lib/payments/ledger/*.test.ts lib/account/*.test.ts lib/mail/*.test.ts lib/alerts/*.test.ts lib/view/*.test.ts lib/uetds/*.test.ts lib/ops/push/*.test.ts lib/partner/*.test.ts lib/partner/push/*.test.ts lib/gps/*.test.ts lib/driver-portal/*.test.ts scripts/*.test.ts && tsx --conditions=react-server --test lib/payments/turinvoice/*.test.ts lib/server-tests/*.test.ts lib/seo/*.test.ts && tsx --conditions=react-server --test lib/ops/*.test.ts",
     "typecheck": "tsc --noEmit",
     "fx:refresh": "tsx --conditions=react-server scripts/refresh-fx-rates.ts",
     "fx:scheduled": "tsx --conditions=react-server scripts/fx-scheduled-refresh.ts",
@@ -33,6 +33,7 @@
   "dependencies": {
     "arabic-persian-reshaper": "^1.0.1",
     "bidi-js": "^1.1.0",
+    "leaflet": "^1.9.4",
     "libphonenumber-js": "^1.13.11",
     "next": "16.3.1",
     "nodemailer": "^9.1.0",
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
