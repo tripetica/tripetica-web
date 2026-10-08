@@ -1,18 +1,65 @@
 import { type GpsPresence } from "@/lib/gps/presence";
 
-export const GPS_MOVING_MPS = 0.5;
-export const GPS_MOVING_CLEAR_MPS = 0.3;
+export const GPS_MOTION_HOLD_MS = 180_000;
+
+export type GpsMotion = "moving" | "stopped" | "unknown";
+
+export type GpsMotionMemory = {
+  speedMps: number;
+  at: number;
+};
 
 export function gpsSpeedIsMoving(speedMps: number | null, wasMoving = false) {
-  if (speedMps === null || !Number.isFinite(speedMps)) {
-    return false;
+  if (speedMps === null || !Number.isFinite(speedMps) || speedMps < 0) {
+    return wasMoving;
   }
-  return speedMps >= (wasMoving ? GPS_MOVING_CLEAR_MPS : GPS_MOVING_MPS);
+  return speedMps > 0;
+}
+
+export function gpsResolveMotion(input: {
+  speedMps: number | null;
+  sampledAt: number | null;
+  memory: GpsMotionMemory | null;
+  now: number;
+  holdMs?: number;
+}): { motion: GpsMotion; memory: GpsMotionMemory | null } {
+  const holdMs = input.holdMs ?? GPS_MOTION_HOLD_MS;
+  const speed = input.speedMps;
+  const known = speed !== null && Number.isFinite(speed) && speed >= 0;
+  const age = input.sampledAt === null ? null : input.now - input.sampledAt;
+  const fresh = known && age !== null && age >= -60_000 && age <= holdMs;
+  if (known && speed === 0) {
+    return { motion: "stopped", memory: { speedMps: 0, at: input.sampledAt ?? input.now } };
+  }
+  if (fresh && speed !== null && speed > 0) {
+    return { motion: "moving", memory: { speedMps: speed, at: input.sampledAt ?? input.now } };
+  }
+  const memory = input.memory;
+  if (memory && memory.speedMps === 0) {
+    return { motion: "stopped", memory };
+  }
+  if (memory && memory.speedMps > 0 && input.now - memory.at <= holdMs) {
+    return { motion: "moving", memory };
+  }
+  return { motion: "unknown", memory: null };
+}
+
+export function gpsPresenceMarker(presence: GpsPresence, motion: GpsMotion): GpsMarkerState {
+  if (presence !== "online") {
+    return "idle";
+  }
+  if (motion === "moving") {
+    return "moving";
+  }
+  if (motion === "stopped") {
+    return "stopped";
+  }
+  return "unknown";
 }
 
 export type GpsIgnition = "on" | "off" | null;
 
-export type GpsMarkerState = "moving" | "stopped" | "idle" | "ignition-off";
+export type GpsMarkerState = "moving" | "stopped" | "idle" | "ignition-off" | "unknown";
 
 export type GpsPopupPrefs = {
   speed: boolean;
@@ -108,7 +155,10 @@ export function gpsMarkerState(
   if (ignition === "off") {
     return "ignition-off";
   }
-  if (gpsSpeedIsMoving(speedMps, wasMoving)) {
+  if (speedMps === null || !Number.isFinite(speedMps) || speedMps < 0) {
+    return wasMoving ? "moving" : "unknown";
+  }
+  if (speedMps > 0) {
     return "moving";
   }
   return "stopped";

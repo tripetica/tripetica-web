@@ -8,10 +8,11 @@ import { googleMapsUrl, gpsClock, gpsPopupClock, gpsPopupSpeed, gpsSpeed, yandex
 import { GPS_LIVE_POLL_MS, readGpsLiveSnapshot, type GpsLiveSnapshot } from "@/lib/gps/live";
 import {
   GPS_POPUP_DEFAULTS,
-  gpsMarkerState,
-  gpsSpeedIsMoving,
+  gpsPresenceMarker,
+  gpsResolveMotion,
   gpsPopupStorageKey,
   readGpsPopupPrefs,
+  type GpsMotionMemory,
   type GpsPopupPrefs,
 } from "@/lib/gps/map-popup";
 import { gpsPresence } from "@/lib/gps/presence";
@@ -87,14 +88,28 @@ export function GpsLiveSection({
   const [clock, setClock] = useState(() => Date.now());
   const [tab, setTab] = useState<"gps" | "wifi" | "camera">("gps");
   const [prefs, setPrefs] = useState<GpsPopupPrefs>(GPS_POPUP_DEFAULTS);
-  const movingRef = useRef(false);
+  const motionMemory = useRef(new Map<string, GpsMotionMemory>());
   const presence = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
   const live = snapshot.latitude !== null && snapshot.longitude !== null
     ? { latitude: snapshot.latitude, longitude: snapshot.longitude }
     : null;
-  const moving = presence === "online" && gpsSpeedIsMoving(snapshot.speedMps, movingRef.current);
-  movingRef.current = moving;
-  const markerState = gpsMarkerState(presence, snapshot.speedMps, null, moving);
+  function resolveMotion(id: string, speedMps: number | null, sampledAt: string | null, now = clock) {
+    const parsed = sampledAt ? Date.parse(sampledAt) : Number.NaN;
+    const resolved = gpsResolveMotion({
+      speedMps,
+      sampledAt: Number.isFinite(parsed) ? parsed : null,
+      memory: id ? motionMemory.current.get(id) ?? null : null,
+      now,
+    });
+    if (id) {
+      if (resolved.memory) motionMemory.current.set(id, resolved.memory);
+      else motionMemory.current.delete(id);
+    }
+    return resolved.motion;
+  }
+  const resolveMotionRef = useRef(resolveMotion);
+  resolveMotionRef.current = resolveMotion;
+  const markerState = gpsPresenceMarker(presence, resolveMotion(deviceId, snapshot.speedMps, snapshot.recordedAt));
 
   useEffect(() => {
     if (!viewerId) {
@@ -190,7 +205,7 @@ export function GpsLiveSection({
   }, [deviceId, surface]);
 
   useEffect(() => {
-    setPins(fleetPinsFrom(fleetVehicles, copy.unassigned));
+    setPins(fleetPinsFrom(fleetVehicles, copy.unassigned, (vehicle) => resolveMotionRef.current(vehicle.id, vehicle.speedMps, vehicle.recordedAt)));
   }, [copy.unassigned, pinSeed]);
 
   useEffect(() => {
@@ -199,8 +214,8 @@ export function GpsLiveSection({
     const longitude = snapshot.longitude;
     setPins((current) => current?.map((pin) => {
       if (pin.id !== deviceId) return pin;
-      const presenceNow = gpsPresence(snapshot.lastHeartbeatAt, new Date());
-      const movingNow = presenceNow === "online" && gpsSpeedIsMoving(snapshot.speedMps, movingRef.current);
+      const presenceNow = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
+      const motion = resolveMotionRef.current(deviceId, snapshot.speedMps, snapshot.recordedAt, clock);
       return {
         ...pin,
         latitude,
@@ -214,11 +229,11 @@ export function GpsLiveSection({
           clock: gpsPopupClock(snapshot.recordedAt),
           coordinates: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
           headingDeg: snapshot.headingDeg,
-          state: gpsMarkerState(presenceNow, snapshot.speedMps, null, movingNow),
+          state: gpsPresenceMarker(presenceNow, motion),
         },
       };
     }));
-  }, [copy.unassigned, deviceId, plate, snapshot]);
+  }, [clock, copy.unassigned, deviceId, plate, snapshot]);
 
   useEffect(() => {
     if (!fleetVehicles || fleetVehicles.length < 2) return;
@@ -241,7 +256,7 @@ export function GpsLiveSection({
         if (!next) return;
         setClock(Date.now());
         setPins((current) => {
-          const fresh = fleetPinsFrom(next, copy.unassigned) ?? [];
+          const fresh = fleetPinsFrom(next, copy.unassigned, (vehicle) => resolveMotionRef.current(vehicle.id, vehicle.speedMps, vehicle.recordedAt, Date.now())) ?? [];
           if (!deviceId) return fresh;
           return fresh.map((pin) => current?.find((item) => item.id === pin.id && item.id === deviceId) ?? pin);
         });
@@ -451,22 +466,37 @@ export function GpsLiveSection({
   );
 }
 
-function fleetPinsFrom(vehicles: GpsFleetVehicle[] | undefined, unassigned: string) {
+function fleetPinsFrom(
+  vehicles: GpsFleetVehicle[] | undefined,
+  unassigned: string,
+  motionFor?: (vehicle: GpsFleetVehicle) => ReturnType<typeof gpsResolveMotion>["motion"],
+) {
   if (!vehicles) return undefined;
   const now = new Date();
   const pins: GpsFleetMapPin[] = [];
   for (const vehicle of vehicles) {
-    const pin = fleetPin(vehicle, unassigned, now);
+    const pin = fleetPin(vehicle, unassigned, now, motionFor?.(vehicle));
     if (pin) pins.push(pin);
   }
   return pins;
 }
 
-function fleetPin(vehicle: GpsFleetVehicle, unassigned: string, now: Date): GpsFleetMapPin | null {
+function fleetPin(
+  vehicle: GpsFleetVehicle,
+  unassigned: string,
+  now: Date,
+  motion?: ReturnType<typeof gpsResolveMotion>["motion"],
+): GpsFleetMapPin | null {
   const point = gpsFleetPoint(vehicle.latitude, vehicle.longitude);
   if (!point) return null;
   const presence = gpsPresence(vehicle.lastHeartbeatAt, now);
-  const moving = presence === "online" && gpsSpeedIsMoving(vehicle.speedMps, false);
+  const sampledAt = vehicle.recordedAt ? Date.parse(vehicle.recordedAt) : Number.NaN;
+  const resolved = motion ?? gpsResolveMotion({
+    speedMps: vehicle.speedMps,
+    sampledAt: Number.isFinite(sampledAt) ? sampledAt : null,
+    memory: null,
+    now: now.getTime(),
+  }).motion;
   return {
     id: vehicle.id,
     latitude: point.latitude,
@@ -479,7 +509,7 @@ function fleetPin(vehicle: GpsFleetVehicle, unassigned: string, now: Date): GpsF
       clock: gpsPopupClock(vehicle.recordedAt),
       coordinates: `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`,
       headingDeg: vehicle.headingDeg,
-      state: gpsMarkerState(presence, vehicle.speedMps, null, moving),
+      state: gpsPresenceMarker(presence, resolved),
     },
   };
 }
