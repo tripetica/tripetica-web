@@ -11,17 +11,17 @@ import {
   planAtsControl,
   type AtsBlockReason,
 } from "@/lib/gps/ats-policy";
-import { assertAtsWorkerWithheld } from "@/lib/gps/ats-worker-guard";
+import { assertAtsWorkerWithheld, assertProdAtsDispatchWithheld } from "@/lib/gps/ats-worker-guard";
 
 const square: AtsDistrictBoundary = {
   ilKodu: 34,
   ilceMernisKodu: 2053,
-  ring: [[28.6, 41], [28.8, 41], [28.8, 41.1], [28.6, 41.1]],
+  parts: [[[[28.6, 41], [28.8, 41], [28.8, 41.1], [28.6, 41.1]]]],
 };
 const overlap: AtsDistrictBoundary = {
   ilKodu: 34,
   ilceMernisKodu: 2052,
-  ring: [[28.6, 41], [28.8, 41], [28.8, 41.1], [28.6, 41.1]],
+  parts: [[[[28.6, 41], [28.8, 41], [28.8, 41.1], [28.6, 41.1]]]],
 };
 
 const ready = {
@@ -45,10 +45,27 @@ const ready = {
   alreadySubmitted: false,
 };
 
+test("the installed catalog resolves a known district and refuses open water", () => {
+  const esenyurt = resolveAtsDistrict(41.034, 28.675);
+  assert.equal(esenyurt.ok, true);
+  if (esenyurt.ok) {
+    assert.equal(esenyurt.ilKodu, 34);
+    assert.equal(esenyurt.ilceMernisKodu, 2053);
+  }
+  assert.equal(resolveAtsDistrict(40.9, 28.2).ok, false);
+  const airport = resolveAtsDistrict(41.275, 28.742);
+  assert.equal(airport.ok, true);
+  if (airport.ok) assert.equal(airport.ilceMernisKodu, 2048);
+  const numericText = resolveAtsDistrict("41.2650375" as unknown as number, "28.6878853" as unknown as number);
+  assert.equal(numericText.ok, true);
+  if (numericText.ok) assert.equal(numericText.ilceMernisKodu, 2048);
+});
+
 test("official district codes accept MERNIS districts and reject airports", () => {
   assert.equal(isOfficialAtsDistrict(34, 2053), true);
   assert.equal(isOfficialAtsDistrict(34, 99133), false);
-  assert.equal(resolveAtsDistrict(41.05, 28.7).ok, false);
+  const catalogHit = resolveAtsDistrict(41.05, 28.7);
+  if (catalogHit.ok) assert.equal(isOfficialAtsDistrict(catalogHit.ilKodu, catalogHit.ilceMernisKodu), true);
   assert.deepEqual(resolveAtsDistrict(41.05, 28.7, [square]), { ok: true, ilKodu: 34, ilceMernisKodu: 2053 });
   assert.equal(resolveAtsDistrict(41.05, 28.7, [square, overlap]).ok, false);
   assert.equal(resolveAtsDistrict(41.05, 28.7, [{ ...square, ilceMernisKodu: 99133 }]).ok, false);
@@ -156,23 +173,56 @@ test("retries stop when ATS is off, the ministry rejects, or attempts are exhaus
   assert.match(ATS_RETRY_SELECT_SQL, /ministry_env = 'test'/);
   const migration = readFileSync(new URL("../../db/migrations/075_gps_ats.sql", import.meta.url), "utf8");
   assert.match(migration, /position_id UUID NOT NULL UNIQUE/);
+  const repeat = readFileSync(new URL("../../db/migrations/077_gps_ats_repeat_position.sql", import.meta.url), "utf8");
+  assert.match(repeat, /DROP CONSTRAINT IF EXISTS gps_ats_submissions_position_id_key/);
   assert.match(migration, /DEFAULT FALSE/);
   assert.doesNotMatch(migration, /INSERT INTO gps_ats_settings/);
 });
 
-test("the DEV worker cannot be pointed at production or at a real SOAP call", () => {
+test("the DEV worker cannot be pointed at production or at the live ministry", () => {
   assert.throws(() => assertAtsWorkerWithheld({ NODE_ENV: "production", EXPECTED_DATABASE: "tripetica" }), /ats_worker_blocked/);
-  assert.throws(() => assertAtsWorkerWithheld({ NODE_ENV: "development", EXPECTED_DATABASE: "tripetica_dev", ATS_MINISTRY_DISPATCH: "allow-test" }), /ats_ministry_dispatch_disabled/);
+  assert.throws(() => assertAtsWorkerWithheld({ NODE_ENV: "development", EXPECTED_DATABASE: "tripetica", ATS_MINISTRY_DISPATCH: "allow-test" }), /ats_worker_blocked/);
   assert.doesNotThrow(() => assertAtsWorkerWithheld({ NODE_ENV: "development", EXPECTED_DATABASE: "tripetica_dev", ATS_MINISTRY_DISPATCH: "withheld" }));
+  assert.throws(() => assertProdAtsDispatchWithheld({ NODE_ENV: "production", EXPECTED_DATABASE: "tripetica", ATS_MINISTRY_DISPATCH: "allow-test" }), /ats_live_dispatch_blocked/);
+  assert.doesNotThrow(() => assertProdAtsDispatchWithheld({ NODE_ENV: "production", EXPECTED_DATABASE: "tripetica", ATS_LIVE_DISPATCH: "approved" }));
+  assert.doesNotThrow(() => assertProdAtsDispatchWithheld({ NODE_ENV: "production", EXPECTED_DATABASE: "tripetica", ATS_MINISTRY_DISPATCH: "withheld" }));
   const script = readFileSync(new URL("../../scripts/gps-ats-dispatch.ts", import.meta.url), "utf8");
   const service = readFileSync(new URL("../../deploy/systemd/tripetica-dev-gps-ats.service", import.meta.url), "utf8");
-  assert.doesNotMatch(script, /callUetdsTestSoap|servis\.turkiye\.gov\.tr|atsArizaBildir/);
+  assert.match(script, /ATS_MINISTRY_DISPATCH !== "allow-test"/);
+  assert.match(readFileSync(new URL("./ats-run.ts", import.meta.url), "utf8"), /Number\(point\.latitude\)/);
+  assert.doesNotMatch(script, /uetdsarizi"|atsArizaBildir/);
   assert.match(service, /ATS_MINISTRY_DISPATCH=withheld/);
   assert.match(service, /EXPECTED_DATABASE=tripetica_dev/);
-  assert.doesNotMatch(service, /\[Timer\]|OnUnitActiveSec/);
+  assert.doesNotMatch(service, /OnUnitActiveSec/);
+  const prodScript = readFileSync(new URL("../../scripts/gps-ats-dispatch-prod.ts", import.meta.url), "utf8");
+  const prodService = readFileSync(new URL("../../deploy/systemd/tripetica-prod-gps-ats.service", import.meta.url), "utf8");
+  const prodTimer = readFileSync(new URL("../../deploy/systemd/tripetica-prod-gps-ats.timer", import.meta.url), "utf8");
+  assert.match(prodScript, /assertProdAtsDispatchWithheld/);
+  assert.match(prodScript, /summary\.sent !== 0/);
+  assert.doesNotMatch(prodScript, /allow-test|uetdsarizi/);
+  assert.match(prodService, /EXPECTED_DATABASE=tripetica/);
+  assert.match(prodService, /ATS_MINISTRY_DISPATCH=withheld/);
+  assert.doesNotMatch(prodService, /allow-test/);
+  assert.match(prodTimer, /OnUnitActiveSec=2min/);
+  assert.doesNotMatch(prodService, /ATS_LIVE_DISPATCH=approved/);
+  const poster = readFileSync(new URL("../uetds/ats-post.ts", import.meta.url), "utf8");
+  const dispatcher = readFileSync(new URL("./ats-run.ts", import.meta.url), "utf8");
+  assert.match(poster, /atsLiveDispatchAllowed/);
+  assert.match(poster, /UETDS_LIVE_ENDPOINT/);
+  assert.match(dispatcher, /openAtsRuntime/);
+  assert.match(dispatcher, /\$6, 'pending'/);
+  assert.match(dispatcher, /ministry_env = \$2/);
+  assert.match(dispatcher, /atsPlate/);
   const actions = readFileSync(new URL("./ats-actions.ts", import.meta.url), "utf8");
   assert.match(actions, /getOpsActor/);
   assert.match(actions, /gps\.manage/);
   const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
   assert.match(workspace, /surface === "ops" \? await loadGpsAtsPanel/);
+  const detail = readFileSync(new URL("../../components/uetds/uetds-notification-detail.tsx", import.meta.url), "utf8");
+  const opsDetail = readFileSync(new URL("../../app/[locale]/ops/(panel)/uetds/notifications/[id]/page.tsx", import.meta.url), "utf8");
+  const partnerDetail = readFileSync(new URL("../../app/[locale]/partner/(panel)/uetds/notifications/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(detail, /atsHistoryShow/);
+  assert.match(detail, /atsHistoryHide/);
+  assert.match(opsDetail, /loadGpsAtsNotificationHistory/);
+  assert.match(partnerDetail, /loadGpsAtsNotificationHistory/);
 });

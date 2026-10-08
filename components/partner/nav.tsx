@@ -12,6 +12,7 @@ type PartnerNavProps = {
   items: PartnerNavItem[];
   pathWithoutLocale: string;
   partnerName: string;
+  gpsLabel: string;
 };
 
 export function PartnerNav({
@@ -20,6 +21,7 @@ export function PartnerNav({
   items,
   pathWithoutLocale,
   partnerName,
+  gpsLabel,
 }: PartnerNavProps) {
   const [open, setOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState(pathWithoutLocale);
@@ -83,7 +85,7 @@ export function PartnerNav({
                 aria-current={current ? "page" : undefined}
                 onClick={() => setOpen(false)}
               >
-                {copy[item.labelKey]}
+                {item.labelKey === "gps" ? gpsLabel : copy[item.labelKey]}
               </a>
             );
           })}

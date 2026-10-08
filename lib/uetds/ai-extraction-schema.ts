@@ -6,7 +6,7 @@ import { repairUetdsExtractedPersonNames } from "@/lib/uetds/passenger-name";
 import { preferUetdsPlaceQuery } from "@/lib/uetds/place-query";
 import { resolveOfficialUetdsLocation } from "@/lib/uetds/official-locations";
 import { reconcileExtractedTripDates, yearlessSentinelDate } from "@/lib/uetds/extracted-datetime";
-import { applyUetdsAiExtractionTripTimes } from "@/lib/uetds/trip-time";
+import { applyUetdsAiExtractionTripTimes, isUetdsAirportPickup } from "@/lib/uetds/trip-time";
 
 export const AI_EXTRACTION_MAX_TEXT = 30_000;
 export const AI_EXTRACTION_MAX_PASSENGERS = 60;
@@ -26,10 +26,10 @@ const tripFields = {
   destination: field(
     "Dropoff place identity for Google Places / U-ETDS. Same priority as origin: airport name+IATA > hotel/facility/POI name > full street address. Never reduce a specific source to a bare city/province; preserve a supplied short or ambiguous place verbatim for user selection. Example: Antusa Design Hotel, Alemdar, Divan Yolu Cd. No:38… → Antusa Design Hotel (not Divanyolu Cd. No:38). Sabiha / SAW stays the airport identity, not Pendik street text. Prefer Turkish wording when needed; never invent ministry il/ilçe codes.",
   ),
-  startDate: field("YYYY-MM-DD when the source writes the year. When day and month are written without a year, return 0000-MM-DD and never guess a year. Otherwise null.", 10),
-  startTime: field("HH:mm local source time only when explicit. Do not infer from a flight or add a timezone.", 5),
-  endDate: field("YYYY-MM-DD when the source writes the year. When day and month are written without a year, return 0000-MM-DD and never guess a year. Otherwise null.", 10),
-  endTime: field("HH:mm only with explicit end time. Never calculate a duration.", 5),
+  startDate: field("YYYY-MM-DD when the source writes the year. When day and month are written without a year, return 0000-MM-DD and never guess a year. When only a clock is written, return null — do not invent today's date. Otherwise null.", 10),
+  startTime: field("HH:mm of the trip start. Any visible clock is the start unless that same phrase explicitly says bitiş zamanı, bırakma zamanı, sefer bitiş zamanı, varış saati, or drop-off time. Bare 23:00, Saat 23:00, Saati 23:00, Alış 20:00, Alış saati 20:00, and Transfer saati 20:00 are start times. Return the clock even when startDate is null. Ignore a phone status-bar clock and chat sent/received timestamps. Do not infer from a flight or add a timezone.", 5),
+  endDate: field("YYYY-MM-DD only when an explicit end phrase includes a date. Otherwise null. Never guess a year.", 10),
+  endTime: field("HH:mm only when the same phrase explicitly says the trip end: bitiş zamanı, bırakma zamanı, sefer bitiş zamanı, varış saati, or drop-off time. Bırakma yeri is a place, not an end time. Otherwise null. Never copy the start clock here and never calculate a duration.", 5),
   tripKind: { ...field("Explicit service type only: transfer, tour, or charter. Use transfer unless the source explicitly says tour or charter/tahsis.", 10), enum: ["transfer", "tour", "charter", "other", null] },
   purpose: field("Service description in natural Turkish. Translate foreign purpose text (e.g. Airport Transfer → Havalimanı Transferi); never invent a description.", 500),
   fare: field("Explicit nonnegative group/transport fee as a decimal string without currency. Never infer or calculate.", 30),
@@ -136,6 +136,8 @@ export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = 
         : /^(bırakma|bırakış|drop-?off|destination)/iu.test(match[1]) ? "destination" : null;
       if (!key) continue;
       const location = cleanDescribedPlace(line.slice(match.index! + match[0].length, matches[index + 1]?.index ?? line.length));
+      // "Alış 20:00" is a start clock, not a pickup place.
+      if (/^\d{1,2}[:.]\d{2}\b/u.test(location)) continue;
       if (location && location.length <= tripFields[key].maxLength) labelled[key].add(location);
     }
   }
@@ -217,7 +219,20 @@ export function mergeAiUetdsExtraction(
         ? undefined : passenger.identityNumber,
     })),
   };
-  const merged = mergeExtractedDraft(current, incoming, {
+  const fieldProvenance = { ...current.fieldProvenance };
+  if (!options?.preserveUntouchedTimes) {
+    // A stated description or image clock replaces the form clock on a new
+    // notification. The automatic now+65 value must not stay as a conflict.
+    if (extracted.startDate || extracted.startTime) {
+      fieldProvenance.startDate = "missing";
+      fieldProvenance.startTime = "missing";
+    }
+    if (extracted.endDate || extracted.endTime) {
+      fieldProvenance.endDate = "missing";
+      fieldProvenance.endTime = "missing";
+    }
+  }
+  const merged = mergeExtractedDraft({ ...current, fieldProvenance }, incoming, {
     lockPassengerCount: options?.lockPassengerCount,
   });
   extracted.passengers?.forEach((passenger, index) => {
@@ -293,8 +308,20 @@ export function mergeAiUetdsExtraction(
     );
     return merged;
   }
+  // The new form already shows an automatic end. A start-only source must not
+  // freeze that previous clock as a manual end.
+  if ((extracted.startDate || extracted.startTime) && !extracted.endDate && !extracted.endTime && !current.endManual) {
+    merged.draft.endDate = "";
+    merged.draft.endTime = "";
+    merged.draft.endManual = false;
+  }
   // Deterministic trip-time post-process for a new notification: never leave missing/too-short times to model guessing.
-  const times = applyUetdsAiExtractionTripTimes(merged.draft, nowUtcMs);
+  const times = applyUetdsAiExtractionTripTimes(
+    merged.draft,
+    nowUtcMs,
+    isUetdsAirportPickup(merged.draft.originLocation),
+  );
+  merged.draft.endManual = times.endManual;
   if (
     times.startDate !== merged.draft.startDate ||
     times.startTime !== merged.draft.startTime ||
@@ -308,14 +335,10 @@ export function mergeAiUetdsExtraction(
     if (times.startFromFallback) {
       merged.draft.fieldProvenance.startDate = "suggested";
       merged.draft.fieldProvenance.startTime = "suggested";
-      merged.draft.endManual = false;
     }
     if (times.endAdjusted) {
       merged.draft.fieldProvenance.endDate = "suggested";
       merged.draft.fieldProvenance.endTime = "suggested";
-      if (!times.startFromFallback && !merged.draft.endManual) {
-        merged.draft.endManual = false;
-      }
     }
   }
   return merged;

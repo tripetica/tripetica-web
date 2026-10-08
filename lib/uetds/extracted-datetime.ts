@@ -2,6 +2,8 @@ import { formatUtcToIstanbulLocal, istanbulLocalToUtcMs } from "@/lib/booking/is
 
 /** Yearless day/month/time is accepted only inside [now, now + 30 days]. */
 export const UETDS_YEARLESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+/** A clock with no day uses the nearest future time inside this window. */
+export const UETDS_DATELESS_CLOCK_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 export type ResolvedSourceDateTime = {
   status: "resolved";
@@ -56,7 +58,10 @@ const MONTHS: Record<string, number> = {
 };
 
 const MONTH_PHRASE =
-  /(\d{1,2})\s+([A-Za-zÀ-ÿĞğİıÖöŞşÜüÇç]+)(?:\s+(\d{4}))?\s+(\d{1,2})[:.](\d{2})/gu;
+  /(\d{1,2})\s+([A-Za-zÀ-ÿĞğİıÖöŞşÜüÇç]+)(?:\s+(\d{4}))?(?:\s+saati?)?\s+(\d{1,2})[:.](\d{2})/giu;
+const TOMORROW_PHRASE =
+  /(yarın|yarin|tomorrow)(?:\s+saati?)?\s+(\d{1,2})[:.](\d{2})/giu;
+const CLOCK_PHRASE = /(?<!\d[./])(?<!\d)(\d{1,2})([:.])(\d{2})(?!\.\d)(?!\d)/g;
 const NUMERIC_EXPLICIT =
   /(\d{1,2})[./](\d{1,2})[./](\d{4})(?:\s+(\d{1,2})[:.](\d{2}))?/g;
 const NUMERIC_YEARLESS =
@@ -159,18 +164,71 @@ function yearlessResult(month: number, day: number, hour: number, minute: number
 }
 
 function roleAt(text: string, index: number): "start" | "end" | "unlabelled" {
-  const before = text.slice(Math.max(0, index - 64), index).toLocaleLowerCase("tr-TR");
-  if (/bitiş|bitis|bırak|birak|varış|varis|drop-?off|end\s+(?:time|date)/u.test(before)) {
+  const before = text.slice(Math.max(0, index - 80), index).toLocaleLowerCase("tr-TR");
+  // The label is only the phrase attached to this clock. "Bırakma yeri" is a
+  // place, so a later "Saati 23:00" stays an unlabeled start.
+  const endLabel = /(?:bitiş|bitis|bırak(?:ma|ış|is)?|birak(?:ma|is)?|varış|varis|drop-?off|end(?:\s+(?:time|date))?)\s*(?:saati|saat|zaman[ıi])?\s*[:\-]?\s*$/u;
+  const startLabel = /(?:başlangıç|baslangic|alış|alis|biniş|binis|pick-?up|start(?:\s+(?:time|date))?|tarih|date)\s*(?:saati|saat|zaman[ıi])?\s*[:\-]?\s*$/u;
+  if (endLabel.test(before)) {
     return "end";
   }
-  if (/başlangıç|baslangic|alış|alis|biniş|binis|pick-?up|start\s+(?:time|date)|tarih|date/u.test(before)) {
+  if (startLabel.test(before)) {
     return "start";
   }
   return "unlabelled";
 }
 
+function todayDate(nowUtcMs: number) {
+  return formatUtcToIstanbulLocal(nowUtcMs).slice(0, 10);
+}
+
+function tomorrowDate(nowUtcMs: number) {
+  const today = todayDate(nowUtcMs);
+  const noon = istanbulLocalToUtcMs(`${today}T12:00`);
+  return formatUtcToIstanbulLocal(noon + 24 * 60 * 60 * 1000).slice(0, 10);
+}
+
+/** No written day: the nearest strictly future clock inside the next 12 hours. */
+export function resolveDatelessClock(input: {
+  hour: number;
+  minute: number;
+  nowUtcMs: number;
+}): { date: string; time: string } | null {
+  if (input.hour < 0 || input.hour > 23 || input.minute < 0 || input.minute > 59) {
+    return null;
+  }
+  const time = clock(input.hour, input.minute);
+  const windowEnd = input.nowUtcMs + UETDS_DATELESS_CLOCK_WINDOW_MS;
+  for (const date of [todayDate(input.nowUtcMs), tomorrowDate(input.nowUtcMs)]) {
+    const utc = istanbulLocalToUtcMs(`${date}T${time}`);
+    if (Number.isFinite(utc) && utc > input.nowUtcMs && utc <= windowEnd) {
+      return { date, time };
+    }
+  }
+  return null;
+}
+
+function clockResult(date: string, hour: number, minute: number, index: number): Found | null {
+  if (hour > 23 || minute > 59 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return null;
+  }
+  return {
+    status: "resolved",
+    date,
+    time: clock(hour, minute),
+    yearExplicit: false,
+    index,
+  };
+}
+
+function overlaps(index: number, length: number, spans: Array<{ start: number; end: number }>) {
+  const end = index + length;
+  return spans.some((span) => index < span.end && end > span.start);
+}
+
 function collectPhrases(text: string, nowUtcMs: number): Found[] {
   const found: Found[] = [];
+  const spans: Array<{ start: number; end: number }> = [];
   for (const match of text.matchAll(MONTH_PHRASE)) {
     const month = MONTHS[foldToken(match[2] ?? "")];
     if (!month || match.index == null) {
@@ -185,6 +243,7 @@ function collectPhrases(text: string, nowUtcMs: number): Found[] {
       : explicitResult(year, month, day, hour, minute, match.index);
     if (item) {
       found.push(item);
+      spans.push({ start: match.index, end: match.index + match[0].length });
     }
   }
   for (const match of text.matchAll(NUMERIC_EXPLICIT)) {
@@ -199,6 +258,7 @@ function collectPhrases(text: string, nowUtcMs: number): Found[] {
     }
     if (item) {
       found.push(item);
+      spans.push({ start: match.index, end: match.index + match[0].length });
     }
   }
   for (const match of text.matchAll(NUMERIC_YEARLESS)) {
@@ -215,44 +275,97 @@ function collectPhrases(text: string, nowUtcMs: number): Found[] {
     );
     if (item) {
       found.push(item);
+      spans.push({ start: match.index, end: match.index + match[0].length });
     }
   }
+  for (const match of text.matchAll(TOMORROW_PHRASE)) {
+    if (match.index == null || overlaps(match.index, match[0].length, spans)) {
+      continue;
+    }
+    const item = clockResult(tomorrowDate(nowUtcMs), Number(match[2]), Number(match[3]), match.index);
+    if (item) {
+      found.push(item);
+      spans.push({ start: match.index, end: match.index + match[0].length });
+    }
+  }
+  for (const match of text.matchAll(CLOCK_PHRASE)) {
+    if (match.index == null || overlaps(match.index, match[0].length, spans)) {
+      continue;
+    }
+    const hour = Number(match[1]);
+    const minute = Number(match[3]);
+    // An explicit end keeps its clock. Every other clock is a start, placed on
+    // the nearest future time within 12 hours. Outside that window it is not a start.
+    if (roleAt(text, match.index) === "end") {
+      const item = clockResult(todayDate(nowUtcMs), hour, minute, match.index);
+      if (item) found.push(item);
+      continue;
+    }
+    const resolved = resolveDatelessClock({ hour, minute, nowUtcMs });
+    if (!resolved) {
+      found.push({ status: "rejected", index: match.index });
+      continue;
+    }
+    const item = clockResult(resolved.date, hour, minute, match.index);
+    if (item) found.push(item);
+  }
   return found.sort((left, right) => left.index - right.index);
+}
+
+function withoutIndex(item: Found): SourceDateTime {
+  if (item.status === "rejected") {
+    return { status: "rejected" };
+  }
+  return {
+    status: "resolved",
+    date: item.date,
+    time: item.time,
+    yearExplicit: item.yearExplicit,
+  };
+}
+
+function uniqueResolved(items: Found[]): SourceDateTime | null {
+  if (items.length === 0) {
+    return null;
+  }
+  const resolved = items.filter((item) => item.status === "resolved");
+  const keys = new Set(resolved.map((item) => `${item.date}T${item.time}`));
+  if (keys.size > 1) {
+    return { status: "rejected" };
+  }
+  if (keys.size === 1) {
+    return withoutIndex(resolved[0]!);
+  }
+  if (items.some((item) => item.status === "rejected")) {
+    return { status: "rejected" };
+  }
+  return null;
 }
 
 export function parseDescribedTripDates(text: string, nowUtcMs: number): {
   start: SourceDateTime | null;
   end: SourceDateTime | null;
 } {
-  let start: SourceDateTime | null = null;
-  let end: SourceDateTime | null = null;
+  const startItems: Found[] = [];
+  const endItems: Found[] = [];
+  const bareItems: Found[] = [];
   for (const item of collectPhrases(text, nowUtcMs)) {
     const role = roleAt(text, item.index);
-    const value: SourceDateTime = item.status === "rejected"
-      ? { status: "rejected" }
-      : {
-          status: "resolved",
-          date: item.date,
-          time: item.time,
-          yearExplicit: item.yearExplicit,
-        };
     if (role === "end") {
-      if (!end) {
-        end = value;
-      }
-      continue;
-    }
-    if (role === "start" || !start) {
-      if (!start) {
-        start = value;
-      }
-      continue;
-    }
-    if (!end) {
-      end = value;
+      endItems.push(item);
+    } else if (role === "start") {
+      startItems.push(item);
+    } else {
+      bareItems.push(item);
     }
   }
-  return { start, end };
+  const labelledStart = uniqueResolved(startItems);
+  const end = uniqueResolved(endItems);
+  if (labelledStart) {
+    return { start: labelledStart, end };
+  }
+  const bare = uniqueResolved(bareItems);
+  return { start: bare, end };
 }
 
 export function yearlessSentinelDate(value: string | null | undefined) {
@@ -300,6 +413,11 @@ function sideFromModel(
     }
     return resolved;
   }
+  // An image or file often shows only "23:00". That clock is still the start.
+  if (clockParts && !modelDate) {
+    const resolved = resolveDatelessClock({ ...clockParts, nowUtcMs });
+    return resolved ?? { date: undefined, time: undefined };
+  }
   if (modelDate && !sentinel) {
     return { date: modelDate, time: modelTime };
   }
@@ -316,8 +434,43 @@ export function reconcileExtractedTripDates(input: {
   nowUtcMs: number;
 }) {
   const described = parseDescribedTripDates(input.description, input.nowUtcMs);
-  const start = sideFromModel(input.startDate, input.startTime, described.start, input.nowUtcMs);
-  const end = sideFromModel(input.endDate, input.endTime, described.end, input.nowUtcMs);
+  let start = sideFromModel(input.startDate, input.startTime, described.start, input.nowUtcMs);
+  let end = sideFromModel(input.endDate, input.endTime, described.end, input.nowUtcMs);
+  const text = input.description.trim();
+  const explicitEnd = described.end?.status === "resolved";
+  const explicitStart = described.start?.status === "resolved";
+  // Two unlabeled clocks are not a start and not an end.
+  if (described.start?.status === "rejected" && !explicitEnd) {
+    start = { date: undefined, time: undefined };
+    end = { date: undefined, time: undefined };
+  }
+  // A file/image clock filed as the end, with no explicit end phrase, is the start.
+  // The end never rewrites a start that is already present.
+  if (!explicitStart && !explicitEnd && !start.time && end.time) {
+    start = { date: end.date, time: end.time };
+    end = { date: undefined, time: undefined };
+  }
+  // A drop-off clock never rewrites the start. A clock with no date uses the start date.
+  if (
+    explicitEnd &&
+    described.end?.status === "resolved" &&
+    !described.end.yearExplicit &&
+    start.date &&
+    end.time
+  ) {
+    end = { date: start.date, time: end.time };
+  }
+  if (text && explicitStart && !explicitEnd) {
+    end = { date: undefined, time: undefined };
+  } else if (
+    !explicitEnd &&
+    start.date &&
+    start.time &&
+    start.date === end.date &&
+    start.time === end.time
+  ) {
+    end = { date: undefined, time: undefined };
+  }
   return {
     startDate: start.date,
     startTime: start.time,

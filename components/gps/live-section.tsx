@@ -50,6 +50,7 @@ export function GpsLiveSection({
   rangeSearch = "",
   ats = null,
   canControlAts = false,
+  deviceControls = true,
 }: {
   copy: GpsCopy;
   listPath: string;
@@ -78,6 +79,7 @@ export function GpsLiveSection({
   rangeSearch?: string;
   ats?: GpsAtsPanelState | null;
   canControlAts?: boolean;
+  deviceControls?: boolean;
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
@@ -93,6 +95,7 @@ export function GpsLiveSection({
   }
   const [clock, setClock] = useState(() => Date.now());
   const [tab, setTab] = useState<"gps" | "wifi" | "camera">("gps");
+  const visibleTab = deviceControls ? tab : "gps";
   const [prefs, setPrefs] = useState<GpsPopupPrefs>(GPS_POPUP_DEFAULTS);
   const motionMemory = useRef(new Map<string, GpsMotionMemory>());
   const presence = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
@@ -316,12 +319,14 @@ export function GpsLiveSection({
           <a href={listPath}>{copy.back}</a>
         </header>
       ) : null}
-      <div className="gps-tabs" role="tablist" aria-label={copy.title}>
-        <button type="button" role="tab" aria-selected={tab === "gps"} onClick={() => setTab("gps")}>{copy.tabGps}</button>
-        <button type="button" role="tab" aria-selected={tab === "wifi"} onClick={() => setTab("wifi")}>{copy.tabWifi}</button>
-        <button type="button" role="tab" aria-selected={tab === "camera"} onClick={() => setTab("camera")}>{copy.tabCamera}</button>
-      </div>
-      <div className="gps-stack" hidden={tab !== "gps"}>
+      {deviceControls ? (
+        <div className="gps-tabs" role="tablist" aria-label={copy.title}>
+          <button type="button" role="tab" aria-selected={visibleTab === "gps"} onClick={() => setTab("gps")}>{copy.tabGps}</button>
+          <button type="button" role="tab" aria-selected={visibleTab === "wifi"} onClick={() => setTab("wifi")}>{copy.tabWifi}</button>
+          <button type="button" role="tab" aria-selected={visibleTab === "camera"} onClick={() => setTab("camera")}>{copy.tabCamera}</button>
+        </div>
+      ) : null}
+      <div className="gps-stack" hidden={visibleTab !== "gps"}>
       <section className="gps-section">
         <h2>{copy.live}</h2>
         <fieldset className="gps-map-settings">
@@ -348,7 +353,7 @@ export function GpsLiveSection({
           vehicleId={deviceId}
           live={fleetVehicles ? null : live}
           track={[]}
-          active={tab === "gps"}
+          active={visibleTab === "gps"}
           prefs={prefs}
           addressPending={copy.addressPending}
           pins={pins}
@@ -433,10 +438,14 @@ export function GpsLiveSection({
             <Tech copy={copy} label={copy.satellites} value={snapshot.satellites === null ? null : String(snapshot.satellites)} />
             <Tech copy={copy} label="latitude" value={live ? String(live.latitude) : null} />
             <Tech copy={copy} label="longitude" value={live ? String(live.longitude) : null} />
-            <Tech copy={copy} label={copy.wifiPolicy} value={snapshot.wifiPolicy ?? wifiMode} />
-            <Tech copy={copy} label={copy.apStatus} value={snapshot.apStatus} />
-            <Tech copy={copy} label={copy.clients} value={snapshot.wifiClients === null ? null : String(snapshot.wifiClients)} />
-            <Tech copy={copy} label={copy.maxClients} value={snapshot.reportedMaxClients === null ? null : String(snapshot.reportedMaxClients)} />
+            {deviceControls ? (
+              <>
+                <Tech copy={copy} label={copy.wifiPolicy} value={snapshot.wifiPolicy ?? wifiMode} />
+                <Tech copy={copy} label={copy.apStatus} value={snapshot.apStatus} />
+                <Tech copy={copy} label={copy.clients} value={snapshot.wifiClients === null ? null : String(snapshot.wifiClients)} />
+                <Tech copy={copy} label={copy.maxClients} value={snapshot.reportedMaxClients === null ? null : String(snapshot.reportedMaxClients)} />
+              </>
+            ) : null}
             <Tech copy={copy} label={copy.recovery} value={snapshot.lastRecoveryReason} />
             <Tech copy={copy} label={copy.modemRecovery} value={snapshot.lastModemRecoveryAt ? gpsClock(snapshot.lastModemRecoveryAt) : null} />
             <Tech copy={copy} label={copy.gnssRecovery} value={snapshot.lastGnssRecoveryAt ? gpsClock(snapshot.lastGnssRecoveryAt) : null} />
@@ -449,7 +458,7 @@ export function GpsLiveSection({
         </section>
       ) : null}
       </div>
-      <div hidden={tab !== "wifi"}>
+      {deviceControls ? <div hidden={visibleTab !== "wifi"}>
         <section className="gps-section">
           <div className="gps-wifi-head">
             <h2>{copy.wifi}</h2>
@@ -467,8 +476,8 @@ export function GpsLiveSection({
           </div>
           {wifi}
         </section>
-      </div>
-      <div hidden={tab !== "camera"}>{camera}</div>
+      </div> : null}
+      {deviceControls ? <div hidden={visibleTab !== "camera"}>{camera}</div> : null}
     </>
   );
 }

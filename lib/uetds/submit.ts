@@ -12,7 +12,7 @@ import { shouldDeleteUetdsFormDraftAfterMinistry } from "@/lib/uetds/form-draft-
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
 import { isUetdsDriverSubscriptionEntitled } from "@/lib/uetds/driver-subscription";
 import { loadDriverUetdsSubscriptionEntitlement } from "@/lib/uetds/driver-subscription-store";
-import { adjustUetdsTripTimesForSubmit, type UetdsTripTimeAdjustment } from "@/lib/uetds/trip-time";
+import { adjustUetdsTripTimesForSubmit, isUetdsAirportPickup, type UetdsTripTimeAdjustment } from "@/lib/uetds/trip-time";
 import { selectedFleetCompany, type UetdsFleetScope } from "@/lib/uetds/fleet-options";
 import { getUetdsDriverOption, getUetdsVehicleOption } from "@/lib/uetds/fleet-scope";
 import { isOfficialUetdsLocationReady } from "@/lib/uetds/location";
@@ -147,7 +147,10 @@ export async function submitUetdsNotification(input: {
   if (missing.length > 0) {
     return { ok: false, error: "missing", missing, timeAdjustment: null };
   }
-  const timeAdjustment = adjustUetdsTripTimesForSubmit(draft);
+  const timeAdjustment = adjustUetdsTripTimesForSubmit({
+    ...draft,
+    airportPickup: isUetdsAirportPickup(draft.originLocation),
+  });
   draft.startDate = timeAdjustment.startDate;
   draft.startTime = timeAdjustment.startTime;
   draft.endDate = timeAdjustment.endDate;

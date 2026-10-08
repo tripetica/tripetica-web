@@ -15,7 +15,7 @@ import { mergeSavedReservationDraft } from "@/lib/uetds/prefill";
 import { loadUetdsReservationContext } from "@/lib/uetds/reservation-context";
 import { findActiveUetdsNotificationForReservation } from "@/lib/uetds/reservation-notification";
 import { resolveUetdsMinistryRuntime } from "@/lib/uetds/ministry-env";
-import { defaultUetdsEndFromStart } from "@/lib/uetds/trip-time";
+import { defaultUetdsEndFromStart, isUetdsAirportPickup } from "@/lib/uetds/trip-time";
 import { listAssignableEdevletAuthorities } from "@/lib/partner/fleet-pairing";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ function reservationParam(value: string | string[] | undefined) {
 
 function fillEmptyEnd(draft: UetdsDraft) {
   if (draft.startDate && draft.startTime && (!draft.endDate || !draft.endTime)) {
-    const end = defaultUetdsEndFromStart(draft.startDate, draft.startTime);
+    const end = defaultUetdsEndFromStart(draft.startDate, draft.startTime, isUetdsAirportPickup(draft.originLocation));
     return { ...draft, endDate: end.date, endTime: end.time, endManual: false };
   }
   return draft;

@@ -7,7 +7,7 @@ import { readOpenCameraSession } from "@/lib/gps/camera-sessions";
 export async function cameraViewerScope(surface: string | null) {
   if (surface === "partner") {
     const actor = await getPartnerActor();
-    if (!actor || actor.mustChangePassword) {
+    if (!actor || actor.mustChangePassword || !actor.isPrimaryPartner) {
       return null;
     }
     return {

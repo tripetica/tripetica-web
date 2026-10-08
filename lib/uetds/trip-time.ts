@@ -3,6 +3,7 @@ import {
   istanbulLocalToUtcMs,
   isIstanbulLocalOnOrAfter,
 } from "@/lib/booking/istanbul-time";
+import { uetdsLocationIsAirport } from "@/lib/uetds/official-locations";
 
 /** Form default and AI minimum start: analysis clock + 65 minutes. */
 export const UETDS_DEFAULT_START_LEAD_MS = 65 * 60 * 1000;
@@ -10,7 +11,14 @@ export const UETDS_DEFAULT_START_LEAD_MS = 65 * 60 * 1000;
 export const UETDS_SUBMIT_MIN_REMAINING_MS = 62 * 60 * 1000;
 /** Final submit bump target when start is too soon: now + 62 minutes (same as the minimum). */
 export const UETDS_SUBMIT_ADJUST_LEAD_MS = 62 * 60 * 1000;
+/** Airport pickup automatic end: start + 3 hours. */
 export const UETDS_DEFAULT_END_OFFSET_MS = 3 * 60 * 60 * 1000;
+/** Other pickup automatic end: start + 2 hours. */
+export const UETDS_OTHER_END_OFFSET_MS = 2 * 60 * 60 * 1000;
+/** Airport pickup earliest accepted end: start + 60 minutes. No maximum. */
+export const UETDS_AIRPORT_MIN_END_MS = 60 * 60 * 1000;
+/** Other pickup earliest accepted end: start + 30 minutes. No maximum. */
+export const UETDS_OTHER_MIN_END_MS = 30 * 60 * 1000;
 /** @deprecated Use UETDS_DEFAULT_START_LEAD_MS. */
 export const UETDS_MIN_START_LEAD_MS = UETDS_DEFAULT_START_LEAD_MS;
 
@@ -69,8 +77,30 @@ export function addUetdsDuration(
   return splitUetdsLocal(formatUtcToIstanbulLocal(startUtc + offsetMs));
 }
 
-export function defaultUetdsEndFromStart(date: string, time: string) {
-  return addUetdsDuration(date, time, UETDS_DEFAULT_END_OFFSET_MS);
+export function isUetdsAirportPickup(location: {
+  locationType?: string | null;
+  districtOrAirportCode?: string | null;
+  districtOrAirportName?: string | null;
+  placeName?: string | null;
+  formattedAddress?: string | null;
+} | null | undefined) {
+  return uetdsLocationIsAirport(location);
+}
+
+export function uetdsAutomaticEndOffsetMs(airportPickup: boolean) {
+  return airportPickup ? UETDS_DEFAULT_END_OFFSET_MS : UETDS_OTHER_END_OFFSET_MS;
+}
+
+export function uetdsMinimumEndOffsetMs(airportPickup: boolean) {
+  return airportPickup ? UETDS_AIRPORT_MIN_END_MS : UETDS_OTHER_MIN_END_MS;
+}
+
+export function defaultUetdsEndFromStart(date: string, time: string, airportPickup = false) {
+  return addUetdsDuration(date, time, uetdsAutomaticEndOffsetMs(airportPickup));
+}
+
+export function minimumUetdsEndFromStart(date: string, time: string, airportPickup = false) {
+  return addUetdsDuration(date, time, uetdsMinimumEndOffsetMs(airportPickup));
 }
 
 function hasCompleteUetdsDateTime(date: string, time: string) {
@@ -78,14 +108,15 @@ function hasCompleteUetdsDateTime(date: string, time: string) {
   return Boolean(date.trim() && time.trim() && Number.isFinite(utc));
 }
 
-/** Enforce end >= start + 3 hours (keep a later explicit end). */
+/** Keep a later end. Raise only to the pickup minimum, never to a maximum. */
 export function ensureUetdsMinimumEnd(
   startDate: string,
   startTime: string,
   endDate: string,
   endTime: string,
+  airportPickup = false,
 ) {
-  const minimum = defaultUetdsEndFromStart(startDate, startTime);
+  const minimum = minimumUetdsEndFromStart(startDate, startTime, airportPickup);
   if (!minimum.date || !minimum.time) {
     return { endDate, endTime, adjusted: false };
   }
@@ -103,17 +134,40 @@ export function applyUetdsStartToEnd(input: {
   endDate: string;
   endTime: string;
   endManual: boolean;
+  /**
+   * New-notification pickup rule. Omit it for the edit form, which keeps its
+   * existing +3 hour fallback when an end is missing or not after the start.
+   */
+  airportPickup?: boolean;
 }) {
   const startUtc = istanbulLocalToUtcMs(joinUetdsDateTime(input.startDate, input.startTime));
   const endUtc = istanbulLocalToUtcMs(joinUetdsDateTime(input.endDate, input.endTime));
   if (!Number.isFinite(startUtc)) {
-    return { endDate: input.endDate, endTime: input.endTime };
+    return { endDate: input.endDate, endTime: input.endTime, raisedToMinimum: false };
   }
-  if (!input.endManual || !Number.isFinite(endUtc) || endUtc <= startUtc) {
-    const next = defaultUetdsEndFromStart(input.startDate, input.startTime);
-    return { endDate: next.date, endTime: next.time };
+  if (input.airportPickup === undefined) {
+    if (!input.endManual || !Number.isFinite(endUtc) || endUtc <= startUtc) {
+      const next = addUetdsDuration(input.startDate, input.startTime, UETDS_DEFAULT_END_OFFSET_MS);
+      return { endDate: next.date, endTime: next.time, raisedToMinimum: false };
+    }
+    return { endDate: input.endDate, endTime: input.endTime, raisedToMinimum: false };
   }
-  return { endDate: input.endDate, endTime: input.endTime };
+  if (!input.endManual || !Number.isFinite(endUtc)) {
+    const next = defaultUetdsEndFromStart(input.startDate, input.startTime, input.airportPickup);
+    return { endDate: next.date, endTime: next.time, raisedToMinimum: false };
+  }
+  const minimum = ensureUetdsMinimumEnd(
+    input.startDate,
+    input.startTime,
+    input.endDate,
+    input.endTime,
+    input.airportPickup,
+  );
+  return {
+    endDate: minimum.endDate,
+    endTime: minimum.endTime,
+    raisedToMinimum: minimum.adjusted,
+  };
 }
 
 export function isUetdsStartOnOrAfterMinimum(
@@ -168,7 +222,8 @@ export type UetdsTripTimeAdjustment = {
 /**
  * Authoritative create-submit guard (server clock):
  * - if start < now + 62m → start = now + 62m
- * - then end = max(end, final_start + 3h)
+ * - an automatic end is recomputed from that final start (+3h airport, +2h otherwise)
+ * - a manual end is kept when it meets the pickup minimum; a shorter one is raised only to that minimum
  */
 export function adjustUetdsTripTimesForSubmit(
   input: {
@@ -177,6 +232,7 @@ export function adjustUetdsTripTimesForSubmit(
     endDate: string;
     endTime: string;
     endManual: boolean;
+    airportPickup?: boolean;
   },
   nowUtcMs = Date.now(),
 ): UetdsTripTimeAdjustment {
@@ -190,7 +246,17 @@ export function adjustUetdsTripTimesForSubmit(
     startTime = start.time;
     startAdjusted = true;
   }
-  const end = ensureUetdsMinimumEnd(startDate, startTime, input.endDate, input.endTime);
+  const airportPickup = input.airportPickup === true;
+  const end = input.endManual && hasCompleteUetdsDateTime(input.endDate, input.endTime)
+    ? ensureUetdsMinimumEnd(startDate, startTime, input.endDate, input.endTime, airportPickup)
+    : (() => {
+        const next = defaultUetdsEndFromStart(startDate, startTime, airportPickup);
+        return {
+          endDate: next.date,
+          endTime: next.time,
+          adjusted: next.date !== input.endDate || next.time !== input.endTime,
+        };
+      })();
   return {
     startDate,
     startTime,
@@ -204,7 +270,8 @@ export function adjustUetdsTripTimesForSubmit(
 /**
  * Deterministic AI/prefill trip times (not model guessing):
  * - missing/too-early start → extraction_now + 65m
- * - end = max(source_end, start + 3h), or start + 3h when source end is missing
+ * - missing end → start + 3h at an airport, otherwise start + 2h
+ * - an explicit end is kept when it meets the pickup minimum; a shorter one is raised only to that minimum
  */
 export function applyUetdsAiExtractionTripTimes(
   input: {
@@ -214,6 +281,7 @@ export function applyUetdsAiExtractionTripTimes(
     endTime: string;
   },
   nowUtcMs = Date.now(),
+  airportPickup = false,
 ): {
   startDate: string;
   startTime: string;
@@ -221,6 +289,7 @@ export function applyUetdsAiExtractionTripTimes(
   endTime: string;
   startFromFallback: boolean;
   endAdjusted: boolean;
+  endManual: boolean;
 } {
   let startDate = input.startDate.trim();
   let startTime = input.startTime.trim();
@@ -235,7 +304,7 @@ export function applyUetdsAiExtractionTripTimes(
     startFromFallback = true;
   }
   if (!hasCompleteUetdsDateTime(input.endDate, input.endTime)) {
-    const end = defaultUetdsEndFromStart(startDate, startTime);
+    const end = defaultUetdsEndFromStart(startDate, startTime, airportPickup);
     return {
       startDate,
       startTime,
@@ -243,9 +312,10 @@ export function applyUetdsAiExtractionTripTimes(
       endTime: end.time,
       startFromFallback,
       endAdjusted: true,
+      endManual: false,
     };
   }
-  const end = ensureUetdsMinimumEnd(startDate, startTime, input.endDate, input.endTime);
+  const end = ensureUetdsMinimumEnd(startDate, startTime, input.endDate, input.endTime, airportPickup);
   return {
     startDate,
     startTime,
@@ -253,12 +323,13 @@ export function applyUetdsAiExtractionTripTimes(
     endTime: end.endTime,
     startFromFallback,
     endAdjusted: end.adjusted,
+    endManual: true,
   };
 }
 
 export function applyManualUetdsTripDefaults(nowUtcMs = Date.now()) {
   const start = uetdsMinimumStart(nowUtcMs);
-  const end = defaultUetdsEndFromStart(start.date, start.time);
+  const end = defaultUetdsEndFromStart(start.date, start.time, false);
   return {
     startDate: start.date,
     startTime: start.time,

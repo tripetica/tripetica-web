@@ -251,7 +251,7 @@ export async function queueGpsWifiAction(formData: FormData) {
     actorLabel = `${ops.firstName} ${ops.lastName}`.trim();
   } else {
     const partner = await getPartnerActor();
-    if (!partner) {
+    if (!partner || !partner.isPrimaryPartner) {
       return;
     }
     partnerScope = partner.partnerId;
@@ -317,7 +317,7 @@ export async function queueGpsWifiShareAction(input: {
     createdBy = "ops";
   } else {
     const partner = await getPartnerActor();
-    if (!partner) return { ok: false };
+    if (!partner || !partner.isPrimaryPartner) return { ok: false };
     partnerScope = partner.partnerId;
     actorLabel = partner.partnerName;
   }
@@ -342,7 +342,7 @@ export async function queueGpsLowBatteryAction(input: {
   const deviceId = input.deviceId.trim();
   if (!deviceId || (input.action !== "keep_on" && input.action !== "save_power")) return { ok: false };
   const partner = await getPartnerActor();
-  if (!partner) return { ok: false };
+  if (!partner || !partner.isPrimaryPartner) return { ok: false };
   const device = await getGpsDevice(deviceId, partner.partnerId);
   if (!device?.partnerId || device.partnerId !== partner.partnerId) return { ok: false };
   const queued = await queueGpsLowBattery({
@@ -375,7 +375,7 @@ export async function queueGpsRebootAction(formData: FormData) {
     createdBy = "ops";
   } else {
     const partner = await getPartnerActor();
-    if (!partner) {
+    if (!partner || !partner.isPrimaryPartner) {
       return;
     }
     partnerScope = partner.partnerId;

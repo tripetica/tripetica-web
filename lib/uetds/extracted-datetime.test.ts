@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
+import { mergeAiExtractedSources } from "@/lib/uetds/ai-passenger-sources";
 import { mapAiUetdsExtraction, mergeAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
 import { createEmptyDraft } from "@/lib/uetds/draft";
 import {
@@ -127,7 +128,7 @@ test("G: an explicit year is kept and is not rewritten by the 30-day window", ()
   assert.equal(later.startTime, "08:00");
 });
 
-test("H/I: missing start is still now + 65 minutes and a short end is still start + 3 hours", () => {
+test("H/I: missing start is still now + 65 minutes and a missing end is start + 2 hours", () => {
   assert.equal(UETDS_DEFAULT_START_LEAD_MS, 65 * 60 * 1000);
   assert.equal(UETDS_DEFAULT_END_OFFSET_MS, 3 * 60 * 60 * 1000);
   assert.equal(UETDS_SUBMIT_MIN_REMAINING_MS, 62 * 60 * 1000);
@@ -146,7 +147,7 @@ test("H/I: missing start is still now + 65 minutes and a short end is still star
   assert.equal(merged.startDate, "2026-10-01");
   assert.equal(merged.startTime, "12:00");
   assert.equal(merged.endDate, "2026-10-01");
-  assert.equal(merged.endTime, "15:00");
+  assert.equal(merged.endTime, "14:00");
 });
 
 test("J: the 30-day window is inclusive on the timestamp and exclusive one minute later", () => {
@@ -177,4 +178,326 @@ test("shared parser is used by new-notification extraction and does not guess a 
   assert.match(schema, /reconcileExtractedTripDates/);
   assert.match(prompt, /0000-MM-DD/);
   assert.match(prompt, /Never guess a year/);
+  assert.match(prompt, /single unlabeled clock/);
+});
+
+const OCT8_1800 = istanbulLocalToUtcMs("2026-10-08T18:00");
+
+function mergedStart(description: string, now = OCT8_1800) {
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: null, startTime: null, endDate: null, endTime: null },
+    description,
+    now,
+  );
+  return mergeAiUetdsExtraction(
+    createEmptyDraft("manual", { applyTripDefaults: false }),
+    mapped,
+    now,
+  ).draft;
+}
+
+test("A/B: one clear clock is today's start and is not ignored", () => {
+  for (const text of [
+    "20:00",
+    "Alış 20:00",
+    "Saat 20:00",
+    "Başlangıç saati 20:00",
+    "Başlangıç zamanı 20:00",
+    "Sefer başlangıç saati 20:00",
+    "Alış saati 20:00",
+    "Transfer saati 20:00",
+    "Rezervasyon saati 20:00",
+    "Saat: 20.00",
+    "20.00'de transfer",
+  ]) {
+    const start = startOf(text, OCT8_1800);
+    assert.equal(start?.status, "resolved", text);
+    if (start?.status === "resolved") {
+      assert.equal(start.date, "2026-10-08", text);
+      assert.equal(start.time, "20:00", text);
+    }
+    const draft = mergedStart(text);
+    assert.equal(draft.startDate, "2026-10-08", text);
+    assert.equal(draft.startTime, "20:00", text);
+    assert.equal(draft.endManual, false, text);
+    assert.equal(draft.endTime, "22:00", text);
+  }
+  const transfer = mergedStart("Transfer saati 20:30");
+  assert.equal(transfer.startTime, "20:30");
+  assert.equal(transfer.endTime, "22:30");
+});
+
+test("a clock earlier than now + 65 minutes becomes now + 65; a later clock is kept", () => {
+  for (const text of [
+    "20:00",
+    "Transfer saati 20:00",
+    "Alış saati 20:00",
+    "Rezervasyon saati 20:00",
+    "Sefer başlangıç saati 20:00",
+    "Başlangıç zamanı 20:00",
+  ]) {
+    const kept = mergedStart(text, OCT8_1800);
+    assert.equal(kept.startDate, "2026-10-08", text);
+    assert.equal(kept.startTime, "20:00", text);
+  }
+  for (const text of ["Alış saati 18:30", "Başlangıç zamanı 17:00", "Sefer başlangıç saati 15:00"]) {
+    const raised = mergedStart(text, OCT8_1800);
+    assert.equal(raised.startDate, "2026-10-08", text);
+    assert.equal(raised.startTime, "19:05", text);
+  }
+});
+
+test("C: a dateless clock outside the next 12 hours uses now + 65 and is not rolled to tomorrow", () => {
+  const start = startOf("Saat 15:00", OCT8_1800);
+  assert.equal(start?.status, "rejected");
+  const draft = mergedStart("Saat 15:00");
+  assert.equal(draft.startDate, "2026-10-08");
+  assert.equal(draft.startTime, "19:05");
+  assert.notEqual(draft.startDate, "2026-10-09");
+});
+
+test("D/G: Yarın and 9 Ekim keep the future date", () => {
+  const tomorrow = mergedStart("Yarın saat 15:00");
+  assert.equal(tomorrow.startDate, "2026-10-09");
+  assert.equal(tomorrow.startTime, "15:00");
+  const october = mergedStart("9 Ekim saat 15:00");
+  assert.equal(october.startDate, "2026-10-09");
+  assert.equal(october.startTime, "15:00");
+});
+
+test("an explicit end is kept and a lone end clock is not treated as the start", () => {
+  const both = parseDescribedTripDates("Başlangıç saati 20:00 Bitiş saati 23:30", OCT8_1800);
+  assert.equal(both.start?.status, "resolved");
+  assert.equal(both.end?.status, "resolved");
+  if (both.start?.status === "resolved" && both.end?.status === "resolved") {
+    assert.equal(both.start.time, "20:00");
+    assert.equal(both.end.time, "23:30");
+  }
+  const endOnly = parseDescribedTripDates("Varış 20:00", OCT8_1800);
+  assert.equal(endOnly.start, null);
+  assert.equal(endOnly.end?.status, "resolved");
+  const draft = mergedStart("Başlangıç saati 20:00 Bitiş saati 23:30");
+  assert.equal(draft.startTime, "20:00");
+  assert.equal(draft.endTime, "23:30");
+  assert.equal(draft.endManual, true);
+});
+
+test("conflicting unlabeled clocks are not chosen at random", () => {
+  const parsed = parseDescribedTripDates("20:00 ve 22:00", OCT8_1800);
+  assert.equal(parsed.start?.status, "rejected");
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "22:00" },
+    "20:00 ve 22:00",
+    OCT8_1800,
+  );
+  assert.equal(mapped.startTime, undefined);
+  const draft = mergedStart("20:00 ve 22:00");
+  assert.equal(draft.startTime, "19:05");
+});
+
+test("description clock overrides a different clock in an image or file", () => {
+  const now = istanbulLocalToUtcMs("2026-10-08T15:00");
+  const description = "Transfer saati 17:30";
+  const fileClock = {
+    ...empty,
+    startDate: "2026-10-08",
+    startTime: "16:00",
+    endDate: "2026-10-08",
+    endTime: "18:00",
+  };
+  const fromDescription = mapAiUetdsExtraction({ ...empty }, description, now);
+  const fromFile = mapAiUetdsExtraction(fileClock, description, now);
+  for (const order of [
+    [fromDescription, fromFile],
+    [fromFile, fromDescription],
+  ]) {
+    const combined = mergeAiExtractedSources(order);
+    assert.equal(combined.startTime, "17:30");
+    assert.notEqual(combined.startTime, "16:00");
+    const draft = mergeAiUetdsExtraction(
+      createEmptyDraft("manual", { applyTripDefaults: false }),
+      combined,
+      now,
+    ).draft;
+    assert.equal(draft.startDate, "2026-10-08");
+    assert.equal(draft.startTime, "17:30");
+  }
+  const bare = mapAiUetdsExtraction(fileClock, "17:30", now);
+  assert.equal(bare.startTime, "17:30");
+  assert.notEqual(bare.startTime, "16:00");
+});
+
+test("a model end is ignored when the text only states a start clock", () => {
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "21:12" },
+    "Saat 20:00",
+    OCT8_1800,
+  );
+  assert.equal(mapped.startTime, "20:00");
+  assert.equal(mapped.endTime, undefined);
+  const draft = mergedStart("Saat 20:00");
+  assert.equal(draft.endManual, false);
+  assert.equal(draft.endTime, "22:00");
+});
+
+test("9 Ekim 15:00 at an airport stays the start and the end is three hours later", () => {
+  const now = istanbulLocalToUtcMs("2026-10-08T19:30");
+  const text = "Alış yeri İstanbul havalimanı\nBırakma yeri Şişli\n9 Ekim 15:00";
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: null, startTime: null, endDate: "2026-10-08", endTime: "20:26" },
+    text,
+    now,
+  );
+  const draft = mergeAiUetdsExtraction(createEmptyDraft("manual", { nowUtcMs: now }), mapped, now).draft;
+  assert.equal(draft.startDate, "2026-10-09");
+  assert.equal(draft.startTime, "15:00");
+  assert.notEqual(draft.startTime, "20:26");
+  assert.equal(draft.endDate, "2026-10-09");
+  assert.equal(draft.endTime, "18:00");
+  assert.equal(draft.endManual, false);
+
+  const dropoff = mapAiUetdsExtraction(
+    { ...empty, startDate: "2026-10-09", startTime: "15:00", endDate: null, endTime: null },
+    "Bırakma saati 18:00",
+    now,
+  );
+  assert.equal(dropoff.startDate, "2026-10-09");
+  assert.equal(dropoff.startTime, "15:00");
+  assert.equal(dropoff.endDate, "2026-10-09");
+  assert.equal(dropoff.endTime, "18:00");
+});
+
+test("Saati 23:00 after bırakma yeri is the start, not the automatic +65 clock", () => {
+  const now = istanbulLocalToUtcMs("2026-10-08T19:21");
+  const text = [
+    "Ayşe Yılmaz",
+    "Kerem Yılmaz",
+    "Bekir Yılmaz",
+    "Ali Yılmaz",
+    "",
+    "Alış yeri İstanbul havalimanı",
+    "Bırakma yeri Şişli",
+    "",
+    "Saati 23:00",
+    "",
+    "Grup ücreti 300",
+  ].join("\n");
+  const parsed = parseDescribedTripDates(text, now);
+  assert.equal(parsed.start?.status, "resolved");
+  assert.equal(parsed.end, null);
+  if (parsed.start?.status === "resolved") {
+    assert.equal(parsed.start.time, "23:00");
+  }
+  const current = createEmptyDraft("manual", { nowUtcMs: now });
+  assert.equal(current.startTime, "20:26");
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: "2026-10-08", startTime: "19:09", endDate: null, endTime: null },
+    text,
+    now,
+  );
+  assert.equal(mapped.startTime, "23:00");
+  assert.equal(mapped.endTime, undefined);
+  const draft = mergeAiUetdsExtraction(current, mapped, now).draft;
+  assert.equal(draft.startDate, "2026-10-08");
+  assert.equal(draft.startTime, "23:00");
+  assert.notEqual(draft.startTime, "20:26");
+  assert.equal(draft.endManual, false);
+  assert.equal(draft.endTime, "02:00");
+  assert.equal(draft.endDate, "2026-10-09");
+});
+
+test("a bare clock replaces the form's automatic start and recomputes the automatic end", () => {
+  const now = istanbulLocalToUtcMs("2026-10-08T19:02");
+  const current = createEmptyDraft("manual", { nowUtcMs: now });
+  assert.equal(current.startTime, "20:07");
+  assert.equal(current.endTime, "22:07");
+  current.fieldProvenance.startDate = "user";
+  current.fieldProvenance.startTime = "user";
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: null, startTime: null, endDate: null, endTime: null },
+    "21:00",
+    now,
+  );
+  const merged = mergeAiUetdsExtraction(current, mapped, now);
+  assert.equal(merged.conflicts.length, 0);
+  assert.equal(merged.draft.startDate, "2026-10-08");
+  assert.equal(merged.draft.startTime, "21:00");
+  assert.equal(merged.draft.endDate, "2026-10-08");
+  assert.equal(merged.draft.endTime, "23:00");
+  assert.equal(merged.draft.endManual, false);
+
+  const manualEnd = createEmptyDraft("manual", { nowUtcMs: now });
+  manualEnd.endManual = true;
+  manualEnd.endTime = "23:40";
+  const kept = mergeAiUetdsExtraction(manualEnd, mapped, now).draft;
+  assert.equal(kept.startTime, "21:00");
+  assert.equal(kept.endTime, "23:40");
+  assert.equal(kept.endManual, true);
+});
+
+const OCT8_1954 = istanbulLocalToUtcMs("2026-10-08T19:54");
+
+test("a dateless 1:35 at 19:54 is the next occurrence inside 12 hours, and it stays the start", () => {
+  const start = startOf("1:35", OCT8_1954);
+  assert.equal(start?.status, "resolved");
+  if (start?.status === "resolved") {
+    assert.equal(start.date, "2026-10-09");
+    assert.equal(start.time, "01:35");
+  }
+  const draft = mergedStart("1:35", OCT8_1954);
+  assert.equal(draft.startDate, "2026-10-09");
+  assert.equal(draft.startTime, "01:35");
+  assert.equal(draft.endManual, false);
+  assert.equal(draft.endDate, "2026-10-09");
+  assert.equal(draft.endTime, "03:35");
+  const tooSoon = mergedStart("20:00", OCT8_1954);
+  assert.equal(tooSoon.startDate, "2026-10-08");
+  assert.equal(tooSoon.startTime, "20:59");
+});
+
+test("an image clock with no date is the start, including a clock the model put on the end", () => {
+  const now = OCT8_1954;
+  const imageStart = mapAiUetdsExtraction(
+    {
+      ...empty,
+      origin: "İstanbul Havalimanı",
+      destination: "Şişli",
+      startDate: null,
+      startTime: "23:00",
+      endDate: null,
+      endTime: null,
+    },
+    "",
+    now,
+  );
+  const fromStart = mergeAiUetdsExtraction(createEmptyDraft("manual", { nowUtcMs: now }), imageStart, now).draft;
+  assert.equal(fromStart.startDate, "2026-10-08");
+  assert.equal(fromStart.startTime, "23:00");
+  assert.notEqual(fromStart.startTime, "20:59");
+  assert.equal(fromStart.endManual, false);
+  assert.equal(fromStart.endDate, "2026-10-09");
+  assert.equal(fromStart.endTime, "02:00");
+
+  const imageEnd = mapAiUetdsExtraction(
+    {
+      ...empty,
+      origin: "İstanbul Havalimanı",
+      destination: "Şişli",
+      startDate: null,
+      startTime: null,
+      endDate: null,
+      endTime: "23:00",
+    },
+    "",
+    now,
+  );
+  const fromEnd = mergeAiUetdsExtraction(createEmptyDraft("manual", { nowUtcMs: now }), imageEnd, now).draft;
+  assert.equal(fromEnd.startDate, "2026-10-08");
+  assert.equal(fromEnd.startTime, "23:00");
+  assert.equal(fromEnd.endManual, false);
+  assert.equal(fromEnd.endTime, "02:00");
+
+  const bare = mergedStart("23:00", now);
+  assert.equal(bare.startDate, "2026-10-08");
+  assert.equal(bare.startTime, "23:00");
 });

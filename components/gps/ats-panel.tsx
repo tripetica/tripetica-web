@@ -89,11 +89,15 @@ export function GpsAtsPanel({
         <div><dt>{copy.atsSending}</dt><dd>{enabled ? copy.atsOn : copy.atsOff}</dd></div>
         <div><dt>{copy.atsSource}</dt><dd>{panel.sourceDeviceCode ?? "—"}</dd></div>
         <div><dt>{copy.atsLastSuccess}</dt><dd>{panel.lastSuccessAt ? gpsClock(panel.lastSuccessAt) : copy.atsNone}</dd></div>
+        <div><dt>{copy.atsLastSent}</dt><dd>{panel.lastSentAt ? gpsClock(panel.lastSentAt) : copy.atsNone}</dd></div>
         <div><dt>{copy.atsLastResponse}</dt><dd>{panel.lastResponse ?? copy.atsNone}</dd></div>
         <div><dt>{copy.atsLastError}</dt><dd>{panel.lastError ?? "—"}</dd></div>
         <div><dt>{copy.atsEnvironment}</dt><dd>{environment}</dd></div>
+        <div><dt>{copy.atsGpsNow}</dt><dd>{panel.gpsFresh ? copy.atsGpsYes : copy.atsGpsNo}</dd></div>
       </dl>
-      {enabled && panel.warning ? <p className="gps-ats-warn">{copy.atsOpenUnconfirmed}</p> : null}
+      {panel.waitingForTrip ? <p className="gps-inline-note">{copy.atsWaitingTrip}</p> : null}
+      {panel.gpsWarning ? <p className="gps-ats-warn">{copy.atsGpsGap}</p> : null}
+      {panel.warning ? <p className="gps-ats-warn">{copy.atsOpenUnconfirmed}</p> : null}
       {notice ? <p className="gps-inline-note">{notice}</p> : null}
       {canToggle ? (
         <label className={`booking-switch${pending ? " is-locked" : ""}`}>

@@ -54,7 +54,9 @@ test("atsArizaBildir is buildable and is not wrapped as a position report", () =
   const poster = readFileSync(new URL("./ats-post.ts", import.meta.url), "utf8");
   assert.match(poster, /ats_dispatch_withheld/);
   assert.match(poster, /ATS_MINISTRY_DISPATCH === "allow-test"/);
-  const guard = poster.indexOf("if (!atsMinistryDispatchAllowed())");
+  const guard = poster.indexOf("if (!plate || (!testAllowed && !liveAllowed))");
   const call = poster.indexOf("return callUetdsTestSoap");
   assert.ok(guard >= 0 && call > guard);
+  assert.match(poster, /UETDS_LIVE_ENDPOINT/);
+  assert.match(poster, /UETDS_TEST_ENDPOINT/);
 });

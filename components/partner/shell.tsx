@@ -34,6 +34,7 @@ export function PartnerShell({
             items={PARTNER_NAV}
             pathWithoutLocale={pathWithoutLocale}
             partnerName={actor.partnerName}
+            gpsLabel={actor.isPrimaryPartner ? copy.gps : copy.gpsOnly}
           />
         </div>
         <p className="partner-topbar-title">{copy.panelName}</p>
@@ -54,7 +55,7 @@ export function PartnerShell({
       </header>
       <div className="ops-body">
         <main className="ops-main">
-          <PartnerLowBatteryWarning locale={locale} />
+          {actor.isPrimaryPartner ? <PartnerLowBatteryWarning locale={locale} /> : null}
           {children}
         </main>
       </div>

@@ -78,7 +78,7 @@ test("AI identity placeholder and inferred nationality/gender fill the form with
   assert.equal(createPassengerDraft().gender, "female", "manual default remains unchanged");
 });
 
-test("AI merge applies deterministic +65 start / +3h end without inventing identity", () => {
+test("AI merge applies deterministic +65 start / +2h end without inventing identity", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T10:00");
   const draft = createEmptyDraft("manual", { applyTripDefaults: false });
   const mapped = mapAiUetdsExtraction({
@@ -89,7 +89,7 @@ test("AI merge applies deterministic +65 start / +3h end without inventing ident
   assert.equal(merged.startDate, "2026-09-20");
   assert.equal(merged.startTime, "11:05");
   assert.equal(merged.endDate, "2026-09-20");
-  assert.equal(merged.endTime, "14:05");
+  assert.equal(merged.endTime, "13:05");
   assert.equal(merged.passengers[0].identityNumber, "11111111111");
   const withShortEnd = mergeAiUetdsExtraction(
     draft,
@@ -104,7 +104,7 @@ test("AI merge applies deterministic +65 start / +3h end without inventing ident
     now,
   ).draft;
   assert.equal(withShortEnd.startTime, "15:05");
-  assert.equal(withShortEnd.endTime, "18:05");
+  assert.equal(withShortEnd.endTime, "17:05");
 });
 
 test("AI merge keeps two same-surname passengers with different passport numbers", () => {

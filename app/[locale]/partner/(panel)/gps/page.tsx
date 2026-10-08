@@ -8,6 +8,8 @@ import { type GpsFleetVehicle } from "@/lib/gps/fleet";
 import { listGpsCommands, listGpsDevices, listGpsRoute, type GpsRoutePoint } from "@/lib/gps/queries";
 import { readGpsRange } from "@/lib/gps/range";
 import { requirePartnerPage } from "@/lib/partner/auth";
+import { partnerCopy } from "@/lib/partner/copy";
+import { partnerHasGpsDeviceControls } from "@/lib/partner/gps-access";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +22,10 @@ export default async function PartnerGpsPage({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
+  const deviceControls = partnerHasGpsDeviceControls(actor.isPrimaryPartner);
   const devices = await listGpsDevices(actor.partnerId);
-  const copy = gpsCopy[asPanelLocale(locale)];
+  const panel = asPanelLocale(locale);
+  const copy = deviceControls ? gpsCopy[panel] : { ...gpsCopy[panel], title: partnerCopy[panel].gpsOnly };
   if (devices.length === 0) {
     return (
       <div className="gps-screen">
@@ -48,7 +52,7 @@ export default async function PartnerGpsPage({
       to: range.to,
     })
     : { total: 0, step: 1, points: [] as GpsRoutePoint[] };
-  const commands = selected?.partnerId
+  const commands = selected?.partnerId && deviceControls
     ? (await listGpsCommands(selected.id, selected.partnerId)).filter((command) => isPartnerCommand(command.kind) || command.kind === "wifi.configure" || command.kind === "wifi.disable")
     : [];
   const fromQuery = one(query.from) ?? "";
@@ -79,6 +83,7 @@ export default async function PartnerGpsPage({
       fleetVehicles={devices.map(fleetVehicle)}
       historyPath={localizedPath(locale, "/partner/gps")}
       rangeSearch={rangeParams.toString()}
+      deviceControls={deviceControls}
     />
   );
 }

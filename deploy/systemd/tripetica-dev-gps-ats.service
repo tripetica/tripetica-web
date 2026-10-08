@@ -1,6 +1,6 @@
-# Prepared only. Do not enable and do not add a timer in this phase.
-# V15 does not state an ATS send interval. This unit cannot call the ministry:
-# the script refuses ATS_MINISTRY_DISPATCH=allow-test and never opens a SOAP socket.
+# DEV unit. Do not enable in production.
+# ATS_MINISTRY_DISPATCH=withheld keeps this unit from opening a ministry socket.
+# A controlled test process may set allow-test for the TEST endpoint only.
 [Unit]
 Description=Tripetica DEV ATS dispatch (withheld)
 After=network-online.target postgresql.service

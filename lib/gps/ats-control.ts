@@ -3,6 +3,8 @@ import "server-only";
 import { getPool } from "@/lib/db/postgres";
 import { type GpsAtsPanel } from "@/lib/gps/ats-panel-state";
 import { planAtsControl } from "@/lib/gps/ats-policy";
+import { listAtsTripClocks } from "@/lib/gps/ats-trips";
+import { atsPositionIsCurrent, selectActiveAtsTrips } from "@/lib/gps/ats-window";
 import { resolveUetdsMinistryRuntime } from "@/lib/uetds/ministry-env";
 
 export type { GpsAtsPanel };
@@ -88,6 +90,43 @@ export async function loadGpsAtsPanel(deviceId: string): Promise<GpsAtsPanel | n
     [deviceId],
   );
   const last = latest.rows[0] ?? null;
+  const sent = await getPool().query<{ sent_at: Date | null }>(
+    `SELECT COALESCE(submitted_at, queued_at) AS sent_at
+     FROM gps_ats_submissions
+     WHERE device_id = $1
+     ORDER BY queued_at DESC
+     LIMIT 1`,
+    [deviceId],
+  );
+  const runtime = resolveUetdsMinistryRuntime();
+  let activeTrip = false;
+  let gpsFresh = false;
+  if (row.vehicle_id && row.company_id && row.plate && (runtime === "test" || runtime === "live")) {
+    const trips = await listAtsTripClocks(row.vehicle_id, row.company_id, runtime);
+    activeTrip = selectActiveAtsTrips({
+      trips,
+      vehicleId: row.vehicle_id,
+      companyId: row.company_id,
+      plate: row.plate,
+      nowMs: Date.now(),
+    }).ok;
+    const point = await getPool().query<{ recorded_at: Date }>(
+      `SELECT recorded_at FROM gps_positions
+       WHERE device_id = $1 AND vehicle_id = $2
+       ORDER BY recorded_at DESC LIMIT 1`,
+      [deviceId, row.vehicle_id],
+    );
+    const heartbeat = await getPool().query<{ last_heartbeat_at: Date | null; gnss_fix: boolean | null }>(
+      `SELECT last_heartbeat_at, gnss_fix FROM gps_device_status WHERE device_id = $1`,
+      [deviceId],
+    );
+    gpsFresh = atsPositionIsCurrent({
+      recordedAt: point.rows[0]?.recorded_at.toISOString() ?? null,
+      statusGnssFix: heartbeat.rows[0]?.gnss_fix ?? null,
+      heartbeatAt: heartbeat.rows[0]?.last_heartbeat_at?.toISOString() ?? null,
+      nowMs: Date.now(),
+    }).ok;
+  }
   const enabled = row.enabled === true;
   const sourceIsThisDevice = row.source_device_id === row.id;
   let blockedReason: GpsAtsPanel["blockedReason"] = "none";
@@ -111,9 +150,14 @@ export async function loadGpsAtsPanel(deviceId: string): Promise<GpsAtsPanel | n
     blockedReason,
     environment: environment(),
     lastSuccessAt: success.rows[0]?.submitted_at?.toISOString() ?? null,
+    lastSentAt: sent.rows[0]?.sent_at?.toISOString() ?? null,
     lastResponse: response || null,
     lastError: last && last.status !== "succeeded" ? (last.last_error || last.sonuc_mesaji || null) : null,
-    warning: enabled && (last?.status ?? "none") !== "succeeded",
+    gpsFresh,
+    activeTrip,
+    waitingForTrip: enabled && !activeTrip,
+    gpsWarning: enabled && activeTrip && !gpsFresh,
+    warning: enabled && activeTrip && Boolean(last) && last?.status !== "succeeded",
   };
 }
 

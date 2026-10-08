@@ -4,6 +4,8 @@ import { useActionState, useEffect, useState } from "react";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsEditMethodModal } from "@/components/uetds/uetds-edit-method-modal";
 import { uetdsStatusLabel, type UetdsFormCopy } from "@/lib/uetds/copy";
+import { atsHistoryClock } from "@/lib/gps/format";
+import { type GpsAtsHistory } from "@/lib/gps/ats-history";
 import { formatUetdsSnapshotDateTime } from "@/lib/uetds/edit-policy";
 import { resolveKamuEditDeepLink } from "@/lib/uetds/kamu-portal/deep-link";
 import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
@@ -27,6 +29,9 @@ type UetdsNotificationDetailViewProps = {
   showAiEdit?: boolean;
   actor: "partner" | "ops";
   locale: string;
+  ats?: GpsAtsHistory | null;
+  atsPrevHref?: string | null;
+  atsNextHref?: string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -51,6 +56,9 @@ export function UetdsNotificationDetailView({
   showAiEdit = false,
   actor,
   locale,
+  ats = null,
+  atsPrevHref = null,
+  atsNextHref = null,
 }: UetdsNotificationDetailViewProps) {
   const snapshot = asRecord(JSON.parse(notification.snapshotJson || "{}"));
   const trip = asRecord(snapshot?.trip);
@@ -78,6 +86,7 @@ export function UetdsNotificationDetailView({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editMethodOpen, setEditMethodOpen] = useState(Boolean(openEditMethod && editHref));
+  const [atsOpen, setAtsOpen] = useState(false);
   const [deleteState, deleteAction, deleting] = useActionState(deleteCancelledUetdsNotificationsAction, { results: [], attempted: false });
   const [state, action, pending] = useActionState<UetdsManageFormState, FormData>(
     cancelUetdsNotificationAction,
@@ -229,6 +238,61 @@ export function UetdsNotificationDetailView({
           </table>
         </div>
       </div>
+
+      {ats ? (
+        <div className="gps-disclosure">
+          {atsOpen ? (
+            <div className="uetds-form-section">
+              <h2>{copy.atsHistoryTitle}</h2>
+              <dl className="gps-facts">
+                <div><dt>{copy.atsHistorySuccessCount}</dt><dd>{ats.succeeded}</dd></div>
+                <div><dt>{copy.atsHistoryFailedCount}</dt><dd>{ats.failed}</dd></div>
+              </dl>
+              {ats.rows.length === 0 ? <p className="gps-inline-note">{copy.atsHistoryEmpty}</p> : (
+                <div className="ops-table-wrap">
+                  <table className="ops-table">
+                    <thead>
+                      <tr>
+                        <th>{copy.atsHistorySentAt}</th>
+                        <th>{copy.atsHistoryGnss}</th>
+                        <th>{copy.atsHistoryResult}</th>
+                        <th>{copy.atsHistoryErrorDetail}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ats.rows.map((row) => (
+                        <tr key={row.id}>
+                          <td>{atsHistoryClock(row.sentAt)}</td>
+                          <td>{atsHistoryClock(row.gnssTime)}</td>
+                          <td>{row.status === "succeeded" ? copy.atsHistoryOk : row.status === "pending" ? copy.atsHistoryPending : copy.atsHistoryError}</td>
+                          <td>{row.error ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {atsPrevHref || atsNextHref ? (
+                <div className="ops-modal-actions">
+                  {atsPrevHref ? <a className="ops-btn-secondary" href={atsPrevHref}>{copy.atsHistoryPrev}</a> : null}
+                  {atsNextHref ? <a className="ops-btn-secondary" href={atsNextHref}>{copy.atsHistoryNext}</a> : null}
+                </div>
+              ) : null}
+              <div className="ops-contact-toggle-wrap gps-disclosure-hide">
+                <button type="button" className="ops-btn-secondary ops-contact-toggle" aria-expanded={true} onClick={() => setAtsOpen(false)}>
+                  {copy.atsHistoryHide}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="ops-contact-toggle-wrap">
+              <button type="button" className="ops-btn-secondary ops-contact-toggle" aria-expanded={false} onClick={() => setAtsOpen(true)}>
+                {copy.atsHistoryShow}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {state.message ? (
         <p className={state.ok ? "uetds-form-info" : "ops-form-error"} role="status">

@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
+import { resolveOfficialUetdsLocation } from "@/lib/uetds/official-locations";
 import {
   adjustUetdsTripTimesForSubmit,
   applyManualUetdsTripDefaults,
   applyUetdsAiExtractionTripTimes,
   applyUetdsStartToEnd,
   defaultUetdsEndFromStart,
+  isUetdsAirportPickup,
   isUetdsEndAfterStart,
   UETDS_DEFAULT_START_LEAD_MS,
   UETDS_SUBMIT_ADJUST_LEAD_MS,
@@ -23,7 +25,6 @@ import {
   shouldDeleteUetdsFormDraftAfterMinistry,
   UETDS_FORM_DRAFT_TTL_MS,
 } from "@/lib/uetds/form-draft-policy";
-import { resolveOfficialUetdsLocation } from "@/lib/uetds/official-locations";
 
 function source(path: string) {
   return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
@@ -44,16 +45,21 @@ test("2: 20 Sep 23:30 Istanbul default start rolls to 21 Sep 00:35", () => {
   assert.equal(minimum.time, "00:35");
 });
 
-test("C/D: default end is start plus 3 hours including midnight rollover", () => {
-  const daytime = defaultUetdsEndFromStart("2026-09-21", "03:00");
-  assert.equal(daytime.date, "2026-09-21");
-  assert.equal(daytime.time, "06:00");
-  const overnight = defaultUetdsEndFromStart("2026-09-21", "23:00");
-  assert.equal(overnight.date, "2026-09-22");
-  assert.equal(overnight.time, "02:00");
+test("C/D: automatic end is +3h at an airport and +2h elsewhere, including midnight", () => {
+  const street = defaultUetdsEndFromStart("2026-09-21", "03:00");
+  assert.equal(street.date, "2026-09-21");
+  assert.equal(street.time, "05:00");
+  const streetNight = defaultUetdsEndFromStart("2026-09-21", "23:00");
+  assert.equal(streetNight.date, "2026-09-22");
+  assert.equal(streetNight.time, "01:00");
+  const airport = defaultUetdsEndFromStart("2026-09-21", "03:00", true);
+  assert.equal(airport.time, "06:00");
+  const airportNight = defaultUetdsEndFromStart("2026-09-21", "23:00", true);
+  assert.equal(airportNight.date, "2026-09-22");
+  assert.equal(airportNight.time, "02:00");
 });
 
-test("3: 70 minutes remaining is submitted unchanged when end also meets +3h", () => {
+test("3: 70 minutes remaining keeps the start and recomputes an automatic non-airport end to +2h", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T10:00");
   assert.equal(uetdsStartRemainingMs("2026-09-20", "11:10", now), 70 * 60 * 1000);
   const next = adjustUetdsTripTimesForSubmit(
@@ -67,27 +73,39 @@ test("3: 70 minutes remaining is submitted unchanged when end also meets +3h", (
     now,
   );
   assert.equal(next.startAdjusted, false);
-  assert.equal(next.endAdjusted, false);
+  assert.equal(next.endAdjusted, true);
   assert.equal(next.startTime, "11:10");
-  assert.equal(next.endTime, "14:10");
+  assert.equal(next.endTime, "13:10");
 });
 
-test("3b: start kept but end shorter than +3h is raised on submit", () => {
+test("3b: an end under the pickup minimum is raised only to that minimum", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T10:00");
-  const next = adjustUetdsTripTimesForSubmit(
+  const street = adjustUetdsTripTimesForSubmit(
     {
       startDate: "2026-09-20",
       startTime: "11:10",
       endDate: "2026-09-20",
-      endTime: "13:10",
+      endTime: "11:20",
       endManual: true,
     },
     now,
   );
-  assert.equal(next.startAdjusted, false);
-  assert.equal(next.startTime, "11:10");
-  assert.equal(next.endAdjusted, true);
-  assert.equal(next.endTime, "14:10");
+  assert.equal(street.startAdjusted, false);
+  assert.equal(street.endAdjusted, true);
+  assert.equal(street.endTime, "11:40");
+  const airport = adjustUetdsTripTimesForSubmit(
+    {
+      startDate: "2026-09-20",
+      startTime: "11:10",
+      endDate: "2026-09-20",
+      endTime: "11:20",
+      endManual: true,
+      airportPickup: true,
+    },
+    now,
+  );
+  assert.equal(airport.endTime, "12:10");
+  assert.equal(airport.endAdjusted, true);
 });
 
 test("4: 56 minutes remaining auto-adjusts start to now + 62 minutes", () => {
@@ -107,24 +125,25 @@ test("4: 56 minutes remaining auto-adjusts start to now + 62 minutes", () => {
   assert.equal(next.startDate, "2026-09-20");
   assert.equal(next.startTime, "11:06");
   assert.equal(next.endAdjusted, true);
-  assert.equal(next.endTime, "14:06");
+  assert.equal(next.endTime, "13:06");
 });
 
-test("5: automatic start adjustment moves too-short end to final_start + 3 hours", () => {
+test("5: automatic start adjustment raises only an end that falls under the new minimum", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T10:04");
   const next = adjustUetdsTripTimesForSubmit(
     {
       startDate: "2026-09-20",
       startTime: "11:00",
       endDate: "2026-09-20",
-      endTime: "14:00",
-      endManual: false,
+      endTime: "11:20",
+      endManual: true,
     },
     now,
   );
   assert.equal(next.startTime, "11:06");
   assert.equal(next.endDate, "2026-09-20");
-  assert.equal(next.endTime, "14:06");
+  assert.equal(next.endTime, "11:36");
+  assert.equal(next.endAdjusted, true);
 });
 
 test("6: automatic start adjustment keeps a still-valid later end", () => {
@@ -158,7 +177,7 @@ test("7: restored stale start is not a form-blocking error", () => {
   assert.equal(next.startTime, "11:06");
 });
 
-test("submit example: 15:05/18:05 waiting until 14:30 bumps start to 15:32 and end to 18:32", () => {
+test("submit example: 15:05/18:05 waiting until 14:30 bumps start to 15:32 and keeps the later end", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T14:30");
   const next = adjustUetdsTripTimesForSubmit(
     {
@@ -171,9 +190,9 @@ test("submit example: 15:05/18:05 waiting until 14:30 bumps start to 15:32 and e
     now,
   );
   assert.equal(next.startTime, "15:32");
-  assert.equal(next.endTime, "18:32");
+  assert.equal(next.endTime, "18:05");
   assert.equal(next.startAdjusted, true);
-  assert.equal(next.endAdjusted, true);
+  assert.equal(next.endAdjusted, false);
 });
 
 test("submit example: 15:05/22:00 waiting until 14:30 bumps start only; end stays", () => {
@@ -206,13 +225,13 @@ test("E: later manual end is kept when start still leaves it valid", () => {
   assert.equal(isUetdsEndAfterStart("2026-09-21", "03:00", "2026-09-21", "08:30"), true);
 });
 
-test("manual default start is now + 65 minutes and end follows +3 hours", () => {
+test("manual default start is now + 65 minutes and a blank pickup ends +2 hours later", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T10:00");
   const defaults = applyManualUetdsTripDefaults(now);
   assert.equal(defaults.startDate, "2026-09-20");
   assert.equal(defaults.startTime, "11:05");
   assert.equal(defaults.endDate, "2026-09-20");
-  assert.equal(defaults.endTime, "14:05");
+  assert.equal(defaults.endTime, "13:05");
   assert.equal(defaults.endManual, false);
 });
 
@@ -228,7 +247,7 @@ test("invalidated manual end is recomputed to start + 3 hours", () => {
   assert.equal(invalidated.endTime, "12:00");
 });
 
-test("AI/prefill trip times: missing start → now+65; end rules use start+3h floor", () => {
+test("AI/prefill trip times: missing start → now+65; missing end uses +2h and a short explicit end uses +30m", () => {
   const now = istanbulLocalToUtcMs("2026-09-20T10:00");
   assert.equal(UETDS_DEFAULT_START_LEAD_MS, 65 * 60 * 1000);
   assert.equal(UETDS_SUBMIT_MIN_REMAINING_MS, 62 * 60 * 1000);
@@ -239,7 +258,7 @@ test("AI/prefill trip times: missing start → now+65; end rules use start+3h fl
     now,
   );
   assert.equal(missingStart.startTime, "11:05");
-  assert.equal(missingStart.endTime, "14:05");
+  assert.equal(missingStart.endTime, "13:05");
   assert.equal(missingStart.startFromFallback, true);
 
   const keepSourceStart = applyUetdsAiExtractionTripTimes(
@@ -247,14 +266,14 @@ test("AI/prefill trip times: missing start → now+65; end rules use start+3h fl
     now,
   );
   assert.equal(keepSourceStart.startTime, "15:05");
-  assert.equal(keepSourceStart.endTime, "18:05");
+  assert.equal(keepSourceStart.endTime, "17:05");
   assert.equal(keepSourceStart.startFromFallback, false);
 
   const shortEnd = applyUetdsAiExtractionTripTimes(
-    { startDate: "2026-09-20", startTime: "15:05", endDate: "2026-09-20", endTime: "17:05" },
+    { startDate: "2026-09-20", startTime: "15:05", endDate: "2026-09-20", endTime: "15:20" },
     now,
   );
-  assert.equal(shortEnd.endTime, "18:05");
+  assert.equal(shortEnd.endTime, "15:35");
   assert.equal(shortEnd.endAdjusted, true);
 
   const longEnd = applyUetdsAiExtractionTripTimes(
@@ -384,9 +403,15 @@ for (const start of ["", "01:15", "04:50", "05:04", "05:05", "07:00"]) {
         endDate: end ? "2026-09-22" : "", endTime: end,
       }, istanbulLocalToUtcMs("2026-09-22T04:00"));
       const appliedStart = start >= "05:05" ? start : "05:05";
-      const minimumEnd = appliedStart === "07:00" ? "10:00" : "08:05";
+      const [hour, minute] = appliedStart.split(":").map(Number);
+      const automatic = hour * 60 + minute + 120;
+      const minimum = hour * 60 + minute + 30;
+      const chosen = end
+        ? Math.max(Number(end.slice(0, 2)) * 60 + Number(end.slice(3)), minimum)
+        : automatic;
+      const expected = `${String(Math.floor(chosen / 60)).padStart(2, "0")}:${String(chosen % 60).padStart(2, "0")}`;
       assert.equal(actual.startTime, appliedStart);
-      assert.equal(actual.endTime, end >= minimumEnd ? end : minimumEnd);
+      assert.equal(actual.endTime, expected);
       assert.equal(actual.startDate, "2026-09-22");
       assert.equal(actual.endDate, "2026-09-22");
     });
@@ -401,12 +426,12 @@ for (const [date, nextDate] of [["2026-09-22", "2026-09-23"], ["2026-09-30", "20
     assert.equal(ai.startDate, nextDate);
     assert.equal(ai.startTime, "00:35");
     assert.equal(ai.endDate, nextDate);
-    assert.equal(ai.endTime, "03:35");
+    assert.equal(ai.endTime, "01:05");
     const submit = adjustUetdsTripTimesForSubmit(input, now);
     assert.equal(submit.startDate, nextDate);
     assert.equal(submit.startTime, "00:32");
     assert.equal(submit.endDate, nextDate);
-    assert.equal(submit.endTime, "03:32");
+    assert.equal(submit.endTime, "01:02");
   });
 }
 
@@ -418,10 +443,9 @@ for (const start of ["06:05", "06:11", "06:12", "07:00"]) {
         endDate: "2026-09-22", endTime: end, endManual: true,
       }, istanbulLocalToUtcMs("2026-09-22T05:10"));
       const finalStart = start >= "06:12" ? start : "06:12";
-      const minimumEnd = finalStart === "07:00" ? "10:00" : "09:12";
       assert.equal(actual.startTime, finalStart);
       assert.equal(actual.startAdjusted, start < "06:12");
-      assert.equal(actual.endTime, end >= minimumEnd ? end : minimumEnd);
+      assert.equal(actual.endTime, end);
     });
   }
 }
@@ -431,9 +455,199 @@ test("one-minute form review preserves AI +65 start; fractional minutes round sa
   const ai = applyUetdsAiExtractionTripTimes({ startDate: "", startTime: "", endDate: "", endTime: "" }, now);
   const result = adjustUetdsTripTimesForSubmit({ ...ai, endManual: false }, now + 60_000);
   assert.equal(result.startTime, "06:05");
-  assert.equal(result.endTime, "09:05");
+  assert.equal(result.endTime, "08:05");
   assert.equal(result.startAdjusted, false);
   const rounded = applyUetdsAiExtractionTripTimes({ startDate: "", startTime: "", endDate: "", endTime: "" }, now + 1_000);
   assert.equal(rounded.startTime, "06:06");
-  assert.equal(rounded.endTime, "09:06");
+  assert.equal(rounded.endTime, "08:06");
+});
+
+test("new notification pickup end rules keep a valid manual end and have no maximum", () => {
+  const airportAuto = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "23:00", endManual: false, airportPickup: true,
+  });
+  assert.equal(airportAuto.endTime, "23:00");
+  const airportHour = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "21:00", endManual: true, airportPickup: true,
+  });
+  assert.equal(airportHour.endTime, "21:00");
+  assert.equal(airportHour.raisedToMinimum, false);
+  const airportTooSoon = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "20:59", endManual: true, airportPickup: true,
+  });
+  assert.equal(airportTooSoon.endTime, "21:00");
+  assert.equal(airportTooSoon.raisedToMinimum, true);
+
+  const streetAuto = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "22:00", endManual: false, airportPickup: false,
+  });
+  assert.equal(streetAuto.endTime, "22:00");
+  const streetHalf = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "20:30", endManual: true, airportPickup: false,
+  });
+  assert.equal(streetHalf.endTime, "20:30");
+  const streetTooSoon = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "20:29", endManual: true, airportPickup: false,
+  });
+  assert.equal(streetTooSoon.endTime, "20:30");
+  assert.equal(streetTooSoon.raisedToMinimum, true);
+
+  const airportMidnight = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "22:30", endDate: "", endTime: "", endManual: false, airportPickup: true,
+  });
+  assert.equal(airportMidnight.endDate, "2026-10-09");
+  assert.equal(airportMidnight.endTime, "01:30");
+  const streetMidnight = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "23:15", endDate: "", endTime: "", endManual: false, airportPickup: false,
+  });
+  assert.equal(streetMidnight.endDate, "2026-10-09");
+  assert.equal(streetMidnight.endTime, "01:15");
+
+  const longTrip = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-09", endTime: "02:00", endManual: true, airportPickup: true,
+  });
+  assert.equal(longTrip.endDate, "2026-10-09");
+  assert.equal(longTrip.endTime, "02:00");
+  assert.equal(longTrip.raisedToMinimum, false);
+
+  const keptAfterStartChange = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:30", endDate: "2026-10-08", endTime: "22:00", endManual: true, airportPickup: true,
+  });
+  assert.equal(keptAfterStartChange.endTime, "22:00");
+  const recalculated = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "21:00", endDate: "2026-10-08", endTime: "23:00", endManual: false, airportPickup: false,
+  });
+  assert.equal(recalculated.endTime, "23:00");
+  const switchedToAirport = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "20:40", endManual: true, airportPickup: true,
+  });
+  assert.equal(switchedToAirport.endTime, "21:00");
+  const switchedToStreet = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "23:00", endManual: false, airportPickup: false,
+  });
+  assert.equal(switchedToStreet.endTime, "22:00");
+
+  const now = istanbulLocalToUtcMs("2026-10-08T18:00");
+  assert.equal(uetdsMinimumStart(now).time, "19:05");
+  const document = applyUetdsAiExtractionTripTimes({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-09", endTime: "02:00",
+  }, now, true);
+  assert.equal(document.startTime, "20:00");
+  assert.equal(document.endDate, "2026-10-09");
+  assert.equal(document.endTime, "02:00");
+  assert.equal(document.endManual, true);
+  assert.equal(document.endAdjusted, false);
+  const missingDocumentEnd = applyUetdsAiExtractionTripTimes({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "", endTime: "",
+  }, now, true);
+  assert.equal(missingDocumentEnd.endTime, "23:00");
+  assert.equal(missingDocumentEnd.endManual, false);
+
+  const submitted = adjustUetdsTripTimesForSubmit({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-09", endTime: "02:00", endManual: true, airportPickup: true,
+  }, now);
+  assert.equal(submitted.startTime, "20:00");
+  assert.equal(submitted.endDate, "2026-10-09");
+  assert.equal(submitted.endTime, "02:00");
+  assert.equal(submitted.endAdjusted, false);
+  assert.equal(isUetdsAirportPickup({ locationType: "airport" }), true);
+  assert.equal(isUetdsAirportPickup({ locationType: "district" }), false);
+  assert.match(source("lib/uetds/ministry-submit.ts"), /seferBitisSaati", input\.draft\.endTime/);
+  assert.match(source("components/uetds/uetds-notification-form.tsx"), /endMinimumAirport/);
+  assert.match(source("components/uetds/uetds-notification-form.tsx"), /ensureUetdsMinimumEnd/);
+  assert.match(source("components/uetds/uetds-notification-form.tsx"), /role="status"/);
+  assert.doesNotMatch(source("components/uetds/uetds-notification-form.tsx"), /max=\{/);
+});
+
+test("screen regressions: airport parking is +3h and a manual end below the minimum snaps", () => {
+  const parking = resolveOfficialUetdsLocation({
+    placeName: "İstanbul Havalimanı Otopark",
+    details: {
+      name: "İstanbul Havalimanı Otopark",
+      region: "İstanbul",
+      district: "Arnavutköy",
+      countryCode: "TR",
+      types: ["parking", "point_of_interest"],
+    },
+  });
+  const sisli = resolveOfficialUetdsLocation({
+    placeName: "Şişli",
+    details: { name: "Şişli", region: "İstanbul", countryCode: "TR", types: ["locality"] },
+  });
+  const airportDropoff = resolveOfficialUetdsLocation({ placeName: "İstanbul Havalimanı" });
+  assert.equal(isUetdsAirportPickup(parking), true);
+  assert.equal(parking.districtOrAirportCode, "99157");
+  assert.equal(isUetdsAirportPickup(sisli), false);
+  assert.equal(isUetdsAirportPickup({ locationType: "district", placeName: "IST" }), true);
+  assert.equal(isUetdsAirportPickup({ locationType: "district", placeName: "SAW" }), true);
+  assert.equal(isUetdsAirportPickup({ locationType: "district", placeName: "AYT" }), true);
+  assert.equal(isUetdsAirportPickup({ locationType: "district", placeName: "Sabiha Gökçen" }), true);
+  assert.equal(isUetdsAirportPickup({ locationType: "district", placeName: "Antalya Havalimanı" }), true);
+  assert.equal(isUetdsAirportPickup({ locationType: "district", placeName: "Antalya" }), false);
+
+  const streetAuto = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "19:09", endDate: "2026-10-08", endTime: "21:09",
+    endManual: false, airportPickup: isUetdsAirportPickup(sisli),
+  });
+  assert.equal(streetAuto.endTime, "21:09");
+  const streetManual = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "19:09", endDate: "2026-10-08", endTime: "19:09",
+    endManual: true, airportPickup: false,
+  });
+  assert.equal(streetManual.endTime, "19:39");
+  assert.equal(streetManual.raisedToMinimum, true);
+
+  const airportAuto = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "19:13", endDate: "2026-10-08", endTime: "21:12",
+    endManual: false, airportPickup: isUetdsAirportPickup(parking),
+  });
+  assert.equal(airportAuto.endDate, "2026-10-08");
+  assert.equal(airportAuto.endTime, "22:13");
+  const airportManual = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "19:13", endDate: "2026-10-08", endTime: "19:13",
+    endManual: true, airportPickup: true,
+  });
+  assert.equal(airportManual.endTime, "20:13");
+  assert.equal(airportManual.raisedToMinimum, true);
+
+  const dropoffDoesNotExtend = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:00", endDate: "2026-10-08", endTime: "22:00",
+    endManual: false, airportPickup: isUetdsAirportPickup(sisli),
+  });
+  assert.equal(isUetdsAirportPickup(airportDropoff), true);
+  assert.equal(dropoffDoesNotExtend.endTime, "22:00");
+
+  const shiftedAuto = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "19:15", endDate: "2026-10-08", endTime: "21:09",
+    endManual: false, airportPickup: false,
+  });
+  assert.equal(shiftedAuto.endTime, "21:15");
+  const shiftedManual = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:10", endDate: "2026-10-08", endTime: "20:30",
+    endManual: true, airportPickup: false,
+  });
+  assert.equal(shiftedManual.endTime, "20:40");
+  assert.equal(shiftedManual.raisedToMinimum, true);
+  const keptLong = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "20:10", endDate: "2026-10-08", endTime: "23:30",
+    endManual: true, airportPickup: false,
+  });
+  assert.equal(keptLong.endTime, "23:30");
+  assert.equal(keptLong.raisedToMinimum, false);
+
+  const midnightAirport = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "23:00", endDate: "", endTime: "",
+    endManual: false, airportPickup: true,
+  });
+  assert.equal(midnightAirport.endDate, "2026-10-09");
+  assert.equal(midnightAirport.endTime, "02:00");
+  const midnightStreet = applyUetdsStartToEnd({
+    startDate: "2026-10-08", startTime: "23:00", endDate: "", endTime: "",
+    endManual: false, airportPickup: false,
+  });
+  assert.equal(midnightStreet.endDate, "2026-10-09");
+  assert.equal(midnightStreet.endTime, "01:00");
+
+  assert.equal(UETDS_DEFAULT_START_LEAD_MS, 65 * 60 * 1000);
+  assert.equal(uetdsMinimumStart(istanbulLocalToUtcMs("2026-10-08T18:00")).time, "19:05");
 });

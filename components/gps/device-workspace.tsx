@@ -44,6 +44,7 @@ export async function GpsDeviceWorkspace({
   fleetVehicles,
   historyPath,
   rangeSearch = "",
+  deviceControls = true,
 }: {
   locale: Locale;
   copy: GpsCopy;
@@ -66,6 +67,7 @@ export async function GpsDeviceWorkspace({
   fleetVehicles?: GpsFleetVehicle[];
   historyPath?: string;
   rangeSearch?: string;
+  deviceControls?: boolean;
 }) {
   const listPath = localizedPath(locale, surface === "ops" ? "/ops/gps" : "/partner/gps");
   if (!device) {
@@ -93,8 +95,9 @@ export async function GpsDeviceWorkspace({
           selectedVehicleId={null}
           rangeSearch={rangeSearch}
           gps={null}
-          wifi={<p className="gps-inline-note">{copy.fleetPick}</p>}
-          camera={<p className="gps-inline-note">{copy.fleetPick}</p>}
+          wifi={deviceControls ? <p className="gps-inline-note">{copy.fleetPick}</p> : null}
+          camera={deviceControls ? <p className="gps-inline-note">{copy.fleetPick}</p> : null}
+          deviceControls={deviceControls}
         />
       </div>
     );
@@ -171,7 +174,8 @@ export async function GpsDeviceWorkspace({
         company={device.uetdsCompany}
         partnerLabel={surface === "ops" ? (device.partnerCode ? `${device.partnerCode} · ${device.partnerName}` : copy.stock) : null}
         wifiMode={device.wifiMode}
-        canToggleWifi={(surface === "partner" || canManage) && Boolean(device.partnerId)}
+        canToggleWifi={deviceControls && (surface === "partner" || canManage) && Boolean(device.partnerId)}
+        deviceControls={deviceControls}
         showDeviceList={showDeviceList}
         viewerId={viewerId}
         historyQuery={`${fromIso}|${toIso}`}
@@ -179,8 +183,8 @@ export async function GpsDeviceWorkspace({
         selectedVehicleId={device.id}
         rangeSearch={rangeSearch}
         gps={panels.gps}
-        wifi={panels.wifi}
-        camera={panels.camera}
+        wifi={deviceControls ? panels.wifi : null}
+        camera={deviceControls ? panels.camera : null}
         ats={surface === "ops" ? await loadGpsAtsPanel(device.id) : null}
         canControlAts={surface === "ops" && canManage}
       />

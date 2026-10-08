@@ -1,5 +1,6 @@
 // Official UAB U-ETDS ilce_listesi / ulke_listesi published at
 // https://uetds.uab.gov.tr/teknik-dokuman — airport codes are 99xxx, not IATA.
+import { airportPresets } from "@/lib/booking/catalog";
 import officialCountries from "@/lib/uetds/data/official-countries.json";
 import officialPlaces from "@/lib/uetds/data/official-places.json";
 import {
@@ -392,4 +393,87 @@ export function applyOfficialLocationSelection(input: {
 
 export function officialLocationIdentityKey(location: UetdsLocation) {
   return `${location.locationType}:${location.provinceCode}:${location.districtOrAirportCode}`;
+}
+
+function isCatalogAirportCode(code: string) {
+  return PLACES.some((place) => place.kind === "airport" && place.code === code);
+}
+
+/** Bare IST/SAW/AYT, or the same code written next to an airport word. */
+function placeNameIsPresetAirport(placeName: string) {
+  const folded = fold(placeName);
+  if (!folded) {
+    return false;
+  }
+  return airportPresets.some((preset) => {
+    const code = fold(preset.airportCode);
+    if (!code || folded === code) {
+      return Boolean(code) && folded === code;
+    }
+    return (
+      new RegExp(`(?:^| )${code}(?: |$)`).test(folded) &&
+      /HAVALIMANI|HAVAALANI|AIRPORT/.test(folded)
+    );
+  });
+}
+
+/**
+ * A non-province token such as Sabiha/Gökçen identifies one catalog airport.
+ * A province name alone (Antalya, İstanbul) does not.
+ */
+function matchesDistinctiveAirportName(text: string) {
+  if (!text.trim()) {
+    return false;
+  }
+  if (looksLikeAirport({}, text)) {
+    return matchOfficialAirport([text]) != null;
+  }
+  const airport = matchOfficialAirport([text]);
+  if (!airport) {
+    return false;
+  }
+  const provinces = new Set(officialUetdsProvinces().map((item) => fold(item.name)));
+  const tokens = airportMatchKey(text)
+    .split(" ")
+    .filter((token) => token.length >= 4 && token !== "HAVALIMANI" && !provinces.has(token));
+  return tokens.length > 0;
+}
+
+/**
+ * Pickup duration uses the normalized U-ETDS location: airport type, ministry
+ * airport code, or the existing official matcher. Dropoff is never passed here.
+ */
+export function uetdsLocationIsAirport(location: {
+  locationType?: string | null;
+  districtOrAirportCode?: string | null;
+  districtOrAirportName?: string | null;
+  placeName?: string | null;
+  formattedAddress?: string | null;
+} | null | undefined) {
+  if (!location || location.locationType === "foreign") {
+    return false;
+  }
+  if (location.locationType === "airport") {
+    return true;
+  }
+  const code = location.districtOrAirportCode?.trim() ?? "";
+  if (code && isCatalogAirportCode(code)) {
+    return true;
+  }
+  const placeName = location.placeName?.trim() ?? "";
+  if (placeNameIsPresetAirport(placeName)) {
+    return true;
+  }
+  const identity = [placeName, location.districtOrAirportName?.trim() ?? ""].filter(Boolean).join(" ");
+  if (!identity) {
+    return false;
+  }
+  const resolved = resolveOfficialUetdsLocation({
+    placeName,
+    formattedAddress: location.formattedAddress?.trim() || "",
+  });
+  if (resolved.locationType === "airport" && resolved.districtOrAirportCode) {
+    return true;
+  }
+  return matchesDistinctiveAirportName(identity);
 }

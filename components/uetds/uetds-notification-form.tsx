@@ -30,7 +30,7 @@ import {
   type UetdsPassengerDraft,
   type UetdsTripKind,
 } from "@/lib/uetds/draft";
-import { applyUetdsStartToEnd, isUetdsEndAfterStart } from "@/lib/uetds/trip-time";
+import { applyUetdsStartToEnd, ensureUetdsMinimumEnd, isUetdsAirportPickup, isUetdsEndAfterStart } from "@/lib/uetds/trip-time";
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
 import { extractionHasStructuredFields } from "@/lib/uetds/extract";
 import { cloneUetdsDraft } from "@/lib/uetds/ai-edit";
@@ -161,6 +161,7 @@ export function UetdsNotificationForm({
     });
   });
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const [endLiftNotice, setEndLiftNotice] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [conflicts, setConflicts] = useState<UetdsFieldConflict[]>([]);
   const [extractHint, setExtractHint] = useState<string | null>(null);
@@ -249,17 +250,39 @@ export function UetdsNotificationForm({
   }, []);
 
   useEffect(() => {
-    if (!timeAdjustment?.startAdjusted) {
+    if (!timeAdjustment?.startAdjusted && !timeAdjustment?.endAdjusted) {
       return;
     }
-    setDraft((current) => ({
-      ...current,
-      startDate: timeAdjustment.startDate,
-      startTime: timeAdjustment.startTime,
-      endDate: timeAdjustment.endDate,
-      endTime: timeAdjustment.endTime,
-    }));
-  }, [timeAdjustment]);
+    setDraft((current) => {
+      const startDate = timeAdjustment.startAdjusted ? timeAdjustment.startDate : current.startDate;
+      const startTime = timeAdjustment.startAdjusted ? timeAdjustment.startTime : current.startTime;
+      if (aiEdit) {
+        return {
+          ...current,
+          startDate,
+          startTime,
+          endDate: timeAdjustment.endDate,
+          endTime: timeAdjustment.endTime,
+        };
+      }
+      const end = applyUetdsStartToEnd({
+        startDate,
+        startTime,
+        endDate: current.endDate,
+        endTime: current.endTime,
+        endManual: current.endManual,
+        airportPickup: isUetdsAirportPickup(current.originLocation),
+      });
+      queueMicrotask(() => setEndLiftNotice(end.raisedToMinimum));
+      return {
+        ...current,
+        startDate,
+        startTime,
+        endDate: end.endDate,
+        endTime: end.endTime,
+      };
+    });
+  }, [aiEdit, timeAdjustment]);
 
   useEffect(() => {
     if (aiEdit || !draft.reservationId || submittedOk || storedAttempt) {
@@ -347,7 +370,13 @@ export function UetdsNotificationForm({
       draft.endTime &&
       !isUetdsEndAfterStart(draft.startDate, draft.startTime, draft.endDate, draft.endTime),
   );
-  const blocking = [...missing, ...(endBeforeStart ? ["endBeforeStart"] : [])];
+  const airportPickup = isUetdsAirportPickup(draft.originLocation);
+  const endMinimumMessage = !aiEdit && endLiftNotice
+    ? airportPickup
+      ? copy.endMinimumAirport
+      : copy.endMinimumOther
+    : null;
+  const blocking = [...missing, ...(endBeforeStart && aiEdit ? ["endBeforeStart"] : [])];
   const suggested = countSuggestedFields(draft);
   const selectedDriverLabel = driver?.label ?? "";
   const selectedVehicleLabel = vehicle?.label ?? "";
@@ -368,13 +397,30 @@ export function UetdsNotificationForm({
           ),
         },
       };
-      return next;
+      if (key !== "originLocation" || aiEdit) {
+        return next;
+      }
+      const end = applyUetdsStartToEnd({
+        startDate: next.startDate,
+        startTime: next.startTime,
+        endDate: next.endDate,
+        endTime: next.endTime,
+        endManual: next.endManual,
+        airportPickup: isUetdsAirportPickup(location),
+      });
+      queueMicrotask(() => setEndLiftNotice(end.raisedToMinimum));
+      return { ...next, endDate: end.endDate, endTime: end.endTime };
     });
     setFieldErrors([]);
   }
 
   function missingMessages(keys: string[]) {
-    return keys.map((key) => uetdsMissingFieldMessage(key, copy));
+    return keys.map((key) => {
+      if (key === "endBeforeStart" && !aiEdit) {
+        return airportPickup ? copy.endMinimumAirport : copy.endMinimumOther;
+      }
+      return uetdsMissingFieldMessage(key, copy);
+    });
   }
 
   function applyPurposeChip(tripKind: UetdsTripKind) {
@@ -446,10 +492,30 @@ export function UetdsNotificationForm({
   }, [draft, validation]);
 
   function requestSend() {
+    if (!aiEdit && draft.startDate && draft.startTime && draft.endDate && draft.endTime) {
+      const raised = ensureUetdsMinimumEnd(
+        draft.startDate,
+        draft.startTime,
+        draft.endDate,
+        draft.endTime,
+        airportPickup,
+      );
+      if (raised.adjusted) {
+        setDraft((current) => ({
+          ...current,
+          endDate: raised.endDate,
+          endTime: raised.endTime,
+          endManual: true,
+        }));
+        setEndLiftNotice(true);
+        setFieldErrors([]);
+        return;
+      }
+    }
     const valid = validation.validate();
     const keys = [
       ...missingMandatoryFields(draft),
-      ...(endBeforeStart ? ["endBeforeStart"] : []),
+      ...(aiEdit && endBeforeStart ? ["endBeforeStart"] : []),
     ];
     const fleetBlocked = !eligibility.ok;
     const driverIdentityMissing = Boolean(draft.driverId && driver && driver.hasNationalId === false);
@@ -489,14 +555,16 @@ export function UetdsNotificationForm({
       const startDate = next.startDate ?? current.startDate;
       const startTime = next.startTime ?? current.startTime;
       const end = aiEdit
-        ? { endDate: current.endDate, endTime: current.endTime }
+        ? { endDate: current.endDate, endTime: current.endTime, raisedToMinimum: false }
         : applyUetdsStartToEnd({
             startDate,
             startTime,
             endDate: current.endDate,
             endTime: current.endTime,
             endManual: current.endManual,
+            airportPickup: isUetdsAirportPickup(current.originLocation),
           });
+      queueMicrotask(() => setEndLiftNotice(end.raisedToMinimum));
       return {
         ...current,
         startDate,
@@ -514,25 +582,29 @@ export function UetdsNotificationForm({
   }
 
   function updateEnd(next: { endDate?: string; endTime?: string }) {
-    setDraft((current) => ({
-      ...current,
-      endDate: next.endDate ?? current.endDate,
-      endTime: next.endTime ?? current.endTime,
-      endManual: true,
-      fieldProvenance: {
-        ...current.fieldProvenance,
-        endDate: markUserEdited(
-          current.fieldProvenance.endDate,
-          next.endDate ?? current.endDate,
-          current.endDate,
-        ),
-        endTime: markUserEdited(
-          current.fieldProvenance.endTime,
-          next.endTime ?? current.endTime,
-          current.endTime,
-        ),
-      },
-    }));
+    setDraft((current) => {
+      const endDate = next.endDate ?? current.endDate;
+      const endTime = next.endTime ?? current.endTime;
+      if (endDate === current.endDate && endTime === current.endTime) {
+        return current;
+      }
+      const complete = Boolean(endDate.trim() && /^([01]\d|2[0-3]):[0-5]\d$/.test(endTime));
+      const raised = !aiEdit && complete
+        ? ensureUetdsMinimumEnd(current.startDate, current.startTime, endDate, endTime, isUetdsAirportPickup(current.originLocation))
+        : { endDate, endTime, adjusted: false };
+      queueMicrotask(() => setEndLiftNotice(raised.adjusted));
+      return {
+        ...current,
+        endDate: raised.endDate,
+        endTime: raised.endTime,
+        endManual: true,
+        fieldProvenance: {
+          ...current.fieldProvenance,
+          endDate: markUserEdited(current.fieldProvenance.endDate, raised.endDate, current.endDate),
+          endTime: markUserEdited(current.fieldProvenance.endTime, raised.endTime, current.endTime),
+        },
+      };
+    });
     setFieldErrors([]);
   }
 
@@ -617,6 +689,19 @@ export function UetdsNotificationForm({
       );
       extractionValidationPending.current = true;
       const applied = { ...merged.draft, ...enriched };
+      if (!aiEdit) {
+        const end = applyUetdsStartToEnd({
+          startDate: applied.startDate,
+          startTime: applied.startTime,
+          endDate: applied.endDate,
+          endTime: applied.endTime,
+          endManual: applied.endManual,
+          airportPickup: isUetdsAirportPickup(applied.originLocation),
+        });
+        applied.endDate = end.endDate;
+        applied.endTime = end.endTime;
+        queueMicrotask(() => setEndLiftNotice(end.raisedToMinimum));
+      }
       setDraft(applied);
       rememberNewSnapshot(applied);
       setLocationPrefillVersion((version) => version + 1);
@@ -906,7 +991,11 @@ export function UetdsNotificationForm({
               onChange={(event) => updateEnd({ endTime: event.target.value })}
             />
           </label>
-          {endBeforeStart && !validation.attempted ? (
+          {!aiEdit && endMinimumMessage ? (
+            <p className="uetds-span-2 uetds-field-hint" role="status">
+              {endMinimumMessage}
+            </p>
+          ) : aiEdit && endBeforeStart && !validation.attempted ? (
             <p className="uetds-span-2 uetds-field-hint" role="alert">
               {copy.endBeforeStart}
             </p>
