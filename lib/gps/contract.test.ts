@@ -248,7 +248,8 @@ test("gps schema does not call the ministry and keeps the device token hashed", 
   assert.match(wifiConfig, /wifi_config/);
   assert.match(wifiConfig, /BETWEEN 1 AND 8/);
   const header = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
-  assert.match(header, /\{deviceCode\} · \{copy\[presence\]\}/);
+  assert.doesNotMatch(header, /\{deviceCode\} · \{copy\[presence\]\}/);
+  assert.match(header, /copy\.batteryLevel/);
   assert.match(header, /gps-battery is-low/);
   assert.match(header, /snapshot\.batteryPercent === null/);
   assert.doesNotMatch(header, /charging_inferred|chargingInferred|Şarj oluyor/);

@@ -39,9 +39,6 @@ export function GpsLiveMap({
   pins,
   selectedVehicleId = null,
   onVehicleSelect,
-  fleetLabel,
-  onShowFleet,
-  preserveSelection = false,
 }: {
   vehicleId: string;
   live: GpsMapPoint | null;
@@ -53,9 +50,6 @@ export function GpsLiveMap({
   pins?: GpsFleetMapPin[];
   selectedVehicleId?: string | null;
   onVehicleSelect?: (id: string) => void;
-  fleetLabel?: string;
-  onShowFleet?: () => void;
-  preserveSelection?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -74,10 +68,9 @@ export function GpsLiveMap({
   const modelRef = useRef({ marker, prefs });
   const pinsRef = useRef(pins);
   const onSelectRef = useRef(onVehicleSelect);
-  const onShowFleetRef = useRef(onShowFleet);
-  const preserveRef = useRef(preserveSelection);
-  const fleetLabelRef = useRef(fleetLabel);
   const selectedFleetRef = useRef<string | null>(selectedVehicleId);
+  const followHeldRef = useRef(false);
+  const movingMapRef = useRef(false);
   const fleetMarkers = useRef(new Map<string, LeafletMarker>());
   const fleetPopups = useRef(new Map<string, HTMLDivElement>());
   const fleetFrames = useRef(new Map<string, number>());
@@ -86,9 +79,6 @@ export function GpsLiveMap({
   const addressPin = useRef("");
   pinsRef.current = pins;
   onSelectRef.current = onVehicleSelect;
-  onShowFleetRef.current = onShowFleet;
-  preserveRef.current = preserveSelection;
-  fleetLabelRef.current = fleetLabel;
   const selectedIdRef = useRef<string | null>(null);
   const vehiclePropRef = useRef(vehicleId);
   if (vehiclePropRef.current !== vehicleId) {
@@ -181,6 +171,12 @@ export function GpsLiveMap({
       leafletRef.current = L;
       const created = L.map(node, { zoomControl: true });
       mapRef.current = created;
+      created.on("dragstart", () => {
+        followHeldRef.current = true;
+      });
+      created.on("zoomstart", () => {
+        if (!movingMapRef.current) followHeldRef.current = true;
+      });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap",
         maxZoom: 19,
@@ -205,14 +201,19 @@ export function GpsLiveMap({
         }).addTo(created);
         bounds.push([point.latitude, point.longitude]);
       });
-      if (bounds.length === 0) {
-        if (!pinsRef.current?.length) created.setView([41.015, 28.979], 10);
-      } else if (bounds.length === 1) {
-        created.setView(bounds[0], 15);
-      } else {
-        created.fitBounds(bounds, { padding: [24, 24] });
-      }
-      window.setTimeout(() => created.invalidateSize(), 0);
+      holdMapMove(() => {
+        if (bounds.length === 0) {
+          if (!pinsRef.current?.length) created.setView([41.015, 28.979], 10);
+        } else if (bounds.length === 1) {
+          created.setView(bounds[0], 15);
+        } else {
+          created.fitBounds(bounds, { padding: [24, 24] });
+        }
+      });
+      window.setTimeout(() => {
+        if (cancelled || mapRef.current !== created) return;
+        holdMapMove(() => created.invalidateSize());
+      }, 0);
       if (!cancelled) {
         setMapEpoch((value) => value + 1);
       }
@@ -269,15 +270,16 @@ export function GpsLiveMap({
             longitude: here.lng,
           }, map.getZoom());
           selectedIdRef.current = next.selectedId;
-          focusSelected(map, next);
+          followHeldRef.current = false;
+          centerOn(map, next);
         });
         markerRef.current = pin;
         paint();
         if (!framedRef.current && trackKey === "[]") {
-          map.setView(next, 15);
+          holdMapMove(() => map.setView(next, 15));
         }
         framedRef.current = true;
-        focusSelected(map, gpsApplyVehicleFix(currentView(map, selectedIdRef.current), {
+        centerOn(map, gpsApplyVehicleFix(currentView(map, selectedIdRef.current), {
           id: vehicleId,
           latitude: next[0],
           longitude: next[1],
@@ -292,7 +294,7 @@ export function GpsLiveMap({
           longitude,
         });
         if (nextView !== current) {
-          focusSelected(map, nextView);
+          centerOn(map, nextView);
         }
       });
     })();
@@ -321,7 +323,9 @@ export function GpsLiveMap({
     if (!active) {
       return;
     }
-    mapRef.current?.invalidateSize();
+    const map = mapRef.current;
+    if (!map) return;
+    holdMapMove(() => map.invalidateSize());
   }, [active, mapEpoch]);
 
   useEffect(() => {
@@ -339,33 +343,6 @@ export function GpsLiveMap({
     }
     loadAddressRef.current();
   }, [prefs?.address, addressCell]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const leaflet = leafletRef.current;
-    if (!map || !leaflet || !fleetLabel) {
-      return;
-    }
-    const FleetControl = leaflet.Control.extend({
-      options: { position: "topright" },
-      onAdd() {
-        const button = leaflet.DomUtil.create("button", "gps-fleet-control");
-        button.setAttribute("type", "button");
-        button.textContent = fleetLabelRef.current ?? "";
-        leaflet.DomEvent.disableClickPropagation(button);
-        leaflet.DomEvent.on(button, "click", (event: Event) => {
-          leaflet.DomEvent.stop(event);
-          showFleetNow(map);
-        });
-        return button;
-      },
-    });
-    const control = new FleetControl();
-    control.addTo(map);
-    return () => {
-      control.remove();
-    };
-  }, [fleetLabel, mapEpoch]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -429,12 +406,13 @@ export function GpsLiveMap({
               longitude: here.lng,
             }, previous === pin.id ? map.getZoom() : GPS_FLEET_FOLLOW_ZOOM);
             if (previous !== pin.id) onSelectRef.current?.(pin.id);
-            focusSelected(map, next);
+            followHeldRef.current = false;
+            centerOn(map, next);
           });
           fleetMarkers.current.set(pin.id, marker);
           fleetPlaced.current.set(pin.id, fleetPlaceKey(pin));
           if (pin.id === selectedFleetRef.current) {
-            map.setView([pin.latitude, pin.longitude], GPS_FLEET_FOLLOW_ZOOM, { animate: false });
+            holdMapMove(() => map.setView([pin.latitude, pin.longitude], GPS_FLEET_FOLLOW_ZOOM, { animate: false }));
           }
         } else {
           marker.setIcon(vehicleIcon(leaflet, pin.marker.state));
@@ -446,7 +424,7 @@ export function GpsLiveMap({
               glideFleet(marker, [pin.latitude, pin.longitude], pin.id, (latitude, longitude) => {
                 const current = currentView(map, selectedFleetRef.current);
                 const nextView = gpsApplyVehicleFix(current, { id: pin.id, latitude, longitude });
-                if (nextView !== current) focusSelected(map, nextView);
+                if (nextView !== current) centerOn(map, nextView);
               });
             } else {
               window.cancelAnimationFrame(fleetFrames.current.get(pin.id) ?? 0);
@@ -459,7 +437,7 @@ export function GpsLiveMap({
       }
       const ids = pins.map((pin) => pin.id);
       if (!selectedFleetRef.current && (fittedIds.current === null || gpsFleetIdsChanged(fittedIds.current, ids))) {
-        fitFleet(map, pins);
+        holdMapMove(() => fitFleet(map, pins));
         fittedIds.current = ids;
       }
     })();
@@ -470,29 +448,17 @@ export function GpsLiveMap({
 
   return <div ref={host} className="gps-map" />;
 
-  function showFleetNow(map: LeafletMap) {
-    if (pinsRef.current) {
-      for (const marker of fleetMarkers.current.values()) marker.closePopup();
-      for (const frame of fleetFrames.current.values()) window.cancelAnimationFrame(frame);
-      fleetFrames.current.clear();
-      for (const pin of pinsRef.current) {
-        fleetMarkers.current.get(pin.id)?.setLatLng([pin.latitude, pin.longitude]);
-        fleetPlaced.current.set(pin.id, fleetPlaceKey(pin));
-      }
-      if (!preserveRef.current) {
-        selectedFleetRef.current = null;
-        fittedIds.current = null;
-        onShowFleetRef.current?.();
-      }
-      fitFleet(map, pinsRef.current);
-      fittedIds.current = pinsRef.current.map((pin) => pin.id);
-      return;
-    }
-    markerRef.current?.closePopup();
-    const here = markerRef.current?.getLatLng();
-    if (here) {
-      map.setView([here.lat, here.lng], GPS_FLEET_FOLLOW_ZOOM, { animate: false });
-    }
+  function centerOn(map: LeafletMap, view: GpsFollowView) {
+    if (followHeldRef.current) return;
+    holdMapMove(() => focusSelected(map, view));
+  }
+
+  function holdMapMove(run: () => void) {
+    movingMapRef.current = true;
+    run();
+    window.requestAnimationFrame(() => {
+      movingMapRef.current = false;
+    });
   }
 
   function loadFleetAddress(pinId: string) {

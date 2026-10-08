@@ -14922,24 +14922,6 @@ html[dir="rtl"] .location-back {
   overflow: hidden;
 }
 
-.gps-fleet-control {
-  max-width: min(16rem, calc(100vw - 5.5rem));
-  margin: 10px;
-  padding: 0.4rem 0.7rem;
-  min-height: 36px;
-  border: 0;
-  border-radius: 8px;
-  background: #142e5c;
-  color: #fff;
-  font: inherit;
-  font-size: 0.82rem;
-  line-height: 1.2;
-  text-align: center;
-  white-space: normal;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.28);
-}
-
 .gps-facts .gps-fleet-pick {
   grid-column: 1 / -1;
 }
@@ -15026,22 +15008,6 @@ html[dir="rtl"] .location-back {
 
 .gps-fleet-missing {
   margin: 0;
-}
-
-.gps-fleet-control {
-  margin-top: 10px;
-  max-width: calc(100vw - 4rem);
-  padding: 0.45rem 0.7rem;
-  border: 0;
-  border-radius: 8px;
-  background: #fff;
-  color: #142e5c;
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  line-height: 1.2;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.28);
-  cursor: pointer;
 }
 
 .gps-facts dd.is-prompt {

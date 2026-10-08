@@ -38,13 +38,6 @@ export function gpsFleetPopupClosed(state: GpsFleetSelection): GpsFleetSelection
   return { selectedId: state.selectedId, popupId: null };
 }
 
-export function gpsFleetShowAll(vehicleIds: readonly string[]): GpsFleetSelection {
-  if (vehicleIds.length === 1) {
-    return { selectedId: vehicleIds[0] ?? null, popupId: null };
-  }
-  return { selectedId: null, popupId: null };
-}
-
 export function gpsFleetHistoryReady(vehicleCount: number, selectedId: string | null) {
   return vehicleCount <= 1 || selectedId !== null;
 }

@@ -44,8 +44,6 @@ export function GpsLiveSection({
   fleetVehicles,
   selectedVehicleId = null,
   onVehicleSelect,
-  onShowFleet,
-  preserveSelection = false,
   rangeSearch = "",
 }: {
   copy: GpsCopy;
@@ -72,8 +70,6 @@ export function GpsLiveSection({
   fleetVehicles?: GpsFleetVehicle[];
   selectedVehicleId?: string | null;
   onVehicleSelect?: (id: string) => void;
-  onShowFleet?: () => void;
-  preserveSelection?: boolean;
   rangeSearch?: string;
 }) {
   const router = useRouter();
@@ -279,15 +275,6 @@ export function GpsLiveSection({
     router.replace(`${listPath}?${params.toString()}`, { scroll: false });
   }
 
-  function showEntireFleet() {
-    onShowFleet?.();
-    if (preserveSelection || !fleetVehicles || fleetVehicles.length <= 1 || !listPath) return;
-    const params = new URLSearchParams(rangeSearch);
-    params.delete("vehicle");
-    const query = params.toString();
-    router.replace(query ? `${listPath}?${query}` : listPath, { scroll: false });
-  }
-
   const picking = awaitingPick || Boolean(fleetVehicles && fleetVehicles.length > 1 && !selectedVehicleId);
   const historyNotice = fleetVehicles && !gpsFleetHistoryReady(fleetVehicles.length, selectedVehicleId)
     ? copy.historyPick
@@ -295,25 +282,11 @@ export function GpsLiveSection({
 
   return (
     <>
-      <header className="gps-head">
-        <div>
-          {showDeviceList ? <a href={listPath}>{copy.back}</a> : null}
-          <h1>
-            {picking ? copy.live : (
-              <>
-                {deviceCode} · {copy[presence]}
-                {snapshot.batteryPercent === null ? null : (
-                  <span className={snapshot.batteryPercent < 20 ? "gps-battery is-low" : "gps-battery"}>
-                    {" · "}
-                    <BatteryIcon />
-                    {` %${snapshot.batteryPercent}`}
-                  </span>
-                )}
-              </>
-            )}
-          </h1>
-        </div>
-      </header>
+      {showDeviceList ? (
+        <header className="gps-head">
+          <a href={listPath}>{copy.back}</a>
+        </header>
+      ) : null}
       <div className="gps-tabs" role="tablist" aria-label={copy.title}>
         <button type="button" role="tab" aria-selected={tab === "gps"} onClick={() => setTab("gps")}>{copy.tabGps}</button>
         <button type="button" role="tab" aria-selected={tab === "wifi"} onClick={() => setTab("wifi")}>{copy.tabWifi}</button>
@@ -352,9 +325,6 @@ export function GpsLiveSection({
           pins={pins}
           selectedVehicleId={selectedVehicleId}
           onVehicleSelect={fleetVehicles ? chooseVehicle : onVehicleSelect}
-          fleetLabel={surface === "partner" ? copy.showFleet : undefined}
-          onShowFleet={fleetVehicles ? showEntireFleet : onShowFleet}
-          preserveSelection={preserveSelection}
           marker={live ? {
             latitude: live.latitude,
             longitude: live.longitude,
@@ -379,6 +349,15 @@ export function GpsLiveSection({
           <div><dt>{copy.gpsFix}</dt><dd>{picking ? "—" : snapshot.gnssFix ? copy.fixYes : copy.fixNo}</dd></div>
           <div><dt>{copy.satellites}</dt><dd>{picking ? "—" : snapshot.satellites ?? copy.unavailable}</dd></div>
           <div><dt>{copy.live}</dt><dd>{picking ? "—" : live ? `${live.latitude.toFixed(6)}, ${live.longitude.toFixed(6)}` : copy.unavailable}</dd></div>
+          <div>
+            <dt>{copy.batteryLevel}</dt>
+            <dd>{picking || snapshot.batteryPercent === null ? "—" : (
+              <span className={snapshot.batteryPercent < 20 ? "gps-battery is-low" : "gps-battery"}>
+                <BatteryIcon />
+                {` %${snapshot.batteryPercent}`}
+              </span>
+            )}</dd>
+          </div>
         </dl>
       </section>
       <GpsSectionToggle key={selectedVehicleId ?? "fleet"} showLabel={copy.showHistory} hideLabel={copy.hideHistory} rememberKey={deviceId && !picking ? `gps-history:${deviceId}` : undefined} historyQuery={historyQuery} blockedMessage={historyNotice}>

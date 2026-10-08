@@ -16,7 +16,6 @@ import {
   gpsFleetOpening,
   gpsFleetPoint,
   gpsFleetPopupClosed,
-  gpsFleetShowAll,
   gpsFleetUnlocated,
   readGpsFleet,
   type GpsFleetVehicle,
@@ -119,7 +118,6 @@ test("one vehicle starts selected with the popup closed and can be opened again"
   const closed = gpsFleetPopupClosed(shown);
   assert.deepEqual(closed, { selectedId: "only", popupId: null });
   assert.deepEqual(gpsFleetMarkerClick(closed, "only"), { selectedId: "only", popupId: "only" });
-  assert.deepEqual(gpsFleetShowAll(["only"]), { selectedId: "only", popupId: null });
   assert.equal(gpsFleetHistoryReady(1, "only"), true);
   assert.equal(gpsFleetHistoryReady(1, null), true);
 });
@@ -136,7 +134,6 @@ test("many vehicles start unselected and history waits for a map choice", () => 
   assert.equal(gpsFleetHistoryReady(4, hidden.selectedId), true);
   const second = gpsFleetMarkerClick(hidden, "c");
   assert.deepEqual(second, { selectedId: "c", popupId: "c" });
-  assert.deepEqual(gpsFleetShowAll(["a", "b", "c", "d"]), { selectedId: null, popupId: null });
   assert.deepEqual(gpsFleetOpening([]), { selectedId: null, popupId: null });
 });
 
@@ -169,8 +166,9 @@ test("fleet endpoint stays partner scoped and the live map is the partner home",
   assert.match(map, /keepInView:\s*false/);
   assert.match(map, /GPS_FLEET_GLIDE_MS/);
   assert.match(map, /gpsFleetMarkerClick/);
-  assert.match(map, /fleetLabel/);
   assert.match(map, /loadFleetAddress\(selectedFleetRef\.current\)/);
+  assert.match(map, /followHeldRef/);
+  assert.doesNotMatch(map, /fleetLabel|gps-fleet-control|showFleetNow|Tüm filoyu göster/);
   const click = map.slice(map.indexOf("gpsFleetMarkerClick"), map.indexOf("fleetMarkers.current.set"));
   assert.match(click, /openPopup\(\)/);
   assert.doesNotMatch(click, /if \(same\) return|if \(previous === pin\.id\) return/);
@@ -178,6 +176,9 @@ test("fleet endpoint stays partner scoped and the live map is the partner home",
   assert.match(section, /GPS_LIVE_POLL_MS/);
   assert.match(section, /document\.hidden/);
   assert.match(section, /copy\.historyPick/);
+  assert.match(section, /copy\.batteryLevel/);
+  assert.doesNotMatch(section, /showFleet|onShowFleet|preserveSelection/);
+  assert.doesNotMatch(section, /\{deviceCode\} · \{copy\[presence\]\}/);
   const history = readFileSync(new URL("../../components/gps/history-playback.tsx", import.meta.url), "utf8");
   assert.match(history, /interactive: false/);
 });

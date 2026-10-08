@@ -90,7 +90,6 @@ export function GpsDeviceWorkspace({
           awaitingPick
           fleetVehicles={fleetVehicles}
           selectedVehicleId={null}
-          preserveSelection={false}
           rangeSearch={rangeSearch}
           gps={null}
           wifi={<p className="gps-inline-note">{copy.fleetPick}</p>}
@@ -177,7 +176,6 @@ export function GpsDeviceWorkspace({
         historyQuery={`${fromIso}|${toIso}`}
         fleetVehicles={fleetVehicles}
         selectedVehicleId={device.id}
-        preserveSelection={!fleetVehicles || fleetVehicles.length <= 1}
         rangeSearch={rangeSearch}
         gps={panels.gps}
         wifi={panels.wifi}
