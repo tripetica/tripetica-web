@@ -14598,6 +14598,24 @@ html[dir="rtl"] .location-back {
   color: #5c6b80;
 }
 
+.gps-ats {
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #d8dee8;
+}
+
+.gps-ats h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+}
+
+.gps-ats-warn {
+  margin: 0.55rem 0 0;
+  color: #8a5a00;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .gps-head p,
 .gps-hint,
 .gps-card p {

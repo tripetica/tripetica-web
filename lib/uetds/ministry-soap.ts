@@ -3,6 +3,7 @@ import "server-only";
 import {
   resolveUetdsMinistryEndpoint,
   resolveUetdsMinistryRuntime,
+  UETDS_ATS_SOAP_ACTIONS,
   UETDS_NS,
   type UETDS_SOAP_ACTIONS,
 } from "@/lib/uetds/ministry-env";
@@ -68,7 +69,7 @@ export function soapField(name: string, value: string | number) {
 }
 
 export async function callUetdsTestSoap(input: {
-  operation: keyof typeof UETDS_SOAP_ACTIONS;
+  operation: keyof typeof UETDS_SOAP_ACTIONS | keyof typeof UETDS_ATS_SOAP_ACTIONS;
   soapAction: string;
   innerXml: string;
   username: string;

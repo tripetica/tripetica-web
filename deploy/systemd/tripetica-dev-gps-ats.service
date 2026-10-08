@@ -1,0 +1,49 @@
+# Prepared only. Do not enable and do not add a timer in this phase.
+# V15 does not state an ATS send interval. This unit cannot call the ministry:
+# the script refuses ATS_MINISTRY_DISPATCH=allow-test and never opens a SOAP socket.
+[Unit]
+Description=Tripetica DEV ATS dispatch (withheld)
+After=network-online.target postgresql.service
+Wants=postgresql.service network-online.target
+
+[Service]
+Type=oneshot
+User=tripetica-dev
+Group=tripetica-dev
+WorkingDirectory=/var/lib/tripetica-dev/app
+ExecStart=/usr/bin/flock -n /var/lib/tripetica-dev/gps-ats-dispatch.lock /usr/bin/npm run gps-ats:dispatch
+TimeoutStartSec=60
+Nice=10
+UMask=0077
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/var/lib/tripetica-dev
+Environment=npm_config_cache=/var/lib/tripetica-dev/npm-cache
+Environment=NODE_ENV=development
+Environment=EXPECTED_DATABASE=tripetica_dev
+Environment=ATS_MINISTRY_DISPATCH=withheld
+Environment=PG_POOL_MAX=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+BindPaths=/root/tripetica-web:/var/lib/tripetica-dev/app
+ReadWritePaths=/var/lib/tripetica-dev
+InaccessiblePaths=/srv/tripetica
+BindReadOnlyPaths=/dev/null:/var/lib/tripetica-dev/app/.env.local
+BindReadOnlyPaths=/dev/null:/var/lib/tripetica-dev/app/.env.development.migrate.local
+StandardOutput=journal
+StandardError=journal

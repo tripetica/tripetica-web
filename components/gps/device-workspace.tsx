@@ -15,13 +15,14 @@ import { gpsPresence } from "@/lib/gps/presence";
 import { GpsDeviceAssignmentForm } from "@/components/gps/device-assignment-form";
 import { GpsDeviceDelete } from "@/components/gps/device-delete";
 import { GpsRebootControl } from "@/components/gps/reboot-control";
+import { loadGpsAtsPanel } from "@/lib/gps/ats-control";
 import { GpsHistoryPlayback } from "@/components/gps/history-playback";
 import { GpsLiveSection } from "@/components/gps/live-section";
 import { type GpsFleetVehicle } from "@/lib/gps/fleet";
 import { GpsRemoteCommands } from "@/components/gps/remote-commands";
 import { GpsTokenRotateForm } from "@/components/gps/token-rotate-form";
 
-export function GpsDeviceWorkspace({
+export async function GpsDeviceWorkspace({
   locale,
   copy,
   surface,
@@ -180,6 +181,8 @@ export function GpsDeviceWorkspace({
         gps={panels.gps}
         wifi={panels.wifi}
         camera={panels.camera}
+        ats={surface === "ops" ? await loadGpsAtsPanel(device.id) : null}
+        canControlAts={surface === "ops" && canManage}
       />
 
       {surface === "ops" && canManage ? (

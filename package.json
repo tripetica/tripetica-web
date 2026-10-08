@@ -15,6 +15,7 @@
     "partner:push:dispatch": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx --conditions=react-server scripts/dispatch-partner-job-push.ts",
     "assignment-alarm:dispatch": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx --conditions=react-server scripts/dispatch-assignment-alarms.ts",
     "flight-track:poll": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx --conditions=react-server scripts/poll-flight-tracking.ts",
+    "gps-ats:dispatch": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx scripts/gps-ats-dispatch.ts",
     "flight-track:poll:prod": "EXPECTED_DATABASE=tripetica NODE_ENV=production tsx --conditions=react-server scripts/poll-flight-tracking-prod.ts",
     "assignment-alarm:dispatch:prod": "EXPECTED_DATABASE=tripetica NODE_ENV=production tsx --conditions=react-server scripts/dispatch-assignment-alarms-prod.ts",
     "assignment-alarm:ring-once": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development ASSIGNMENT_ALARM_VOICE_ENABLED=true tsx --conditions=react-server scripts/dev-assignment-alarm-ring-once.ts",

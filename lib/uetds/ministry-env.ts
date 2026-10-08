@@ -107,3 +107,9 @@ export const UETDS_SOAP_ACTIONS = {
   yolcuBildirimSorgula: `${UETDS_NS}uetdsytsarizi/yolcuBildirimSorgula`,
   bildirimOzeti: `${UETDS_NS}uetdsytsarizi/bildirimOzeti`,
 } as const;
+
+// Arızi V15 WSDL. These actions are not the seferEkle `uetdsytsarizi` prefix.
+export const UETDS_ATS_SOAP_ACTIONS = {
+  atsKonumBildir: `${UETDS_NS}uetdsyts/atsKonumBildir`,
+  atsArizaBildir: `${UETDS_NS}uetdsarizi/atsArizaBildir`,
+} as const;

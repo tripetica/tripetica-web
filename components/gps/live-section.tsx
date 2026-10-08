@@ -17,6 +17,8 @@ import {
 } from "@/lib/gps/map-popup";
 import { gpsPresence } from "@/lib/gps/presence";
 import { type GpsCopy } from "@/lib/gps/copy";
+import { GpsAtsPanel } from "@/components/gps/ats-panel";
+import { type GpsAtsPanel as GpsAtsPanelState } from "@/lib/gps/ats-panel-state";
 import { GpsSectionToggle } from "@/components/gps/section-toggle";
 import { GpsWifiShareSwitch } from "@/components/gps/wifi-share-switch";
 
@@ -46,6 +48,8 @@ export function GpsLiveSection({
   selectedVehicleId = null,
   onVehicleSelect,
   rangeSearch = "",
+  ats = null,
+  canControlAts = false,
 }: {
   copy: GpsCopy;
   listPath: string;
@@ -72,6 +76,8 @@ export function GpsLiveSection({
   selectedVehicleId?: string | null;
   onVehicleSelect?: (id: string) => void;
   rangeSearch?: string;
+  ats?: GpsAtsPanelState | null;
+  canControlAts?: boolean;
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
@@ -406,6 +412,7 @@ export function GpsLiveSection({
             {surface === "ops" && partnerLabel ? <div><dt>{copy.partner}</dt><dd>{partnerLabel}</dd></div> : null}
           </dl>
         )}
+        {!deviceLoading && ats ? <GpsAtsPanel copy={copy} panel={ats} canControl={canControlAts} /> : null}
       </GpsSectionToggle>
       {surface === "ops" ? (
         <section className="gps-section">
