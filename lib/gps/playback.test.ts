@@ -168,7 +168,11 @@ test("history playback stays on the selected device and off the live poll", () =
   assert.match(workspace, /className="gps-range"/);
   assert.match(workspace, /className="gps-range-fields"/);
   assert.match(workspace, /className="gps-range-submit"/);
+  assert.match(workspace, /className="gps-range-chevron" aria-hidden="true"/);
   assert.match(css, /\.gps-range-fields \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+  assert.match(css, /\.gps-range-chevron \{\n  display: none;\n\}/);
+  assert.match(css, /@media \(max-width: 480px\) \{\n  \.gps-range-picker \{[\s\S]*?\.gps-range-chevron \{[^}]*pointer-events: none;/);
+  assert.match(css, /padding-inline-end: 1\.15rem;\n    font-size: 0\.78rem;/);
   assert.doesNotMatch(css, /\.gps-playback-scale/);
   assert.match(css, /\.gps-status::before \{[^}]*width: 22px;/);
   assert.match(css, /\.gps-status::before \{[^}]*border: 2px solid/);

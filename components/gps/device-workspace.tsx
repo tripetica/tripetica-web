@@ -307,11 +307,17 @@ export function gpsWorkspacePanels({
           <div className="gps-range-fields">
             <label>
               <span>{copy.from}</span>
-              <input type="datetime-local" name="from" defaultValue={fromLocal} required />
+              <span className="gps-range-picker">
+                <input type="datetime-local" name="from" defaultValue={fromLocal} required />
+                <span className="gps-range-chevron" aria-hidden="true" />
+              </span>
             </label>
             <label>
               <span>{copy.to}</span>
-              <input type="datetime-local" name="to" defaultValue={toLocal} required />
+              <span className="gps-range-picker">
+                <input type="datetime-local" name="to" defaultValue={toLocal} required />
+                <span className="gps-range-chevron" aria-hidden="true" />
+              </span>
             </label>
           </div>
           <button type="submit" className="gps-range-submit">{copy.showRoute}</button>
