@@ -77,6 +77,9 @@ export function GpsLiveSection({
   const [pins, setPins] = useState<GpsFleetMapPin[] | undefined>(() => fleetPinsFrom(fleetVehicles, copy.unassigned));
   const pinSeed = fleetVehicles?.map((vehicle) => `${vehicle.id}:${vehicle.latitude}:${vehicle.longitude}`).join("|") ?? "";
   const [seenDevice, setSeenDevice] = useState(deviceId);
+  const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
+  const liveDeviceRef = useRef(deviceId);
+  liveDeviceRef.current = deviceId;
   if (deviceId !== seenDevice) {
     setSeenDevice(deviceId);
     setSnapshot(initial);
@@ -143,6 +146,9 @@ export function GpsLiveSection({
             etag = nextEtag;
           }
           const body = readGpsLiveSnapshot(await response.json());
+          if (stopped || liveDeviceRef.current !== deviceId) {
+            return;
+          }
           if (body) {
             setSnapshot(body);
           }
@@ -270,12 +276,14 @@ export function GpsLiveSection({
   function chooseVehicle(id: string) {
     onVehicleSelect?.(id);
     if (!fleetVehicles || fleetVehicles.length <= 1 || !listPath || id === selectedVehicleId) return;
+    setPendingVehicleId(id);
     const params = new URLSearchParams(rangeSearch);
     params.set("vehicle", id);
     router.replace(`${listPath}?${params.toString()}`, { scroll: false });
   }
 
   const picking = awaitingPick || Boolean(fleetVehicles && fleetVehicles.length > 1 && !selectedVehicleId);
+  const deviceLoading = Boolean(pendingVehicleId && pendingVehicleId !== deviceId);
   const historyNotice = fleetVehicles && !gpsFleetHistoryReady(fleetVehicles.length, selectedVehicleId)
     ? copy.historyPick
     : historyBlocked;
@@ -349,35 +357,41 @@ export function GpsLiveSection({
           <div><dt>{copy.gpsFix}</dt><dd>{picking ? "—" : snapshot.gnssFix ? copy.fixYes : copy.fixNo}</dd></div>
           <div><dt>{copy.satellites}</dt><dd>{picking ? "—" : snapshot.satellites ?? copy.unavailable}</dd></div>
           <div><dt>{copy.live}</dt><dd>{picking ? "—" : live ? `${live.latitude.toFixed(6)}, ${live.longitude.toFixed(6)}` : copy.unavailable}</dd></div>
-          <div>
-            <dt>{copy.batteryLevel}</dt>
-            <dd>{picking || snapshot.batteryPercent === null ? "—" : (
-              <span className={snapshot.batteryPercent < 20 ? "gps-battery is-low" : "gps-battery"}>
-                <BatteryIcon />
-                {` %${snapshot.batteryPercent}`}
-              </span>
-            )}</dd>
-          </div>
         </dl>
       </section>
       <GpsSectionToggle key={selectedVehicleId ?? "fleet"} showLabel={copy.showHistory} hideLabel={copy.hideHistory} rememberKey={deviceId && !picking ? `gps-history:${deviceId}` : undefined} historyQuery={historyQuery} blockedMessage={historyNotice}>
         {gps}
       </GpsSectionToggle>
-      {picking ? null : <GpsSectionToggle showLabel={copy.showDevice} hideLabel={copy.hideDevice}>
-        <h2>{copy.deviceInfo}</h2>
-        <dl className="gps-facts">
-          <div><dt>{copy.deviceId}</dt><dd>{deviceCode}</dd></div>
-          <div><dt>{copy.imei}</dt><dd>{imei ?? copy.unavailable}</dd></div>
-          <div><dt>{copy.firmware}</dt><dd>{snapshot.firmware ?? copy.unavailable}</dd></div>
-          <div><dt>{copy.operator}</dt><dd>{snapshot.operatorName ?? copy.unavailable}</dd></div>
-          <div><dt>{copy.signal}</dt><dd>{snapshot.rssi === null ? copy.unavailable : `${snapshot.rssi} dBm`}</dd></div>
-          <div><dt>{copy.seen}</dt><dd>{gpsClock(snapshot.lastHeartbeatAt)}</dd></div>
-          <div><dt>{copy.status}</dt><dd>{status === "active" ? copy.active : copy.disabled}</dd></div>
-          <div><dt>{copy.gpsFix}</dt><dd>{snapshot.gnssFix ? copy.fixYes : copy.fixNo}</dd></div>
-          <div><dt>{copy.company}</dt><dd>{company ?? "—"}</dd></div>
-          {surface === "ops" && partnerLabel ? <div><dt>{copy.partner}</dt><dd>{partnerLabel}</dd></div> : null}
-        </dl>
-      </GpsSectionToggle>}
+      <GpsSectionToggle showLabel={copy.showDevice} hideLabel={copy.hideDevice} blockedMessage={picking ? copy.devicePick : undefined}>
+        <div className="gps-device-head">
+          <h2>{copy.deviceInfo}</h2>
+          <span className="gps-device-battery">
+            <span className="gps-device-sep" aria-hidden="true">·</span>
+            {deviceLoading ? <span>{copy.deviceLoading}</span> : snapshot.batteryPercent === null ? (
+              <span aria-label={copy.batteryLevel}>—</span>
+            ) : (
+              <span className={snapshot.batteryPercent < 20 ? "gps-battery is-low" : "gps-battery"} aria-label={`${copy.batteryLevel} %${snapshot.batteryPercent}`}>
+                <BatteryIcon />
+                {` %${snapshot.batteryPercent}`}
+              </span>
+            )}
+          </span>
+        </div>
+        {deviceLoading ? <p className="gps-inline-note">{copy.deviceLoading}</p> : (
+          <dl className="gps-facts">
+            <div><dt>{copy.deviceId}</dt><dd>{deviceCode}</dd></div>
+            <div><dt>{copy.imei}</dt><dd>{imei ?? copy.unavailable}</dd></div>
+            <div><dt>{copy.firmware}</dt><dd>{snapshot.firmware ?? copy.unavailable}</dd></div>
+            <div><dt>{copy.operator}</dt><dd>{snapshot.operatorName ?? copy.unavailable}</dd></div>
+            <div><dt>{copy.signal}</dt><dd>{snapshot.rssi === null ? copy.unavailable : `${snapshot.rssi} dBm`}</dd></div>
+            <div><dt>{copy.seen}</dt><dd>{gpsClock(snapshot.lastHeartbeatAt)}</dd></div>
+            <div><dt>{copy.status}</dt><dd>{status === "active" ? copy.active : copy.disabled}</dd></div>
+            <div><dt>{copy.gpsFix}</dt><dd>{snapshot.gnssFix ? copy.fixYes : copy.fixNo}</dd></div>
+            <div><dt>{copy.company}</dt><dd>{company ?? "—"}</dd></div>
+            {surface === "ops" && partnerLabel ? <div><dt>{copy.partner}</dt><dd>{partnerLabel}</dd></div> : null}
+          </dl>
+        )}
+      </GpsSectionToggle>
       {surface === "ops" ? (
         <section className="gps-section">
           <h2>{copy.technical}</h2>

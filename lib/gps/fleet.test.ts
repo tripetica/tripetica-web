@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { gpsCopy } from "@/lib/gps/copy";
 import { googleMapsUrl, yandexMapsUrl } from "@/lib/gps/format";
 import { gpsApplyVehicleFix, gpsOpenPopup, gpsSelectVehicle } from "@/lib/gps/follow";
 import {
@@ -176,7 +177,17 @@ test("fleet endpoint stays partner scoped and the live map is the partner home",
   assert.match(section, /GPS_LIVE_POLL_MS/);
   assert.match(section, /document\.hidden/);
   assert.match(section, /copy\.historyPick/);
+  assert.match(section, /copy\.devicePick/);
   assert.match(section, /copy\.batteryLevel/);
+  assert.match(section, /pendingVehicleId/);
+  assert.match(section, /gps-device-head/);
+  const liveFactsStart = section.indexOf('<dl className="gps-facts">');
+  const liveFacts = section.slice(liveFactsStart, section.indexOf("</dl>", liveFactsStart));
+  assert.doesNotMatch(liveFacts, /batteryLevel|gps-battery/);
+  assert.equal(
+    gpsCopy.tr.devicePick,
+    "Cihaz bilgilerini görüntülemek için lütfen yukarıdaki canlı konum haritasından bir araç seçin.",
+  );
   assert.doesNotMatch(section, /showFleet|onShowFleet|preserveSelection/);
   assert.doesNotMatch(section, /\{deviceCode\} · \{copy\[presence\]\}/);
   const history = readFileSync(new URL("../../components/gps/history-playback.tsx", import.meta.url), "utf8");
