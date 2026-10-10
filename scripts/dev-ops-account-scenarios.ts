@@ -165,6 +165,8 @@ async function main() {
       partnerName: "Test",
       partnerCode: "PTR-0000",
       isPrimaryPartner: false,
+      isOwner: true,
+      tabs: [],
       mustChangePassword: false,
     };
     const partnerReject = await changePartnerPassword({

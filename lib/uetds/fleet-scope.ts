@@ -21,7 +21,7 @@ type DriverRow = {
   company_short_name: string | null;
   company_status: string | null;
   company_integration_status: string | null;
-  membership_status: string | null;
+  service_advanced_enabled: boolean | null;
   default_vehicle_id: string | null;
   default_authority_id: string | null;
 };
@@ -61,7 +61,7 @@ function mapDriver(row: DriverRow, scope: UetdsFleetScope): UetdsFleetOption {
     uetdsCompanyId: row.uetds_company_id,
     company,
     hasNationalId: Boolean(row.national_id?.trim()),
-    membershipStatus: row.membership_status === "gold" ? "gold" : "standard",
+    membershipStatus: row.service_advanced_enabled ? "gold" : "standard",
     defaultVehicleId: row.default_vehicle_id,
     defaultAuthorityId: row.default_authority_id,
     label: uetdsDriverOptionLabel({
@@ -96,7 +96,7 @@ const DRIVER_SELECT = `
   uc.short_name AS company_short_name,
   uc.status AS company_status,
   uc.integration_status AS company_integration_status,
-  d.membership_status,
+  d.service_advanced_enabled,
   dv.id AS default_vehicle_id,
   CASE
     WHEN ea.id IS NULL THEN NULL

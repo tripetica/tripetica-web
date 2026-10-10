@@ -3,24 +3,35 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { GpsLiveMap, type GpsFleetMapPin } from "@/components/gps/live-map";
-import { gpsFleetHistoryReady, gpsFleetPoint, readGpsFleet, type GpsFleetVehicle } from "@/lib/gps/fleet";
+import { gpsFleetHistoryReady, gpsFleetItemKey, gpsFleetPoint, readGpsFleet, type GpsFleetVehicle } from "@/lib/gps/fleet";
+import { adoptFleetSelection } from "@/lib/gps/ops-fleet-filter";
+import { OpsFleetFilter } from "@/components/gps/ops-fleet-filter";
+import { useOpsGpsPanelVisible } from "@/components/gps/ops-gps-tabs";
 import { googleMapsUrl, gpsClock, gpsPopupClock, gpsPopupSpeed, gpsSpeed, yandexMapsUrl } from "@/lib/gps/format";
-import { GPS_LIVE_POLL_MS, readGpsLiveSnapshot, type GpsLiveSnapshot } from "@/lib/gps/live";
+import { GPS_LIVE_POLL_MS, readGpsLiveSnapshot, type GpsLiveSnapshot, type GpsRecentFix } from "@/lib/gps/live";
 import {
   GPS_POPUP_DEFAULTS,
-  gpsPresenceMarker,
-  gpsResolveMotion,
+  gpsMapMarkerState,
   gpsPopupStorageKey,
   readGpsPopupPrefs,
-  type GpsMotionMemory,
   type GpsPopupPrefs,
 } from "@/lib/gps/map-popup";
+import { gpsSpeedKmSa, mobileDisplaySpeedMps } from "@/lib/gps/mobile-speed";
+import { gpsMotionView, type GpsMotionFix } from "@/lib/gps/motion";
 import { gpsPresence } from "@/lib/gps/presence";
 import { type GpsCopy } from "@/lib/gps/copy";
 import { GpsAtsPanel } from "@/components/gps/ats-panel";
 import { type GpsAtsPanel as GpsAtsPanelState } from "@/lib/gps/ats-panel-state";
 import { GpsSectionToggle } from "@/components/gps/section-toggle";
 import { GpsWifiShareSwitch } from "@/components/gps/wifi-share-switch";
+import { GpsImmobilizerSwitch } from "@/components/gps/immobilizer-switch";
+import { GpsPositionHistory, type GpsHistoryModel } from "@/components/gps/position-history";
+import { GpsShareHistory } from "@/components/gps/share-history";
+import { GpsWifiPanel, type GpsWifiPanelDevice } from "@/components/gps/wifi-panel";
+import { GpsCameraLive } from "@/components/gps/camera-live";
+import { cameraIdlePhase } from "@/lib/gps/camera";
+import { type ShareHistoryPreset } from "@/lib/gps/share-history";
+import { type ImmobilizerPanel } from "@/lib/teltonika/immobilizer";
 
 export function GpsLiveSection({
   copy,
@@ -39,7 +50,7 @@ export function GpsLiveSection({
   showDeviceList,
   viewerId,
   historyQuery,
-  gps,
+  history = null,
   wifi,
   camera,
   awaitingPick = false,
@@ -51,6 +62,15 @@ export function GpsLiveSection({
   ats = null,
   canControlAts = false,
   deviceControls = true,
+  immobilizer = null,
+  shareEvents = [],
+  sharePreset = "week",
+  shareFromLocal = "",
+  shareToLocal = "",
+  wifiDevice = null,
+  cameraDevice = null,
+  fleetUrl = "/api/gps/fleet",
+  opsFilter = false,
 }: {
   copy: GpsCopy;
   listPath: string;
@@ -68,7 +88,7 @@ export function GpsLiveSection({
   showDeviceList: boolean;
   viewerId: string;
   historyQuery: string;
-  gps: ReactNode;
+  history?: GpsHistoryModel | null;
   wifi: ReactNode;
   camera: ReactNode;
   awaitingPick?: boolean;
@@ -80,13 +100,41 @@ export function GpsLiveSection({
   ats?: GpsAtsPanelState | null;
   canControlAts?: boolean;
   deviceControls?: boolean;
+  immobilizer?: ImmobilizerPanel | null;
+  shareEvents?: { id: string; kind: string; createdAt: string }[];
+  sharePreset?: ShareHistoryPreset;
+  shareFromLocal?: string;
+  shareToLocal?: string;
+  wifiDevice?: GpsWifiPanelDevice | null;
+  cameraDevice?: {
+    deviceId: string;
+    surface: "ops" | "partner";
+    lowBatteryState: GpsLiveSnapshot["lowBatteryState"];
+    batteryPercent: number | null;
+    lastHeartbeatAt: string | null;
+    cameraAvailable: boolean | null;
+    cameraReady: boolean | null;
+  } | null;
+  fleetUrl?: string;
+  opsFilter?: boolean;
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
   const [pins, setPins] = useState<GpsFleetMapPin[] | undefined>(() => fleetPinsFrom(fleetVehicles, copy.unassigned));
-  const pinSeed = fleetVehicles?.map((vehicle) => `${vehicle.id}:${vehicle.latitude}:${vehicle.longitude}`).join("|") ?? "";
+  const pinSeed = fleetVehicles?.map((vehicle) => `${vehicle.id}:${vehicle.source ?? "device"}:${vehicle.plate ?? ""}:${vehicle.driverName ?? ""}:${vehicle.latitude}:${vehicle.longitude}:${vehicle.recordedAt ?? ""}`).join("|") ?? "";
   const [seenDevice, setSeenDevice] = useState(deviceId);
   const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(selectedVehicleId);
+  const [seenSelection, setSeenSelection] = useState(selectedVehicleId);
+  const [fleet, setFleet] = useState(fleetVehicles);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set((fleetVehicles ?? []).map((vehicle) => vehicle.id)));
+  const seenFleetIds = useRef<Set<string>>(new Set((fleetVehicles ?? []).map((vehicle) => vehicle.id)));
+  const panelVisible = useOpsGpsPanelVisible();
+  if (selectedVehicleId !== seenSelection) {
+    setSeenSelection(selectedVehicleId);
+    setActiveId(selectedVehicleId);
+    setPendingVehicleId(null);
+  }
   const liveDeviceRef = useRef(deviceId);
   liveDeviceRef.current = deviceId;
   if (deviceId !== seenDevice) {
@@ -97,28 +145,25 @@ export function GpsLiveSection({
   const [tab, setTab] = useState<"gps" | "wifi" | "camera">("gps");
   const visibleTab = deviceControls ? tab : "gps";
   const [prefs, setPrefs] = useState<GpsPopupPrefs>(GPS_POPUP_DEFAULTS);
-  const motionMemory = useRef(new Map<string, GpsMotionMemory>());
   const presence = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
-  const live = snapshot.latitude !== null && snapshot.longitude !== null
+  const motionView = gpsMotionView(motionFixes(snapshot.recent, snapshot), clock);
+  const raw = snapshot.latitude !== null && snapshot.longitude !== null
     ? { latitude: snapshot.latitude, longitude: snapshot.longitude }
     : null;
-  function resolveMotion(id: string, speedMps: number | null, sampledAt: string | null, now = clock) {
-    const parsed = sampledAt ? Date.parse(sampledAt) : Number.NaN;
-    const resolved = gpsResolveMotion({
-      speedMps,
-      sampledAt: Number.isFinite(parsed) ? parsed : null,
-      memory: id ? motionMemory.current.get(id) ?? null : null,
-      now,
-    });
-    if (id) {
-      if (resolved.memory) motionMemory.current.set(id, resolved.memory);
-      else motionMemory.current.delete(id);
-    }
-    return resolved.motion;
-  }
-  const resolveMotionRef = useRef(resolveMotion);
-  resolveMotionRef.current = resolveMotion;
-  const markerState = gpsPresenceMarker(presence, resolveMotion(deviceId, snapshot.speedMps, snapshot.recordedAt));
+  const live = motionView
+    ? { latitude: motionView.latitude, longitude: motionView.longitude }
+    : raw;
+  const markerState = gpsMapMarkerState({
+    receivedAt: snapshot.lastHeartbeatAt,
+    nowMs: clock,
+    motion: motionView?.kind ?? "unknown",
+  });
+  const signalCurrent = markerState === "moving" || markerState === "stopped" || markerState === "unknown" || (markerState === "still" && presence === "online");
+  const liveSpeed = motionView?.liveSpeedMps ?? null;
+  const mobileSpeed = mobileDisplaySpeedMps({
+    motion: motionView?.kind ?? "unknown",
+    speedMps: snapshot.speedMps,
+  });
 
   useEffect(() => {
     if (!viewerId) {
@@ -134,8 +179,9 @@ export function GpsLiveSection({
     }
   }
 
+  const devicePollId = fleetVehicles?.some((vehicle) => vehicle.id === deviceId && vehicle.source === "mobile") ? "" : deviceId;
   useEffect(() => {
-    if (!deviceId) {
+    if (!devicePollId) {
       return;
     }
     let stopped = false;
@@ -211,11 +257,24 @@ export function GpsLiveSection({
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [deviceId, surface]);
+  }, [devicePollId, surface]);
+
+  function adoptVisibleFleet(next: GpsFleetVehicle[]) {
+    if (!opsFilter) return;
+    const seen = seenFleetIds.current;
+    const ids = next.map((vehicle) => vehicle.id);
+    seenFleetIds.current = new Set(ids);
+    setSelectedIds((previous) => {
+      const next = adoptFleetSelection(previous, seen, ids).selected;
+      if (next.size === previous.size && [...next].every((id) => previous.has(id))) return previous;
+      return next;
+    });
+  }
 
   useEffect(() => {
-    setPins(fleetPinsFrom(fleetVehicles, copy.unassigned, (vehicle) => resolveMotionRef.current(vehicle.id, vehicle.speedMps, vehicle.recordedAt)));
-  }, [copy.unassigned, pinSeed]);
+    setFleet(fleetVehicles);
+    if (fleetVehicles) adoptVisibleFleet(fleetVehicles);
+  }, [opsFilter, pinSeed, fleetVehicles]);
 
   useEffect(() => {
     if (!deviceId || snapshot.latitude === null || snapshot.longitude === null) return;
@@ -224,25 +283,44 @@ export function GpsLiveSection({
     setPins((current) => current?.map((pin) => {
       if (pin.id !== deviceId) return pin;
       const presenceNow = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
-      const motion = resolveMotionRef.current(deviceId, snapshot.speedMps, snapshot.recordedAt, clock);
+      const view = gpsMotionView(motionFixes(snapshot.recent, snapshot), clock);
+      const latitudeNow = view?.latitude ?? latitude;
+      const longitudeNow = view?.longitude ?? longitude;
+      const selected = fleetVehicles?.find((item) => item.id === deviceId);
+      const speedMps = selected?.source === "mobile"
+        ? mobileDisplaySpeedMps({ motion: view?.kind ?? "unknown", speedMps: snapshot.speedMps })
+        : view?.liveSpeedMps ?? null;
       return {
         ...pin,
-        latitude,
-        longitude,
+        latitude: latitudeNow,
+        longitude: longitudeNow,
         marker: {
           ...pin.marker,
-          latitude,
-          longitude,
+          latitude: latitudeNow,
+          longitude: longitudeNow,
           plate: plate ?? copy.unassigned,
-          speed: gpsPopupSpeed(snapshot.speedMps),
+          speed: gpsPopupSpeed(speedMps),
           clock: gpsPopupClock(snapshot.recordedAt),
-          coordinates: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          coordinates: `${latitudeNow.toFixed(6)}, ${longitudeNow.toFixed(6)}`,
           headingDeg: snapshot.headingDeg,
-          state: gpsPresenceMarker(presenceNow, motion),
+          state: gpsMapMarkerState({
+            receivedAt: snapshot.lastHeartbeatAt,
+            nowMs: clock,
+            motion: view?.kind ?? "unknown",
+          }),
         },
       };
     }));
-  }, [clock, copy.unassigned, deviceId, plate, snapshot]);
+  }, [clock, copy.unassigned, deviceId, fleetVehicles, plate, snapshot]);
+
+  useEffect(() => {
+    const shown = opsFilter && fleet ? fleet.filter((vehicle) => selectedIds.has(vehicle.id)) : fleet;
+    setPins((current) => {
+      const fresh = fleetPinsFrom(shown, copy.unassigned);
+      if (!fresh || !deviceId) return fresh;
+      return fresh.map((pin) => current?.find((item) => item.id === pin.id && item.id === deviceId) ?? pin);
+    });
+  }, [copy.unassigned, deviceId, fleet, opsFilter, selectedIds]);
 
   useEffect(() => {
     if (!fleetVehicles || fleetVehicles.length < 2) return;
@@ -255,7 +333,7 @@ export function GpsLiveSection({
       running = true;
       controller = new AbortController();
       try {
-        const response = await fetch("/api/gps/fleet", { cache: "no-store", signal: controller.signal });
+        const response = await fetch(fleetUrl, { cache: "no-store", signal: controller.signal });
         if (stopped || response.status === 401) {
           if (response.status === 401) stopped = true;
           return;
@@ -264,11 +342,8 @@ export function GpsLiveSection({
         const next = readGpsFleet(await response.json());
         if (!next) return;
         setClock(Date.now());
-        setPins((current) => {
-          const fresh = fleetPinsFrom(next, copy.unassigned, (vehicle) => resolveMotionRef.current(vehicle.id, vehicle.speedMps, vehicle.recordedAt, Date.now())) ?? [];
-          if (!deviceId) return fresh;
-          return fresh.map((pin) => current?.find((item) => item.id === pin.id && item.id === deviceId) ?? pin);
-        });
+        setFleet(next);
+        adoptVisibleFleet(next);
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) return;
       } finally {
@@ -295,20 +370,52 @@ export function GpsLiveSection({
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [copy.unassigned, deviceId, fleetVehicles]);
+  }, [copy.unassigned, deviceId, fleetUrl, fleetVehicles, opsFilter]);
 
   function chooseVehicle(id: string) {
     onVehicleSelect?.(id);
-    if (!fleetVehicles || fleetVehicles.length <= 1 || !listPath || id === selectedVehicleId) return;
+    setActiveId(id);
+    if (!fleet || fleet.length <= 1 || !listPath || id === selectedVehicleId) return;
     setPendingVehicleId(id);
     const params = new URLSearchParams(rangeSearch);
     params.set("vehicle", id);
     router.replace(`${listPath}?${params.toString()}`, { scroll: false });
   }
 
-  const picking = awaitingPick || Boolean(fleetVehicles && fleetVehicles.length > 1 && !selectedVehicleId);
+  const rawSelected = fleet?.find((vehicle) => vehicle.id === (activeId || selectedVehicleId || deviceId)) ?? null;
+  const selectionHidden = Boolean(opsFilter && rawSelected && !selectedIds.has(rawSelected.id));
+  const selectedFleet = selectionHidden ? null : rawSelected;
+  const picking = selectionHidden || awaitingPick || Boolean(fleet && fleet.length > 1 && !(activeId || selectedVehicleId));
+  const shownMotion = selectedFleet
+    ? gpsMotionView(motionFixes(selectedFleet.recent, selectedFleet), clock)
+    : null;
+  const shownPoint = selectedFleet
+    ? (shownMotion
+      ? { latitude: shownMotion.latitude, longitude: shownMotion.longitude }
+      : (selectedFleet.latitude !== null && selectedFleet.longitude !== null
+        ? { latitude: selectedFleet.latitude, longitude: selectedFleet.longitude }
+        : null))
+    : live;
+  const shownPlate = selectedFleet ? selectedFleet.plate : plate;
+  const shownTime = selectedFleet?.recordedAt ?? snapshot.recordedAt;
+  const shownSpeed = selectedFleet?.source === "mobile"
+    ? mobileDisplaySpeedMps({ motion: shownMotion?.kind ?? "unknown", speedMps: selectedFleet.speedMps })
+    : selectedFleet
+      ? (shownMotion?.liveSpeedMps ?? selectedFleet.speedMps)
+      : liveSpeed;
+  const shownReceived = selectedFleet?.receivedAt ?? selectedFleet?.lastHeartbeatAt ?? snapshot.lastHeartbeatAt;
+  const shownMarker = selectedFleet
+    ? gpsMapMarkerState({
+      receivedAt: shownReceived,
+      nowMs: clock,
+      motion: shownMotion?.kind ?? "unknown",
+    })
+    : markerState;
+  const shownSignal = shownMarker === "moving" || shownMarker === "stopped" || shownMarker === "unknown" || (shownMarker === "still" && (selectedFleet ? gpsPresence(shownReceived, new Date(clock)) : presence) === "online");
+  const historyVehicleId = history?.mode === "mobile" ? history.vehicleId : history?.deviceId ?? null;
+  const historyStale = !selectionHidden && Boolean(selectedFleet && history && historyVehicleId !== selectedFleet.id);
   const deviceLoading = Boolean(pendingVehicleId && pendingVehicleId !== deviceId);
-  const historyNotice = fleetVehicles && !gpsFleetHistoryReady(fleetVehicles.length, selectedVehicleId)
+  const historyNotice = selectionHidden || (fleetVehicles && !gpsFleetHistoryReady(fleetVehicles.length, selectedVehicleId))
     ? copy.historyPick
     : historyBlocked;
 
@@ -327,6 +434,22 @@ export function GpsLiveSection({
         </div>
       ) : null}
       <div className="gps-stack" hidden={visibleTab !== "gps"}>
+      {opsFilter ? (
+        <OpsFleetFilter
+          copy={copy}
+          vehicles={(fleet ?? []).flatMap((vehicle) => vehicle.partnerId && vehicle.partnerName ? [{
+            id: vehicle.id,
+            partnerId: vehicle.partnerId,
+            partnerName: vehicle.partnerName,
+            plate: vehicle.plate,
+            driverName: vehicle.driverName ?? null,
+            deviceCode: vehicle.deviceCode,
+            source: vehicle.source === "mobile" ? "mobile" as const : "device" as const,
+          }] : [])}
+          selected={selectedIds}
+          onChange={setSelectedIds}
+        />
+      ) : null}
       <section className="gps-section">
         <h2>{copy.live}</h2>
         <fieldset className="gps-map-settings">
@@ -353,41 +476,61 @@ export function GpsLiveSection({
           vehicleId={deviceId}
           live={fleetVehicles ? null : live}
           track={[]}
-          active={visibleTab === "gps"}
+          active={visibleTab === "gps" && panelVisible}
           prefs={prefs}
           addressPending={copy.addressPending}
           pins={pins}
-          selectedVehicleId={selectedVehicleId}
-          onVehicleSelect={fleetVehicles ? chooseVehicle : onVehicleSelect}
+          selectedVehicleId={selectionHidden ? null : (activeId ?? selectedVehicleId)}
+          onVehicleSelect={fleet ? chooseVehicle : onVehicleSelect}
           marker={live ? {
             latitude: live.latitude,
             longitude: live.longitude,
             plate: plate ?? copy.unassigned,
-            speed: gpsPopupSpeed(snapshot.speedMps),
+            speed: gpsPopupSpeed(selectedFleet?.source === "mobile" ? mobileSpeed : liveSpeed),
             clock: gpsPopupClock(snapshot.recordedAt),
             coordinates: `${live.latitude.toFixed(6)}, ${live.longitude.toFixed(6)}`,
             headingDeg: snapshot.headingDeg,
             state: markerState,
           } : null}
         />
-        {!picking && live && googleMapsUrl(live.latitude, live.longitude) && yandexMapsUrl(live.latitude, live.longitude) ? (
+        {!picking && shownPoint && googleMapsUrl(shownPoint.latitude, shownPoint.longitude) && yandexMapsUrl(shownPoint.latitude, shownPoint.longitude) ? (
           <div className="gps-nav-links">
-            <a href={googleMapsUrl(live.latitude, live.longitude) ?? undefined} target="_blank" rel="noreferrer">{copy.google}</a>
-            <a href={yandexMapsUrl(live.latitude, live.longitude) ?? undefined} target="_blank" rel="noreferrer">{copy.yandex}</a>
+            <a href={googleMapsUrl(shownPoint.latitude, shownPoint.longitude) ?? undefined} target="_blank" rel="noreferrer">{copy.google}</a>
+            <a href={yandexMapsUrl(shownPoint.latitude, shownPoint.longitude) ?? undefined} target="_blank" rel="noreferrer">{copy.yandex}</a>
           </div>
         ) : picking ? null : <p>{copy.noFix}</p>}
         <dl className="gps-facts">
-          <div className={picking ? "gps-fleet-pick" : undefined}><dt>{copy.plate}</dt><dd>{picking ? copy.fleetPick : (plate ?? copy.unassigned)}</dd></div>
-          <div><dt>{copy.gnssTime}</dt><dd>{picking ? "—" : gpsClock(snapshot.recordedAt)}</dd></div>
-          <div><dt>{copy.speed}</dt><dd>{picking ? "—" : gpsSpeed(snapshot.speedMps)}</dd></div>
-          <div><dt>{copy.gpsFix}</dt><dd>{picking ? "—" : snapshot.gnssFix ? copy.fixYes : copy.fixNo}</dd></div>
-          <div><dt>{copy.satellites}</dt><dd>{picking ? "—" : snapshot.satellites ?? copy.unavailable}</dd></div>
-          <div><dt>{copy.live}</dt><dd>{picking ? "—" : live ? `${live.latitude.toFixed(6)}, ${live.longitude.toFixed(6)}` : copy.unavailable}</dd></div>
+          {selectedFleet?.partnerName ? <div><dt>{copy.partner}</dt><dd>{selectedFleet.partnerName}</dd></div> : null}
+          <div><dt>{copy.positionSource}</dt><dd>{picking ? "—" : selectedFleet?.source === "mobile" ? copy.sourceMobile : copy.sourceTracker}</dd></div>
+          <div><dt>{copy.driverName}</dt><dd>{picking ? "—" : selectedFleet?.driverName || "—"}</dd></div>
+          <div className={picking ? "gps-fleet-pick" : undefined}><dt>{copy.plate}</dt><dd>{picking ? copy.fleetPick : (shownPlate ?? copy.unassigned)}</dd></div>
+          <div><dt>{selectedFleet?.source === "mobile" ? copy.mobileClock : copy.gnssTime}</dt><dd>{picking ? "—" : gpsClock(shownTime)}</dd></div>
+          {selectedFleet?.source === "mobile" ? <div><dt>{copy.accuracy}</dt><dd>{selectedFleet.accuracyM == null ? "—" : `${Math.round(selectedFleet.accuracyM)} m`}</dd></div> : null}
+          <div><dt>{copy.speed}</dt><dd>{picking ? "—" : selectedFleet?.source === "mobile" ? gpsSpeedKmSa(shownSpeed) : gpsSpeed(shownSpeed)}</dd></div>
+          {selectedFleet?.source === "mobile" ? (
+            <div><dt>{copy.mobileConnection}</dt><dd>{picking ? "—" : shownSignal ? copy.mobileConnected : copy.signalLost}</dd></div>
+          ) : (
+            <div><dt>{copy.gpsFix}</dt><dd>{picking ? "—" : shownSignal ? ((selectedFleet?.id === deviceId ? snapshot.gnssFix : selectedFleet?.gnssFix) ? copy.fixYes : copy.fixNo) : copy.signalLost}</dd></div>
+          )}
+          {selectedFleet?.source === "mobile" ? null : <div><dt>{copy.satellites}</dt><dd>{picking ? "—" : (selectedFleet?.id === deviceId ? snapshot.satellites : selectedFleet?.satellites) ?? copy.unavailable}</dd></div>}
+          <div><dt>{shownSignal ? copy.live : copy.fleetLastKnown}</dt><dd>{picking ? "—" : shownPoint ? `${shownPoint.latitude.toFixed(6)}, ${shownPoint.longitude.toFixed(6)}` : copy.unavailable}</dd></div>
         </dl>
       </section>
-      <GpsSectionToggle key={selectedVehicleId ?? "fleet"} showLabel={copy.showHistory} hideLabel={copy.hideHistory} rememberKey={deviceId && !picking ? `gps-history:${deviceId}` : undefined} historyQuery={historyQuery} blockedMessage={historyNotice}>
-        {gps}
+      <GpsSectionToggle key={activeId ?? selectedVehicleId ?? "fleet"} showLabel={copy.showHistory} hideLabel={copy.hideHistory} rememberKey={deviceId && !picking ? `gps-history:${activeId ?? deviceId}` : undefined} historyQuery={historyQuery} blockedMessage={historyStale ? copy.deviceLoading : historyNotice}>
+        {history && !historyStale && !selectionHidden ? <GpsPositionHistory copy={copy} history={history} /> : null}
       </GpsSectionToggle>
+      {selectedFleet?.source === "mobile" && activeId && !historyStale ? (
+        <GpsShareHistory
+          copy={copy}
+          action={listPath}
+          vehicleId={activeId}
+          events={shareEvents}
+          preset={sharePreset}
+          fromLocal={shareFromLocal}
+          toLocal={shareToLocal}
+        />
+      ) : null}
+      {selectedFleet?.source === "mobile" ? null : (
       <GpsSectionToggle showLabel={copy.showDevice} hideLabel={copy.hideDevice} blockedMessage={picking ? copy.devicePick : undefined}>
         <div className="gps-device-head">
           <h2>{copy.deviceInfo}</h2>
@@ -406,6 +549,8 @@ export function GpsLiveSection({
         {deviceLoading ? <p className="gps-inline-note">{copy.deviceLoading}</p> : (
           <dl className="gps-facts">
             <div><dt>{copy.deviceId}</dt><dd>{deviceCode}</dd></div>
+            {selectedFleet?.id === deviceId && selectedFleet.manufacturer ? <div><dt>{copy.manufacturer}</dt><dd>{selectedFleet.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</dd></div> : null}
+            {selectedFleet?.id === deviceId && selectedFleet.trackerModel ? <div><dt>{copy.trackerModel}</dt><dd>{selectedFleet.trackerModel.toUpperCase()}</dd></div> : null}
             <div><dt>{copy.imei}</dt><dd>{imei ?? copy.unavailable}</dd></div>
             <div><dt>{copy.firmware}</dt><dd>{snapshot.firmware ?? copy.unavailable}</dd></div>
             <div><dt>{copy.operator}</dt><dd>{snapshot.operatorName ?? copy.unavailable}</dd></div>
@@ -417,9 +562,22 @@ export function GpsLiveSection({
             {surface === "ops" && partnerLabel ? <div><dt>{copy.partner}</dt><dd>{partnerLabel}</dd></div> : null}
           </dl>
         )}
+        {!deviceLoading && immobilizer ? (
+          <GpsImmobilizerSwitch
+            copy={copy}
+            deviceId={immobilizer.deviceId}
+            surface={surface}
+            request={immobilizer.request}
+            output={immobilizer.output}
+            phase={immobilizer.phase}
+            commandAt={immobilizer.commandAt}
+            lastHeartbeatAt={immobilizer.lastHeartbeatAt}
+          />
+        ) : null}
         {!deviceLoading && ats ? <GpsAtsPanel copy={copy} panel={ats} canControl={canControlAts} /> : null}
       </GpsSectionToggle>
-      {surface === "ops" ? (
+      )}
+      {surface === "ops" && !picking && !selectionHidden && (!fleet || (selectedFleet?.source !== "mobile" && selectedFleet?.id === deviceId)) ? (
         <section className="gps-section">
           <h2>{copy.technical}</h2>
           <dl className="gps-facts">
@@ -458,7 +616,7 @@ export function GpsLiveSection({
         </section>
       ) : null}
       </div>
-      {deviceControls ? <div hidden={visibleTab !== "wifi"}>
+      {deviceControls && visibleTab === "wifi" ? <div>
         <section className="gps-section">
           <div className="gps-wifi-head">
             <h2>{copy.wifi}</h2>
@@ -474,58 +632,92 @@ export function GpsLiveSection({
               />
             ) : null}
           </div>
-          {wifi}
+          {wifiDevice ? <GpsWifiPanel copy={copy} device={wifiDevice} /> : wifi}
         </section>
       </div> : null}
-      {deviceControls ? <div hidden={visibleTab !== "camera"}>{camera}</div> : null}
+      {deviceControls && visibleTab === "camera" ? (
+        <div>
+          {cameraDevice ? (
+            <GpsCameraLive
+              copy={copy}
+              deviceId={cameraDevice.deviceId}
+              surface={cameraDevice.surface}
+              initialLowBatteryState={cameraDevice.lowBatteryState}
+              initialBatteryPercent={cameraDevice.batteryPercent}
+              initialPhase={cameraIdlePhase({
+                presence: gpsPresence(cameraDevice.lastHeartbeatAt, new Date(clock)),
+                cameraAvailable: cameraDevice.cameraAvailable,
+                cameraReady: cameraDevice.cameraReady,
+              })}
+            />
+          ) : camera}
+        </div>
+      ) : null}
     </>
   );
 }
 
-function fleetPinsFrom(
-  vehicles: GpsFleetVehicle[] | undefined,
-  unassigned: string,
-  motionFor?: (vehicle: GpsFleetVehicle) => ReturnType<typeof gpsResolveMotion>["motion"],
-) {
+function motionFixes(
+  recent: GpsRecentFix[] | undefined,
+  fallback: { recordedAt: string | null; latitude: number | null; longitude: number | null; speedMps: number | null },
+): GpsMotionFix[] {
+  if (recent && recent.length > 0) {
+    return recent.map((fix) => ({
+      at: fix.at,
+      latitude: fix.latitude,
+      longitude: fix.longitude,
+      speedMps: fix.speedMps,
+    }));
+  }
+  const at = fallback.recordedAt ? Date.parse(fallback.recordedAt) : Number.NaN;
+  if (!Number.isFinite(at) || fallback.latitude === null || fallback.longitude === null) return [];
+  return [{
+    at,
+    latitude: fallback.latitude,
+    longitude: fallback.longitude,
+    speedMps: fallback.speedMps,
+  }];
+}
+
+function fleetPinsFrom(vehicles: GpsFleetVehicle[] | undefined, unassigned: string) {
   if (!vehicles) return undefined;
   const now = new Date();
   const pins: GpsFleetMapPin[] = [];
   for (const vehicle of vehicles) {
-    const pin = fleetPin(vehicle, unassigned, now, motionFor?.(vehicle));
+    const pin = fleetPin(vehicle, unassigned, now);
     if (pin) pins.push(pin);
   }
   return pins;
 }
 
-function fleetPin(
-  vehicle: GpsFleetVehicle,
-  unassigned: string,
-  now: Date,
-  motion?: ReturnType<typeof gpsResolveMotion>["motion"],
-): GpsFleetMapPin | null {
-  const point = gpsFleetPoint(vehicle.latitude, vehicle.longitude);
+function fleetPin(vehicle: GpsFleetVehicle, unassigned: string, now: Date): GpsFleetMapPin | null {
+  const view = gpsMotionView(motionFixes(vehicle.recent, vehicle), now.getTime());
+  const stored = gpsFleetPoint(vehicle.latitude, vehicle.longitude);
+  const point = view
+    ? { latitude: view.latitude, longitude: view.longitude }
+    : stored;
   if (!point) return null;
   const presence = gpsPresence(vehicle.lastHeartbeatAt, now);
-  const sampledAt = vehicle.recordedAt ? Date.parse(vehicle.recordedAt) : Number.NaN;
-  const resolved = motion ?? gpsResolveMotion({
-    speedMps: vehicle.speedMps,
-    sampledAt: Number.isFinite(sampledAt) ? sampledAt : null,
-    memory: null,
-    now: now.getTime(),
-  }).motion;
   return {
     id: vehicle.id,
+    markerKey: gpsFleetItemKey(vehicle),
     latitude: point.latitude,
     longitude: point.longitude,
     marker: {
       latitude: point.latitude,
       longitude: point.longitude,
       plate: vehicle.plate ?? unassigned,
-      speed: gpsPopupSpeed(vehicle.speedMps),
+      speed: gpsPopupSpeed(vehicle.source === "mobile"
+        ? mobileDisplaySpeedMps({ motion: view?.kind ?? "unknown", speedMps: vehicle.speedMps })
+        : view?.liveSpeedMps ?? null),
       clock: gpsPopupClock(vehicle.recordedAt),
       coordinates: `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`,
       headingDeg: vehicle.headingDeg,
-      state: gpsPresenceMarker(presence, resolved),
+      state: gpsMapMarkerState({
+        receivedAt: vehicle.receivedAt ?? vehicle.lastHeartbeatAt,
+        nowMs: now.getTime(),
+        motion: view?.kind ?? "unknown",
+      }),
     },
   };
 }

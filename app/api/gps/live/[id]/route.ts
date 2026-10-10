@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { gpsLiveEtag } from "@/lib/gps/live";
 import { getGpsLive } from "@/lib/gps/queries";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export const runtime = "nodejs";
@@ -40,7 +41,7 @@ export async function GET(
 async function livePartnerScope(surface: string | null) {
   if (surface === "partner") {
     const actor = await getPartnerActor();
-    if (!actor || actor.mustChangePassword) {
+    if (!actor || actor.mustChangePassword || !partnerHasTab(actor, "gps")) {
       return "denied" as const;
     }
     return actor.partnerId;

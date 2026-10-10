@@ -21,6 +21,7 @@ import {
   type UetdsDriverSubscriptionListSummary,
 } from "@/lib/uetds/driver-subscription";
 import { listFleetChoicesForPartners, type FleetChoicesByPartner } from "@/lib/partner/fleet-pairing";
+import { emptyDriverServices, selectedServiceTotal, type DriverServiceSelection } from "@/lib/uetds/service-subscriptions";
 
 export const OPS_DRIVERS_PAGE_SIZE = 25;
 
@@ -31,6 +32,7 @@ export type OpsDriverListItem = {
   languageCodes: string[];
   status: PartnerFleetStatus;
   membershipStatus: DriverMembershipStatus;
+  services: DriverServiceSelection;
   partnerId: string;
   partnerName: string;
   partnerCode: string;
@@ -64,6 +66,12 @@ type DriverListRow = {
   current_period_status: string | null;
   next_period_status: string | null;
   membership_status: string | null;
+  service_standard_enabled: boolean | null;
+  service_standard_fee: string | null;
+  service_advanced_enabled: boolean | null;
+  service_advanced_fee: string | null;
+  service_mobile_gps_enabled: boolean | null;
+  service_mobile_gps_fee: string | null;
   default_vehicle_id: string | null;
   default_authority_id: string | null;
 };
@@ -97,6 +105,16 @@ function mapListItem(row: DriverListRow): OpsDriverListItem {
     membershipStatus: isDriverMembershipStatus(row.membership_status)
       ? row.membership_status
       : "standard",
+    services: row.service_standard_enabled == null && row.service_advanced_enabled == null
+      ? emptyDriverServices()
+      : {
+          standardEnabled: Boolean(row.service_standard_enabled),
+          standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+          advancedEnabled: Boolean(row.service_advanced_enabled),
+          advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+          mobileEnabled: Boolean(row.service_mobile_gps_enabled),
+          mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+        },
     partnerId: row.partner_id,
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
@@ -105,7 +123,14 @@ function mapListItem(row: DriverListRow): OpsDriverListItem {
     defaultAuthorityId: row.default_authority_id,
     uetdsSubscription: mapUetdsSubscriptionListSummary({
       enrolledAt: row.uetds_subscription_enrolled_at,
-      monthlyFee: row.uetds_subscription_monthly_fee,
+      monthlyFee: selectedServiceTotal({
+        standardEnabled: Boolean(row.service_standard_enabled),
+        standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+        advancedEnabled: Boolean(row.service_advanced_enabled),
+        advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+        mobileEnabled: Boolean(row.service_mobile_gps_enabled),
+        mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+      }) ?? row.uetds_subscription_monthly_fee,
       currency: row.uetds_subscription_currency,
       currentPeriodStatus: row.current_period_status,
       nextPeriodStatus: row.next_period_status,

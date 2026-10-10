@@ -365,6 +365,17 @@ export async function updateUetdsNotification(input: {
   if (!original || !notification.ministryReference || !notification.companyId) {
     return { ok: false, error: "invalid" };
   }
+  if (original.driverId) {
+    const subscription = await loadDriverUetdsSubscriptionEntitlement(original.driverId);
+    if (
+      !isUetdsDriverSubscriptionEntitled({
+        enrolled: subscription.enrolled,
+        periods: subscription.periods,
+      })
+    ) {
+      return { ok: false, error: "subscription" };
+    }
+  }
   const nowUtcMs = input.nowUtcMs ?? Date.now();
   const window = evaluateUetdsEditWindow(original.startDate, original.startTime, nowUtcMs);
   const requested = diffUetdsEdit(original, edited);

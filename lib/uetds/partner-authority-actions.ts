@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 import {
   isEdevletAuthorityStatus,
@@ -27,7 +28,7 @@ function companyIdsFromForm(form: FormData) {
 
 async function requireOwner() {
   const actor = await getPartnerActor();
-  if (!actor || actor.mustChangePassword) return null;
+  if (!actor || actor.mustChangePassword || !partnerHasTab(actor, "edevlet")) return null;
   return actor;
 }
 

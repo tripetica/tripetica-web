@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { claimPartnerJob } from "@/lib/partner/jobs";
+import { firstPartnerTabPath, partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerJobFormState = {
@@ -24,6 +25,9 @@ async function requirePartner(locale: Locale) {
   }
   if (actor.mustChangePassword) {
     redirect(localizedPath(locale, "/partner/change-password"));
+  }
+  if (!partnerHasTab(actor, "jobs")) {
+    redirect(localizedPath(locale, firstPartnerTabPath(actor)));
   }
   return actor;
 }

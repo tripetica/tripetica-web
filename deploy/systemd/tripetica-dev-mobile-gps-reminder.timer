@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll Tripetica DEV mobile GPS trip reminders
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Persistent=true
+Unit=tripetica-dev-mobile-gps-reminder.service
+
+[Install]
+WantedBy=timers.target

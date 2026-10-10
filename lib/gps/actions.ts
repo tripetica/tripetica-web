@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isLocale, locales } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
 import {
@@ -14,6 +15,9 @@ import {
   wifiSsidError,
 } from "@/lib/gps/contract";
 import { softwareRebootPayload, wifiConfigPayload } from "@/lib/gps/commands";
+import { gpsRegistrationProfile, gpsSecretRegistrationField } from "@/lib/gps/registration";
+import { gpsReceiver } from "@/lib/teltonika/accept";
+import { trackerModel } from "@/lib/teltonika/immobilizer";
 import { canDeleteGpsDevice } from "@/lib/gps/delete-access";
 import {
   assignGpsDevice,
@@ -90,6 +94,8 @@ export async function createGpsDeviceAction(
   const deviceCode = deviceCodeRaw ? normalizeDeviceCode(deviceCodeRaw) : null;
   const label = String(formData.get("label") ?? "").trim();
   const imeiRaw = String(formData.get("imei") ?? "").trim();
+  const receiver = gpsReceiver(formData.get("receiver"));
+  const model = trackerModel(formData.get("trackerModel"));
   if (deviceCodeRaw && !deviceCode) {
     return { ok: false, error: "device_code" };
   }
@@ -99,8 +105,25 @@ export async function createGpsDeviceAction(
   if (!partnerRaw && vehicleRaw) {
     return { ok: false, error: "vehicle" };
   }
-  if (imeiRaw && !/^[0-9]{14,16}$/.test(imeiRaw)) {
-    return { ok: false, error: "imei" };
+  if (!receiver || (receiver === "teltonika" && !model)) {
+    return { ok: false, error: "invalid" };
+  }
+  for (const key of formData.keys()) {
+    if (gpsSecretRegistrationField(key)) {
+      return { ok: false, error: "invalid" };
+    }
+  }
+  const profile = gpsRegistrationProfile({
+    receiver,
+    model: receiver === "teltonika" ? model : null,
+    imei: imeiRaw,
+    serial: receiver === "teltonika" ? String(formData.get("serialNumber") ?? "") : "",
+    simPhone: receiver === "teltonika" ? String(formData.get("simPhone") ?? "") : "",
+    simOperator: receiver === "teltonika" ? String(formData.get("simOperator") ?? "") : "",
+    simApn: receiver === "teltonika" ? String(formData.get("simApn") ?? "") : "",
+  });
+  if (!profile.ok) {
+    return { ok: false, error: profile.error };
   }
   try {
     const created = await createGpsDevice({
@@ -108,7 +131,10 @@ export async function createGpsDeviceAction(
       vehicleId: vehicleRaw || null,
       deviceCode,
       label: label || null,
-      imei: imeiRaw || null,
+      imei: profile.value.imei,
+      receiver: profile.value.receiver,
+      trackerModel: profile.value.trackerModel,
+      profile: profile.value,
       assignedBy: actorLabel(actor),
     });
     revalidateGps(created.id);
@@ -251,7 +277,7 @@ export async function queueGpsWifiAction(formData: FormData) {
     actorLabel = `${ops.firstName} ${ops.lastName}`.trim();
   } else {
     const partner = await getPartnerActor();
-    if (!partner || !partner.isPrimaryPartner) {
+    if (!partner || !partner.isPrimaryPartner || !partnerHasTab(partner, "gps")) {
       return;
     }
     partnerScope = partner.partnerId;
@@ -317,7 +343,7 @@ export async function queueGpsWifiShareAction(input: {
     createdBy = "ops";
   } else {
     const partner = await getPartnerActor();
-    if (!partner || !partner.isPrimaryPartner) return { ok: false };
+    if (!partner || !partner.isPrimaryPartner || !partnerHasTab(partner, "gps")) return { ok: false };
     partnerScope = partner.partnerId;
     actorLabel = partner.partnerName;
   }
@@ -342,7 +368,7 @@ export async function queueGpsLowBatteryAction(input: {
   const deviceId = input.deviceId.trim();
   if (!deviceId || (input.action !== "keep_on" && input.action !== "save_power")) return { ok: false };
   const partner = await getPartnerActor();
-  if (!partner || !partner.isPrimaryPartner) return { ok: false };
+  if (!partner || !partner.isPrimaryPartner || !partnerHasTab(partner, "gps")) return { ok: false };
   const device = await getGpsDevice(deviceId, partner.partnerId);
   if (!device?.partnerId || device.partnerId !== partner.partnerId) return { ok: false };
   const queued = await queueGpsLowBattery({
@@ -375,7 +401,7 @@ export async function queueGpsRebootAction(formData: FormData) {
     createdBy = "ops";
   } else {
     const partner = await getPartnerActor();
-    if (!partner || !partner.isPrimaryPartner) {
+    if (!partner || !partner.isPrimaryPartner || !partnerHasTab(partner, "gps")) {
       return;
     }
     partnerScope = partner.partnerId;

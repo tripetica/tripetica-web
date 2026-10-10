@@ -7,6 +7,7 @@ import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type PartnerCopy } from "@/lib/partner/copy";
+import { serviceSubscriptionNames } from "@/lib/uetds/service-subscriptions";
 import {
   patchPartnerDriverAuthorityAction,
   patchPartnerDriverCompanyAction,
@@ -269,7 +270,14 @@ export function PartnerDriverList({
                     </span>
                   </td>
                   <td>
-                    {driver.membershipStatus === "gold" ? copy.membershipGold : copy.membershipStandard}
+                    {serviceSubscriptionNames(driver.services ?? {
+                      standardEnabled: false, standardFee: null, advancedEnabled: false, advancedFee: null, mobileEnabled: false, mobileFee: null,
+                    }, {
+                      standard: copy.serviceStandard,
+                      advanced: copy.serviceAdvanced,
+                      mobile: copy.serviceMobile,
+                      none: copy.serviceNone,
+                    })}
                   </td>
                   <PartnerDriverSubscriptionReadOnlyCells
                     locale={locale}

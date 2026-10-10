@@ -1,0 +1,45 @@
+[Unit]
+Description=Tripetica DEV mobile GPS trip reminders
+After=network-online.target postgresql.service
+Wants=postgresql.service network-online.target
+
+[Service]
+Type=oneshot
+User=tripetica-dev
+Group=tripetica-dev
+WorkingDirectory=/var/lib/tripetica-dev/app
+ExecStart=/usr/bin/npm run mobile-gps:remind
+Environment=MOBILE_GPS_REMINDER_DELIVER=yes
+TimeoutStartSec=120
+Nice=10
+UMask=0077
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/var/lib/tripetica-dev
+Environment=npm_config_cache=/var/lib/tripetica-dev/npm-cache
+Environment=NODE_ENV=development
+Environment=EXPECTED_DATABASE=tripetica_dev
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+BindPaths=/root/tripetica-web:/var/lib/tripetica-dev/app
+ReadWritePaths=/var/lib/tripetica-dev
+InaccessiblePaths=/srv/tripetica
+BindReadOnlyPaths=/dev/null:/var/lib/tripetica-dev/app/.env.local
+BindReadOnlyPaths=/dev/null:/var/lib/tripetica-dev/app/.env.development.migrate.local
+StandardOutput=journal
+StandardError=journal

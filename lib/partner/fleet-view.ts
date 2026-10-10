@@ -2,6 +2,7 @@ import { parsePhoneNumberFromString } from "libphonenumber-js/min";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type DriverMembershipStatus } from "@/lib/ops/driver-membership";
 import { type UetdsDriverSubscriptionListSummary } from "@/lib/uetds/driver-subscription";
+import { type DriverServiceSelection } from "@/lib/uetds/service-subscriptions";
 
 export type { UetdsCompanyRef };
 
@@ -25,6 +26,7 @@ export type PartnerDriverRecord = {
   languageCodes: string[];
   status: PartnerFleetStatus;
   membershipStatus?: DriverMembershipStatus;
+  services?: DriverServiceSelection;
   deletedAt: string | null;
   updatedAt: string;
   uetdsCompanyId?: string | null;

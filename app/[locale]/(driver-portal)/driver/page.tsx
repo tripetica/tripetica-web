@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DriverPortalJobList } from "@/components/driver-portal/driver-portal-job-list";
+import { DriverGpsPushPrompt } from "@/components/driver-portal/gps-push-prompt";
+import { MobileGpsShare } from "@/components/gps/mobile-share";
 import { DriverPortalLoginForm } from "@/components/driver-portal/driver-portal-login-form";
 import { DriverPortalHeader } from "@/components/driver-portal/driver-portal-header";
 import { driverPortalCopy } from "@/lib/driver-portal/copy";
 import { listDriverPortalJobs } from "@/lib/driver-portal/jobs";
 import { getDriverPortalActor } from "@/lib/driver-portal/session";
+import { loadMobileShare } from "@/lib/gps/mobile-store";
 import { isLocale } from "@/lib/i18n/config";
 import { noindexNofollowRobots } from "@/lib/seo/metadata";
 
@@ -38,9 +41,21 @@ export default async function DriverPortalPage({
     );
   }
   const jobs = await listDriverPortalJobs(actor.driverId);
+  const share = await loadMobileShare({ surface: "driver", partnerId: actor.partnerId, driverId: actor.driverId });
   return (
     <main className="driver-task-page">
       <DriverPortalHeader locale={locale} title={driverPortalCopy.jobsTitle} />
+      {share ? <DriverGpsPushPrompt /> : null}
+      {share ? <MobileGpsShare title="Konum Paylaş" initial={{
+        driverName: share.driverName,
+        plate: share.plate,
+        sessionId: share.sessionId,
+        sharing: share.sharing,
+        tokenMatches: share.tokenMatches,
+        lastFixAt: share.lastFixAt,
+        accuracyM: share.accuracyM,
+        fresh: share.fresh,
+      }} /> : null}
       <DriverPortalJobList locale={locale} jobs={jobs} />
     </main>
   );

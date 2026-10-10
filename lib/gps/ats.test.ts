@@ -169,7 +169,9 @@ test("retries stop when ATS is off, the ministry rejects, or attempts are exhaus
   assert.equal(retry.retry, true);
   if (retry.retry) assert.equal(retry.nextAttemptAt.toISOString(), "2026-10-08T09:01:00.000Z");
   assert.equal(nextAtsAttempt({ enabled: true, attemptCount: 3, sonucKodu: null, now }).reason, "exhausted");
-  assert.match(ATS_RETRY_SELECT_SQL, /settings\.enabled = TRUE/);
+  assert.match(ATS_RETRY_SELECT_SQL, /device\.live_source = TRUE/);
+  assert.match(ATS_RETRY_SELECT_SQL, /settings\.enabled = FALSE/);
+  assert.doesNotMatch(ATS_RETRY_SELECT_SQL, /settings\.enabled = TRUE/);
   assert.match(ATS_RETRY_SELECT_SQL, /ministry_env = 'test'/);
   const migration = readFileSync(new URL("../../db/migrations/075_gps_ats.sql", import.meta.url), "utf8");
   assert.match(migration, /position_id UUID NOT NULL UNIQUE/);

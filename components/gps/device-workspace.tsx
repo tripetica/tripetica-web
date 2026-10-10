@@ -1,26 +1,19 @@
-import { queueGpsWifiAction, revokeGpsDeviceTokenAction, setGpsDeviceStatusAction, updateGpsImeiAction } from "@/lib/gps/actions";
+import { revokeGpsDeviceTokenAction, setGpsDeviceStatusAction, updateGpsImeiAction } from "@/lib/gps/actions";
 import { commandAuditState, type GpsAuditState } from "@/lib/gps/commands";
-import { GPS_WIFI_MAX_CLIENTS_MAX, GPS_WIFI_MAX_CLIENTS_MIN } from "@/lib/gps/contract";
 import { gpsErrorText, type GpsCopy } from "@/lib/gps/copy";
 import { gpsClock } from "@/lib/gps/format";
 import { type GpsLiveSnapshot } from "@/lib/gps/live";
-import { type GpsCommandView, type GpsDeviceListItem, type GpsRoutePoint, type GpsVehicleChoice } from "@/lib/gps/queries";
+import { listGpsRecentFixes, type GpsCommandView, type GpsDeviceListItem, type GpsRoutePoint, type GpsVehicleChoice } from "@/lib/gps/queries";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
-import Form from "next/form";
-import { type ReactNode } from "react";
-import { GpsCameraLive } from "@/components/gps/camera-live";
-import { cameraIdlePhase } from "@/lib/gps/camera";
-import { gpsPresence } from "@/lib/gps/presence";
 import { GpsDeviceAssignmentForm } from "@/components/gps/device-assignment-form";
 import { GpsDeviceDelete } from "@/components/gps/device-delete";
-import { GpsRebootControl } from "@/components/gps/reboot-control";
 import { loadGpsAtsPanel } from "@/lib/gps/ats-control";
-import { GpsHistoryPlayback } from "@/components/gps/history-playback";
 import { GpsLiveSection } from "@/components/gps/live-section";
 import { type GpsFleetVehicle } from "@/lib/gps/fleet";
 import { GpsRemoteCommands } from "@/components/gps/remote-commands";
 import { GpsTokenRotateForm } from "@/components/gps/token-rotate-form";
+import { loadImmobilizerPanel } from "@/lib/teltonika/immobilizer-store";
 
 export async function GpsDeviceWorkspace({
   locale,
@@ -45,6 +38,12 @@ export async function GpsDeviceWorkspace({
   historyPath,
   rangeSearch = "",
   deviceControls = true,
+  mobileFocus = null,
+  shareEvents = [],
+  sharePreset = "week",
+  shareFromLocal = "",
+  shareToLocal = "",
+  mobileRoute = null,
 }: {
   locale: Locale;
   copy: GpsCopy;
@@ -68,19 +67,43 @@ export async function GpsDeviceWorkspace({
   historyPath?: string;
   rangeSearch?: string;
   deviceControls?: boolean;
+  mobileFocus?: GpsFleetVehicle | null;
+  shareEvents?: { id: string; kind: string; createdAt: string }[];
+  sharePreset?: "today" | "yesterday" | "3d" | "week" | "range";
+  shareFromLocal?: string;
+  shareToLocal?: string;
+  mobileRoute?: { total: number; step: number; points: { id: string; recordedAt: string; latitude: number; longitude: number; speedMps: number | null; headingDeg: number | null }[] } | null;
 }) {
-  const listPath = localizedPath(locale, surface === "ops" ? "/ops/gps" : "/partner/gps");
+  const listPath = `${localizedPath(locale, surface === "ops" ? "/ops/gps" : "/partner/gps")}${surface === "ops" && showDeviceList ? "?tab=devices" : ""}`;
+  const recentByDevice = await listGpsRecentFixes([
+    device?.id ?? "",
+    ...(fleetVehicles?.filter((vehicle) => vehicle.source !== "mobile").map((vehicle) => vehicle.id) ?? []),
+  ]);
+  const fleetWithMotion = fleetVehicles?.map((vehicle) => ({
+    ...vehicle,
+    recent: vehicle.source === "mobile" ? vehicle.recent ?? [] : recentByDevice.get(vehicle.id) ?? [],
+  }));
   if (!device) {
     return (
       <div className="gps-screen">
         <GpsLiveSection
           copy={copy}
           listPath={listPath}
-          plate={null}
-          deviceCode=""
-          deviceId=""
+          plate={mobileFocus?.plate ?? null}
+          deviceCode={mobileFocus?.driverName ?? ""}
+          deviceId={mobileFocus?.id ?? ""}
           surface={surface}
-          initial={emptyGpsSnapshot()}
+          initial={{
+            ...emptyGpsSnapshot(),
+            recordedAt: mobileFocus?.recordedAt ?? null,
+            latitude: mobileFocus?.latitude ?? null,
+            longitude: mobileFocus?.longitude ?? null,
+            speedMps: mobileFocus?.speedMps ?? null,
+            headingDeg: mobileFocus?.headingDeg ?? null,
+            gnssFix: mobileFocus ? true : null,
+            lastHeartbeatAt: mobileFocus?.lastHeartbeatAt ?? null,
+            recent: mobileFocus?.recent ?? [],
+          }}
           imei={null}
           status="active"
           company={null}
@@ -90,13 +113,27 @@ export async function GpsDeviceWorkspace({
           showDeviceList={false}
           viewerId={viewerId}
           historyQuery=""
-          awaitingPick
-          fleetVehicles={fleetVehicles}
-          selectedVehicleId={null}
+          awaitingPick={!mobileFocus}
+          fleetVehicles={fleetWithMotion}
+          selectedVehicleId={mobileFocus?.id ?? null}
           rangeSearch={rangeSearch}
-          gps={null}
-          wifi={deviceControls ? <p className="gps-inline-note">{copy.fleetPick}</p> : null}
-          camera={deviceControls ? <p className="gps-inline-note">{copy.fleetPick}</p> : null}
+          shareEvents={shareEvents}
+          sharePreset={sharePreset}
+          shareFromLocal={shareFromLocal}
+          shareToLocal={shareToLocal}
+          history={mobileFocus ? {
+            mode: "mobile",
+            plate: mobileFocus.plate,
+            vehicleId: mobileFocus.id,
+            points: mobileRoute?.points ?? [],
+            fromLocal,
+            toLocal,
+            fromIso,
+            toIso,
+            historyPath: listPath,
+          } : null}
+          wifi={null}
+          camera={null}
           deviceControls={deviceControls}
         />
       </div>
@@ -141,23 +178,9 @@ export async function GpsDeviceWorkspace({
     wifiShareCommand: null,
     lowBatteryState: device.lowBatteryState,
     lowBatteryGraceRemainingSeconds: device.lowBatteryGraceRemainingSeconds,
+    recent: recentByDevice.get(device.id) ?? [],
   };
   const errorText = gpsErrorText(copy, error);
-  const panels = gpsWorkspacePanels({
-    locale,
-    copy,
-    surface,
-    device,
-    route,
-    fromLocal,
-    toLocal,
-    fromIso,
-    toIso,
-    errorText,
-    canManage,
-    historyPath: detailPath,
-    includeVehicle: Boolean(fleetVehicles && fleetVehicles.length > 1),
-  });
 
   return (
     <div className="gps-screen">
@@ -179,14 +202,61 @@ export async function GpsDeviceWorkspace({
         showDeviceList={showDeviceList}
         viewerId={viewerId}
         historyQuery={`${fromIso}|${toIso}`}
-        fleetVehicles={fleetVehicles}
+        fleetVehicles={fleetWithMotion}
         selectedVehicleId={device.id}
         rangeSearch={rangeSearch}
-        gps={panels.gps}
-        wifi={deviceControls ? panels.wifi : null}
-        camera={deviceControls ? panels.camera : null}
+        shareEvents={shareEvents}
+        sharePreset={sharePreset}
+        shareFromLocal={shareFromLocal}
+        shareToLocal={shareToLocal}
+        history={{
+          mode: "device",
+          locale,
+          surface,
+          deviceId: device.id,
+          plate: device.plate,
+          points: route.points,
+          total: route.total,
+          step: route.step,
+          fromLocal,
+          toLocal,
+          fromIso,
+          toIso,
+          errorText,
+          historyPath: detailPath,
+          includeVehicle: Boolean(fleetVehicles && fleetVehicles.length > 1),
+        }}
+        wifi={null}
+        camera={null}
+        wifiDevice={deviceControls ? {
+          locale,
+          deviceId: device.id,
+          surface,
+          canManage,
+          partnerId: device.partnerId,
+          lte: device.lteRegistration ?? device.network,
+          reportedSsid: device.reportedWifiSsid,
+          clients: device.wifiClients,
+          reportedMaxClients: device.reportedMaxClients,
+          passwordSet: device.wifiPasswordSet,
+          wifiMode: device.wifiMode,
+          wifiSsid: device.wifiSsid,
+          wifiMaxClients: device.wifiMaxClients,
+        } : null}
+        cameraDevice={deviceControls ? {
+          deviceId: device.id,
+          surface,
+          lowBatteryState: device.lowBatteryState,
+          batteryPercent: device.batteryPercent,
+          lastHeartbeatAt: device.lastHeartbeatAt,
+          cameraAvailable: device.cameraAvailable,
+          cameraReady: device.cameraReady,
+        } : null}
         ats={surface === "ops" ? await loadGpsAtsPanel(device.id) : null}
         canControlAts={surface === "ops" && canManage}
+        immobilizer={device.vehicleId && ((surface === "ops" && canManage) || (surface === "partner" && deviceControls))
+          ? await loadImmobilizerPanel(device.vehicleId, surface === "partner" ? device.partnerId : null)
+          : null}
       />
 
       {surface === "ops" && canManage ? (
@@ -197,6 +267,18 @@ export async function GpsDeviceWorkspace({
             <div><dt>{copy.imei}</dt><dd>{device.imei ?? copy.unavailable}</dd></div>
             <div><dt>{copy.partner}</dt><dd>{device.partnerName || copy.stock}</dd></div>
             <div><dt>{copy.vehicle}</dt><dd>{device.plate ?? copy.unassigned}</dd></div>
+            <div><dt>{copy.manufacturer}</dt><dd>{device.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</dd></div>
+            <div><dt>{copy.trackerModel}</dt><dd>{device.trackerModel ? device.trackerModel.toUpperCase() : copy.unavailable}</dd></div>
+            <div><dt>{copy.link}</dt><dd>{device.linkTechnology === "4g" ? copy.link4g : device.linkTechnology === "2g" ? copy.link2g : copy.unavailable}</dd></div>
+            <div><dt>{copy.installStatus}</dt><dd>{device.installationStatus === "pending" ? copy.installPending : copy.installInstalled}</dd></div>
+            <div><dt>{copy.serial}</dt><dd>{device.serialNumber ?? copy.unavailable}</dd></div>
+            {device.manufacturer === "teltonika" ? (
+              <>
+                <div><dt>{copy.simPhone}</dt><dd>{device.simPhone ?? copy.unavailable}</dd></div>
+                <div><dt>{copy.simOperator}</dt><dd>{device.simOperator ?? copy.unavailable}</dd></div>
+                <div><dt>{copy.simApn}</dt><dd>{device.simApn ?? copy.unavailable}</dd></div>
+              </>
+            ) : null}
             <div><dt>{copy.status}</dt><dd>{device.status === "active" ? copy.active : copy.disabled}</dd></div>
             <div><dt>{copy.heartbeat}</dt><dd>{gpsClock(device.lastHeartbeatAt)}</dd></div>
             <div><dt>{copy.gnssTime}</dt><dd>{gpsClock(device.recordedAt)}</dd></div>
@@ -273,144 +355,6 @@ export async function GpsDeviceWorkspace({
       ) : null}
     </div>
   );
-}
-
-export function gpsWorkspacePanels({
-  locale,
-  copy,
-  surface,
-  device,
-  route,
-  fromLocal,
-  toLocal,
-  fromIso,
-  toIso,
-  errorText,
-  canManage,
-  historyPath,
-  includeVehicle = false,
-}: {
-  locale: Locale;
-  copy: GpsCopy;
-  surface: "ops" | "partner";
-  device: GpsDeviceListItem;
-  route: { total: number; step: number; points: GpsRoutePoint[] };
-  fromLocal: string;
-  toLocal: string;
-  fromIso: string;
-  toIso: string;
-  errorText?: string;
-  canManage: boolean;
-  historyPath: string;
-  includeVehicle?: boolean;
-}): { gps: ReactNode; wifi: ReactNode; camera: ReactNode } {
-  return {
-    gps: (
-      <>
-        {errorText ? <p className="ops-form-error">{errorText}</p> : null}
-        <h2>{copy.route}</h2>
-        <Form className="gps-range" action={historyPath} scroll={false}>
-          {includeVehicle ? <input type="hidden" name="vehicle" value={device.id} /> : null}
-          <div className="gps-range-fields">
-            <label>
-              <span>{copy.from}</span>
-              <span className="gps-range-picker">
-                <input type="datetime-local" name="from" defaultValue={fromLocal} required />
-                <span className="gps-range-chevron" aria-hidden="true" />
-              </span>
-            </label>
-            <label>
-              <span>{copy.to}</span>
-              <span className="gps-range-picker">
-                <input type="datetime-local" name="to" defaultValue={toLocal} required />
-                <span className="gps-range-chevron" aria-hidden="true" />
-              </span>
-            </label>
-          </div>
-          <button type="submit" className="gps-range-submit">{copy.showRoute}</button>
-        </Form>
-        {route.total === 0 ? <p>{copy.routeEmpty}</p> : (
-          <>
-            {surface === "ops" && route.step > 1 ? <p>{copy.routeSampled} ({route.points.length}/{route.total})</p> : null}
-            <GpsHistoryPlayback
-              key={`${device.id}:${fromIso}:${toIso}`}
-              deviceId={device.id}
-              plate={device.plate ?? copy.unassigned}
-              points={route.points}
-              fromIso={fromIso}
-              toIso={toIso}
-              copy={copy}
-            />
-          </>
-        )}
-      </>
-    ),
-    wifi: (
-      <>
-        <dl className="gps-facts">
-          <div><dt>{copy.lte}</dt><dd>{device.lteRegistration ?? device.network ?? copy.unavailable}</dd></div>
-          <div><dt>{copy.ssid}</dt><dd>{device.reportedWifiSsid ?? copy.unavailable}</dd></div>
-          <div><dt>{copy.clients}</dt><dd>{device.wifiClients === null ? copy.unavailable : String(device.wifiClients)}</dd></div>
-          <div><dt>{copy.maxClients}</dt><dd>{device.reportedMaxClients === null ? copy.unavailable : String(device.reportedMaxClients)}</dd></div>
-          <div><dt>{copy.password}</dt><dd>{device.wifiPasswordSet ? copy.passwordSet : copy.passwordMissing}</dd></div>
-        </dl>
-        {(canManage || surface === "partner") && device.partnerId ? (
-          <>
-            <form action={queueGpsWifiAction} className="gps-form">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="deviceId" value={device.id} />
-              <input type="hidden" name="surface" value={surface} />
-              {surface === "ops" ? (
-                <label>
-                  <span>{copy.mode}</span>
-                  <select name="mode" defaultValue={device.wifiMode}>
-                    <option value="on">{copy.modeOn}</option>
-                    <option value="off">{copy.modeOff}</option>
-                    <option value="auto">{copy.modeAuto}</option>
-                  </select>
-                </label>
-              ) : null}
-              <label>
-                <span>{copy.ssid}</span>
-                <input name="ssid" defaultValue={device.wifiSsid ?? ""} maxLength={32} autoComplete="off" />
-              </label>
-              <label>
-                <span>{copy.password}</span>
-                <input name="password" type="password" autoComplete="new-password" />
-              </label>
-              <p className="gps-hint">{copy.passwordHint}</p>
-              <label>
-                <span>{copy.maxClients}</span>
-                <input name="maxClients" type="number" min={GPS_WIFI_MAX_CLIENTS_MIN} max={GPS_WIFI_MAX_CLIENTS_MAX} defaultValue={device.wifiMaxClients} required />
-              </label>
-              <button type="submit" className="ops-btn">{copy.queueWifi}</button>
-            </form>
-            <GpsRebootControl
-              locale={locale}
-              deviceId={device.id}
-              surface={surface}
-              label={copy.rebootDevice}
-              confirm={copy.confirmReboot}
-            />
-          </>
-        ) : null}
-      </>
-    ),
-    camera: (
-      <GpsCameraLive
-        copy={copy}
-        deviceId={device.id}
-        surface={surface}
-        initialLowBatteryState={device.lowBatteryState}
-        initialBatteryPercent={device.batteryPercent}
-        initialPhase={cameraIdlePhase({
-          presence: gpsPresence(device.lastHeartbeatAt, new Date()),
-          cameraAvailable: device.cameraAvailable,
-          cameraReady: device.cameraReady,
-        })}
-      />
-    ),
-  };
 }
 
 function CommandAudit({ copy, commands }: { copy: GpsCopy; commands: GpsCommandView[] }) {

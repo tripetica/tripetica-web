@@ -33,6 +33,9 @@ Passenger identity across documents:
 - Treat two entries as the same passenger ONLY when the explicit identity/passport number is the same (ignore trivial spacing). Same surname, same nationality, similar given names, or family relationship alone MUST NOT collapse passengers into one.
 - firstName and lastName must be split fields: given name(s) in firstName, surname (including particles such as da/de/van/von) in lastName. Never return a multi-word full name only in firstName with lastName null/empty when the source contains a surname. Prefer labeled passport GIVEN NAMES / SURNAME over free-text when both are present. firstName/lastName letters must be English ASCII A-Z/a-z only (transliterate ø→o, ü→u, Ş→S, etc.); never leave non-ASCII letters.
 - Never silently omit a hard-to-read second passport/ID or a passenger who appears only on a voucher: if a document identifies a person, return that passenger with every readable field and null only for unreadable identity numbers. Do not drop the person because another file in the same request was a clearer passport.
+- A note that listed names are examples, samples, or not real passengers does not authorize an empty passenger list. Extract every person in that list.
+- A numbered line such as "1. Oliver Bennett" is one passenger: given name Oliver, surname Bennett. "Ülke" or "Country" on that list is the nationality of every listed person. Return the written country name or its ISO alpha-2 code; do not leave nationality empty when Ülke is visible.
+- visibleText must contain that readable list and trip lines. Omit the phone status bar, message timestamps, and app buttons.
 - Exact duplicate pages/images of the SAME passport/identity number may be listed once. Do not create blank people from an aggregate passenger count alone. Prefer source document order when listing passengers.
 If the source is unrelated, return all scalar fields null and passengers []. No tools, submissions, updates or cancellations are available.
 ${UETDS_FORM_LANGUAGE_AI_RULES}`;
@@ -81,7 +84,12 @@ export async function extractAiUetdsDocument(input: { text: unknown; files: Form
       if (response.status !== "completed" || !response.output_text || response.output.some(item => item.type === "message" && item.content.some(part => part.type === "refusal"))) throw new AiExtractionError("failed");
       parts.push(mapAiUetdsExtraction(JSON.parse(response.output_text), text));
     }
-    return mergeAiExtractedSources(parts);
+    const extracted = mergeAiExtractedSources(parts);
+    const passengers = extracted.passengers ?? [];
+    console.info(
+      `UETDS extract passengers=${passengers.length} named=${passengers.filter((passenger) => passenger.firstName && passenger.lastName).length} nationality=${passengers.filter((passenger) => passenger.nationality).length} time=${extracted.startTime ?? "-"} fare=${extracted.fare ? "yes" : "no"}`,
+    );
+    return extracted;
   } catch (error) {
     if (error instanceof AiExtractionError) throw error;
     if (error instanceof OpenAI.APIConnectionTimeoutError) throw new AiExtractionError("timeout");

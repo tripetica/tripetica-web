@@ -14,11 +14,18 @@ import {
   type UetdsSubscriptionCurrency,
   type UetdsSubscriptionPeriodStatus,
 } from "@/lib/uetds/driver-subscription";
+import {
+  emptyDriverServices,
+  selectedServiceTotal,
+  SERVICE_PRICE_PLACEHOLDER,
+  type DriverServiceSelection,
+} from "@/lib/uetds/service-subscriptions";
 
 export type DriverSubscriptionDraft = {
   enrolled: boolean;
   monthlyFee: string;
   currency: UetdsSubscriptionCurrency;
+  services: DriverServiceSelection;
   /** key "YYYY-MM" -> status */
   periodStatuses: Record<string, UetdsSubscriptionPeriodStatus>;
 };
@@ -39,14 +46,16 @@ export function driverSubscriptionDraftFromState(
   }
   return {
     enrolled: Boolean(state?.enrolled),
-    monthlyFee: formatUetdsSubscriptionFee(state?.monthlyFee ?? 9),
+    monthlyFee: formatUetdsSubscriptionFee(state?.monthlyFee ?? 0),
     currency: state?.currency ?? "USD",
+    services: state?.services ?? emptyDriverServices(),
     periodStatuses,
   };
 }
 
 export function driverSubscriptionDraftEquals(a: DriverSubscriptionDraft, b: DriverSubscriptionDraft) {
   if (a.enrolled !== b.enrolled) return false;
+  if (JSON.stringify(a.services) !== JSON.stringify(b.services)) return false;
   if (a.monthlyFee.trim() !== b.monthlyFee.trim()) return false;
   if (a.currency !== b.currency) return false;
   const keys = new Set([...Object.keys(a.periodStatuses), ...Object.keys(b.periodStatuses)]);
@@ -76,8 +85,15 @@ type StatusLabels = {
   free: string;
 };
 
+const SERVICE_ROWS = [
+  ["standard", "standardEnabled", "standardFee"],
+  ["advanced", "advancedEnabled", "advancedFee"],
+  ["mobile", "mobileEnabled", "mobileFee"],
+] as const;
+
 type DriverSubscriptionEditorProps = {
   membershipControl?: ReactNode;
+  serviceLabels: { standard: string; advanced: string; mobile: string; total: string };
   locale: "tr" | "en" | "ru";
   value: DriverSubscriptionDraft;
   disabled?: boolean;
@@ -94,6 +110,7 @@ type DriverSubscriptionEditorProps = {
 
 export function DriverUetdsSubscriptionSection({
   membershipControl,
+  serviceLabels,
   locale,
   value,
   disabled = false,
@@ -109,127 +126,133 @@ export function DriverUetdsSubscriptionSection({
 }: DriverSubscriptionEditorProps) {
   const window = subscriptionUiWindow();
   const locked = disabled || readOnly;
+  const total = selectedServiceTotal(value.services);
+  const periodChosen = Object.values(value.periodStatuses).some((status) => status === "paid" || status === "free");
+  const enrolledForSave = value.enrolled || periodChosen;
+  function toggleService(enabledKey: "standardEnabled" | "advancedEnabled" | "mobileEnabled", feeKey: "standardFee" | "advancedFee" | "mobileFee", checked: boolean) {
+    const fee = value.services[feeKey];
+    onChange({
+      ...value,
+      services: {
+        ...value.services,
+        [enabledKey]: checked,
+        [feeKey]: checked && fee == null ? SERVICE_PRICE_PLACEHOLDER : fee,
+      },
+    });
+  }
 
   return (
     <section className="uetds-driver-subscription" aria-label={sectionTitle}>
       {!membershipControl ? <h2 className="uetds-driver-subscription-title">{sectionTitle}</h2> : null}
 
-      {readOnly ? (
-        value.enrolled ? (
-          <p className="partner-billing-value">
-            {feeLabel}: {value.monthlyFee || "—"} {value.currency}
-          </p>
-        ) : (
-          <p className="partner-billing-value">{enrollHint}</p>
-        )
-      ) : (
-        <>
-          <div className={membershipControl ? styles.controls : undefined}>
-          <label className={membershipControl ? styles.enroll : "ops-field uetds-driver-subscription-enroll"}>
-            {membershipControl ? <span>{sectionTitle}</span> : null}
-            <span className="uetds-driver-subscription-check">
+      <div className="uetds-driver-subscription-services">
+        {SERVICE_ROWS.map(([name, enabledKey, feeKey]) => (
+          <div key={name} className="uetds-driver-subscription-fee-row">
+            <label className="uetds-driver-subscription-check">
               <input
                 type="checkbox"
-                checked={value.enrolled}
+                checked={value.services[enabledKey]}
                 disabled={locked}
-                onChange={(event) =>
-                  onChange({ ...value, enrolled: event.target.checked })
-                }
+                onChange={(event) => toggleService(enabledKey, feeKey, event.target.checked)}
               />
-              {!membershipControl ? enrollLabel : null}
-            </span>
-          </label>
-          {membershipControl}
-          </div>
-          {!membershipControl && !value.enrolled ? <p className="ops-muted">{enrollHint}</p> : null}
-
-          {value.enrolled ? (
-            <div className="uetds-driver-subscription-fee-row">
-              <label className="ops-field">
-                <span>{feeLabel}</span>
+              <span>{serviceLabels[name]}</span>
+            </label>
+            <label className="ops-field">
+              <span>{feeLabel}</span>
+              {readOnly ? (
+                <p className="partner-billing-value">
+                  {value.services[enabledKey] ? formatUetdsSubscriptionFee(value.services[feeKey]) || "—" : "—"} {value.currency}
+                </p>
+              ) : (
                 <input
-                  name="uetdsSubscriptionMonthlyFee"
                   inputMode="decimal"
-                  value={value.monthlyFee}
-                  disabled={locked}
-                  onChange={(event) =>
-                    onChange({ ...value, monthlyFee: event.target.value })
-                  }
-                />
-              </label>
-              <label className="ops-field">
-                <span>{currencyLabel}</span>
-                <select
-                  name="uetdsSubscriptionCurrency"
-                  value={value.currency}
-                  disabled={locked}
-                  onChange={(event) =>
+                  value={value.services[feeKey] == null ? "" : String(value.services[feeKey])}
+                  disabled={locked || !value.services[enabledKey]}
+                  onChange={(event) => {
+                    const parsed = event.target.value.trim();
                     onChange({
                       ...value,
-                      currency: event.target.value as UetdsSubscriptionCurrency,
-                    })
-                  }
-                >
-                  {UETDS_SUBSCRIPTION_CURRENCIES.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ) : null}
-        </>
-      )}
-
-      {value.enrolled ? (
-        <div className="uetds-driver-subscription-months">
-          <p className="partner-billing-label">{monthsLabel}</p>
-          <div className="uetds-driver-subscription-scroller" role="list">
-            {window.map((key) => {
-              const token = periodToken(key.year, key.month);
-              const status = value.periodStatuses[token] ?? "unpaid";
-              return (
-                <div key={token} className="uetds-driver-subscription-month" role="listitem">
-                  <p className="uetds-driver-subscription-month-label">
-                    {subscriptionPeriodLabel(key, locale)}
-                  </p>
-                  {readOnly ? (
-                    <p className="uetds-driver-subscription-month-status">
-                      {statusLabels[status]}
-                    </p>
-                  ) : (
-                    <select
-                      aria-label={subscriptionPeriodLabel(key, locale)}
-                      value={status}
-                      disabled={locked || !value.enrolled}
-                      onChange={(event) =>
-                        onChange({
-                          ...value,
-                          periodStatuses: {
-                            ...value.periodStatuses,
-                            [token]: event.target.value as UetdsSubscriptionPeriodStatus,
-                          },
-                        })
-                      }
-                    >
-                      {UETDS_SUBSCRIPTION_PERIOD_STATUSES.map((code) => (
-                        <option key={code} value={code}>
-                          {statusLabels[code]}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              );
-            })}
+                      services: {
+                        ...value.services,
+                        [feeKey]: parsed === "" ? null : Number(parsed),
+                      },
+                    });
+                  }}
+                />
+              )}
+            </label>
           </div>
+        ))}
+        <p className="partner-billing-value">{serviceLabels.total}: {total == null ? "—" : total.toFixed(2)} {value.currency}</p>
+        {!readOnly ? (
+          <label className="ops-field">
+            <span>{currencyLabel}</span>
+            <select
+              name="uetdsSubscriptionCurrency"
+              value={value.currency}
+              disabled={locked}
+              onChange={(event) => onChange({ ...value, currency: event.target.value as UetdsSubscriptionCurrency })}
+            >
+              {UETDS_SUBSCRIPTION_CURRENCIES.map((code) => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+
+      <div className="uetds-driver-subscription-months">
+        <p className="partner-billing-label">{monthsLabel}</p>
+        <div className="uetds-driver-subscription-scroller" role="list">
+          {window.map((key, index) => {
+            const token = periodToken(key.year, key.month);
+            const status = value.periodStatuses[token] ?? "unpaid";
+            return (
+              <div key={token} className={index < 2 ? "uetds-driver-subscription-month is-lead" : "uetds-driver-subscription-month"} role="listitem">
+                <p className="uetds-driver-subscription-month-label">
+                  {subscriptionPeriodLabel(key, locale)}
+                </p>
+                {readOnly ? (
+                  <p className="uetds-driver-subscription-month-status">
+                    {statusLabels[status]}
+                  </p>
+                ) : (
+                  <select
+                    aria-label={subscriptionPeriodLabel(key, locale)}
+                    value={status}
+                    disabled={locked}
+                    onChange={(event) =>
+                      onChange({
+                        ...value,
+                        periodStatuses: {
+                          ...value.periodStatuses,
+                          [token]: event.target.value as UetdsSubscriptionPeriodStatus,
+                        },
+                      })
+                    }
+                  >
+                    {UETDS_SUBSCRIPTION_PERIOD_STATUSES.map((code) => (
+                      <option key={code} value={code}>
+                        {statusLabels[code]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            );
+          })}
         </div>
-      ) : null}
+      </div>
 
       {!readOnly ? (
         <>
-          <input type="hidden" name="uetdsSubscriptionEnrolled" value={value.enrolled ? "1" : "0"} />
+          <input type="hidden" name="uetdsSubscriptionEnrolled" value={enrolledForSave ? "1" : "0"} />
+          <input type="hidden" name="serviceStandardEnabled" value={value.services.standardEnabled ? "1" : "0"} />
+          <input type="hidden" name="serviceAdvancedEnabled" value={value.services.advancedEnabled ? "1" : "0"} />
+          <input type="hidden" name="serviceMobileEnabled" value={value.services.mobileEnabled ? "1" : "0"} />
+          <input type="hidden" name="serviceStandardFee" value={value.services.standardFee ?? ""} />
+          <input type="hidden" name="serviceAdvancedFee" value={value.services.advancedFee ?? ""} />
+          <input type="hidden" name="serviceMobileFee" value={value.services.mobileFee ?? ""} />
           <input type="hidden" name="uetdsSubscriptionPeriods" value={serializeDriverSubscriptionDraft(value)} />
           {!value.enrolled ? (
             <>

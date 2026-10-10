@@ -25,6 +25,7 @@ test("partner uetds sits between vehicles and profile", () => {
       "/partner/edevlet-authorities",
       "/partner/profile",
       "/partner/employer-billing",
+      "/partner/users",
     ],
   );
   assert.equal(partnerCopy.tr.uetds, "U-ETDS");

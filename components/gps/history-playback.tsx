@@ -6,7 +6,8 @@ import "leaflet/dist/leaflet.css";
 import { vehicleIcon } from "@/components/gps/live-map";
 import { gpsPlaybackClock, gpsSpeed } from "@/lib/gps/format";
 import { type GpsCopy } from "@/lib/gps/copy";
-import { gpsPlaybackMarkerState } from "@/lib/gps/map-popup";
+import { gpsPresenceMarker } from "@/lib/gps/map-popup";
+import { gpsDisplayTrack, gpsMotionView } from "@/lib/gps/motion";
 import {
   GPS_PLAYBACK_RATES,
   advancePlaybackCursor,
@@ -33,17 +34,25 @@ type PlaybackReadout = {
   gap: string;
 };
 
-function playbackReadout(fixes: GpsPlaybackFix[], at: number, gapLimit: number, gapTemplate: string): PlaybackReadout {
+function playbackReadout(
+  fixes: GpsPlaybackFix[],
+  at: number,
+  gapLimit: number,
+  gapTemplate: string,
+  formatSpeed: (mps: number | null) => string,
+): PlaybackReadout {
   const sample = playbackShownSample(fixes, at, gapLimit);
+  const view = gpsMotionView(fixes, at);
   const clock = gpsPlaybackClock(sample.latitude === null ? at : sample.at);
   const minutes = playbackGapMinutes(sample.gapMs);
+  const speedMps = sample.gapMs ? null : sample.speedMps;
   return {
     time: clock?.time ?? "",
     date: clock?.date ?? "",
-    speed: sample.speedMps === null ? "" : gpsSpeed(sample.speedMps),
-    coord: sample.latitude === null || sample.longitude === null
+    speed: speedMps == null ? "" : formatSpeed(speedMps),
+    coord: view === null
       ? ""
-      : `${sample.latitude.toFixed(6)}, ${sample.longitude.toFixed(6)}`,
+      : `${view.latitude.toFixed(6)}, ${view.longitude.toFixed(6)}`,
     gap: minutes === null ? "" : gapTemplate.replace("{n}", String(minutes)),
   };
 }
@@ -55,6 +64,7 @@ export function GpsHistoryPlayback({
   fromIso,
   toIso,
   copy,
+  formatSpeed = gpsSpeed,
 }: {
   deviceId: string;
   plate: string;
@@ -62,14 +72,16 @@ export function GpsHistoryPlayback({
   fromIso: string;
   toIso: string;
   copy: GpsCopy;
+  formatSpeed?: (mps: number | null) => string;
 }) {
   const fixes = useMemo(() => playbackFixes(points), [points]);
+  const display = useMemo(() => gpsDisplayTrack(fixes), [fixes]);
   const gapLimit = useMemo(() => playbackGapLimit(fixes), [fixes]);
   const fromMs = Date.parse(fromIso);
   const toMs = Date.parse(toIso);
   const start = Number.isFinite(fromMs) ? fromMs : fixes[0]?.at ?? 0;
   const end = Number.isFinite(toMs) && toMs > start ? toMs : fixes.at(-1)?.at ?? start;
-  const [readout, setReadout] = useState(() => playbackReadout(fixes, start, gapLimit, copy.playbackGap));
+  const [readout, setReadout] = useState(() => playbackReadout(fixes, start, gapLimit, copy.playbackGap, formatSpeed));
   const readoutKeyRef = useRef("");
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -83,7 +95,8 @@ export function GpsHistoryPlayback({
   const rafRef = useRef(0);
   const lastRef = useRef(0);
   const iconKeyRef = useRef("");
-  const movingRef = useRef(false);
+  const fixesRef = useRef(fixes);
+  fixesRef.current = fixes;
   const rangeRef = useRef<HTMLInputElement>(null);
   const paintRef = useRef<(at: number) => void>(() => {});
   const tickRef = useRef<(now: number) => void>(() => {});
@@ -93,15 +106,15 @@ export function GpsHistoryPlayback({
   const [mapEpoch, setMapEpoch] = useState(0);
   const showPointsRef = useRef(true);
   const trackKey = useMemo(
-    () => JSON.stringify(points.map((point) => [point.recordedAt, point.latitude, point.longitude])),
-    [points],
+    () => JSON.stringify(display.map((point) => [point.at, point.latitude, point.longitude, point.speedMps])),
+    [display],
   );
   rateRef.current = rate;
   showPointsRef.current = showPoints;
 
   paintRef.current = (at: number) => {
     const frame = playbackFrame(fixes, at, gapLimit);
-    const nextReadout = playbackReadout(fixes, at, gapLimit, copy.playbackGap);
+    const nextReadout = playbackReadout(fixes, at, gapLimit, copy.playbackGap, formatSpeed);
     const readoutKey = `${nextReadout.date}|${nextReadout.time}|${nextReadout.speed}|${nextReadout.coord}|${nextReadout.gap}`;
     if (readoutKeyRef.current !== readoutKey) {
       readoutKeyRef.current = readoutKey;
@@ -111,17 +124,18 @@ export function GpsHistoryPlayback({
     const leaflet = leafletRef.current;
     const map = mapRef.current;
     if (!leaflet || !map || !map.getPane(PLAYBACK_PANE)) return;
-    if (frame.latitude === null || frame.longitude === null) {
+    const view = gpsMotionView(fixesRef.current, at);
+    const latitude = view?.latitude ?? frame.latitude;
+    const longitude = view?.longitude ?? frame.longitude;
+    if (latitude === null || longitude === null) {
       markerRef.current?.setOpacity(0);
       return;
     }
-    const gap = frame.gapMs !== null;
-    const state = gpsPlaybackMarkerState(frame.speedMps, gap, movingRef.current);
-    movingRef.current = !gap && state === "moving";
+    const state = gpsPresenceMarker("online", view?.kind ?? "unknown");
     const iconKey = state;
     let marker = markerRef.current;
     if (!marker) {
-      marker = leaflet.marker([frame.latitude, frame.longitude], {
+      marker = leaflet.marker([latitude, longitude], {
         pane: PLAYBACK_PANE,
         icon: vehicleIcon(leaflet, state, "gps-playback-vehicle"),
         interactive: false,
@@ -133,7 +147,7 @@ export function GpsHistoryPlayback({
       return;
     }
     marker.setOpacity(1);
-    marker.setLatLng([frame.latitude, frame.longitude]);
+    marker.setLatLng([latitude, longitude]);
     if (iconKeyRef.current !== iconKey) {
       marker.setIcon(vehicleIcon(leaflet, state, "gps-playback-vehicle"));
       iconKeyRef.current = iconKey;
@@ -174,11 +188,11 @@ export function GpsHistoryPlayback({
         attribution: "&copy; OpenStreetMap",
         maxZoom: 19,
       }).addTo(map);
-      const track = playbackFixes(JSON.parse(trackKey).map((row: [string, number, number]) => ({
-        recordedAt: row[0],
+      const track = playbackFixes(JSON.parse(trackKey).map((row: [number, number, number, number | null]) => ({
+        recordedAt: new Date(row[0]).toISOString(),
         latitude: row[1],
         longitude: row[2],
-        speedMps: null,
+        speedMps: row[3],
         headingDeg: null,
       })));
       const bounds: [number, number][] = [];
@@ -194,13 +208,31 @@ export function GpsHistoryPlayback({
       track.forEach((point, index) => {
         const role = index === 0 ? "start" : index === track.length - 1 ? "end" : "point";
         const color = role === "start" ? "#15803d" : role === "end" ? "#b91c1c" : "#64748b";
-        L.circleMarker([point.latitude, point.longitude], {
+        const dot = L.circleMarker([point.latitude, point.longitude], {
           radius: role === "point" ? 3 : 7,
           color,
           fillColor: color,
           fillOpacity: 0.9,
           weight: 1,
         }).addTo(dots);
+        if (role !== "point") {
+          dot.bindTooltip(role === "start" ? copy.routeStart : copy.routeEnd, { permanent: true, direction: "top", className: "gps-playback-end" });
+        }
+        dot.on("click", () => {
+          playingRef.current = false;
+          setPlaying(false);
+          cursorRef.current = point.at;
+          paintRef.current(point.at);
+          map.panTo([point.latitude, point.longitude]);
+          const clock = gpsPlaybackClock(point.at);
+          const speed = point.speedMps == null ? "" : formatSpeed(point.speedMps);
+          dot.bindPopup([
+            plate,
+            clock ? `${clock.date} ${clock.time}` : "",
+            `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`,
+            speed,
+          ].filter(Boolean).join("<br>")).openPopup();
+        });
         bounds.push([point.latitude, point.longitude]);
       });
       pointsRef.current = dots;
@@ -222,7 +254,7 @@ export function GpsHistoryPlayback({
       mapRef.current = null;
       leafletRef.current = null;
     };
-  }, [trackKey]);
+  }, [copy.routeEnd, copy.routeStart, formatSpeed, plate, trackKey]);
 
   useEffect(() => {
     const map = mapRef.current;

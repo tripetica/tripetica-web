@@ -23,6 +23,7 @@ import {
   istanbulSubscriptionPeriodKey,
   mapUetdsSubscriptionListSummary,
 } from "@/lib/uetds/driver-subscription";
+import { selectedServiceTotal } from "@/lib/uetds/service-subscriptions";
 import {
   nextPartnerVehicleStatus,
   parsePartnerVehicleInput,
@@ -67,6 +68,12 @@ type DriverRow = {
   current_period_status?: string | null;
   next_period_status?: string | null;
   membership_status?: string | null;
+  service_standard_enabled?: boolean | null;
+  service_standard_fee?: string | null;
+  service_advanced_enabled?: boolean | null;
+  service_advanced_fee?: string | null;
+  service_mobile_gps_enabled?: boolean | null;
+  service_mobile_gps_fee?: string | null;
   default_vehicle_id?: string | null;
   default_authority_id?: string | null;
 };
@@ -119,6 +126,18 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
             : ("standard" as const),
         }
       : {}),
+    ...(row.service_standard_enabled !== undefined
+      ? {
+          services: {
+            standardEnabled: Boolean(row.service_standard_enabled),
+            standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+            advancedEnabled: Boolean(row.service_advanced_enabled),
+            advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+            mobileEnabled: Boolean(row.service_mobile_gps_enabled),
+            mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+          },
+        }
+      : {}),
     deletedAt: row.deleted_at?.toISOString() ?? null,
     updatedAt: row.updated_at.toISOString(),
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
@@ -140,7 +159,16 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
     ...base,
     uetdsSubscription: mapUetdsSubscriptionListSummary({
       enrolledAt: row.uetds_subscription_enrolled_at ?? null,
-      monthlyFee: row.uetds_subscription_monthly_fee ?? null,
+      monthlyFee: row.service_standard_enabled === undefined
+        ? row.uetds_subscription_monthly_fee ?? null
+        : selectedServiceTotal({
+            standardEnabled: Boolean(row.service_standard_enabled),
+            standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+            advancedEnabled: Boolean(row.service_advanced_enabled),
+            advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+            mobileEnabled: Boolean(row.service_mobile_gps_enabled),
+            mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+          }),
       currency: row.uetds_subscription_currency ?? null,
       currentPeriodStatus: row.current_period_status ?? null,
       nextPeriodStatus: row.next_period_status ?? null,
@@ -209,6 +237,12 @@ export async function listPartnerDrivers(
   const result = await query<DriverRow>(
     `SELECT ${DRIVER_SELECT},
             d.membership_status,
+            d.service_standard_enabled,
+            d.service_standard_fee,
+            d.service_advanced_enabled,
+            d.service_advanced_fee,
+            d.service_mobile_gps_enabled,
+            d.service_mobile_gps_fee,
             d.uetds_subscription_enrolled_at,
             d.uetds_subscription_monthly_fee,
             d.uetds_subscription_currency,
@@ -773,6 +807,9 @@ async function setDriverStatus(input: {
   if (!updated.rows[0]) {
     return { ok: false as const, error: "not-found" as const };
   }
+  if (input.toStatus === "inactive") {
+    await stopMobileShareAccess(input.partnerId, input.driverId);
+  }
   return { ok: true as const };
 }
 
@@ -970,7 +1007,24 @@ export async function deletePartnerDriver(input: {
     return { ok: false as const, error: "not-found" as const };
   }
   await releaseFleetPair({ partnerId: input.partnerId, driverId: input.driverId });
+  await stopMobileShareAccess(input.partnerId, input.driverId);
   return { ok: true as const };
+}
+
+async function stopMobileShareAccess(partnerId: string, driverId: string) {
+  const stopped = await query<{ id: string }>(
+    `UPDATE gps_mobile_sessions
+        SET status = 'stopped', stopped_at = NOW(), stop_reason = 'access_revoked'
+      WHERE partner_id = $1 AND driver_id = $2 AND status = 'active'
+      RETURNING id`,
+    [partnerId, driverId],
+  );
+  if (!stopped.rows[0]) return;
+  await query(
+    `INSERT INTO gps_mobile_events (partner_id, driver_id, session_id, kind)
+     VALUES ($1, $2, $3, 'access_revoked')`,
+    [partnerId, driverId, stopped.rows[0].id],
+  );
 }
 
 export async function deletePartnerVehicle(input: {

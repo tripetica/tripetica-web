@@ -1,6 +1,7 @@
 "use server";
 
 import { getOpsActor, actorCan } from "@/lib/ops/session";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 import { query } from "@/lib/db/postgres";
 import { isUuid } from "@/lib/ops/process-filters";
@@ -92,7 +93,7 @@ function tripTargetFromSnapshot(snapshotJson: string): PortalTripTarget | null {
 async function ownerKey() {
   if (!kamuAssistedLoginAllowed()) return null;
   const partner = await getPartnerActor();
-  if (partner) return `partner:${partner.partnerId}:${partner.userId}`;
+  if (partner && partnerHasTab(partner, "uetds")) return `partner:${partner.partnerId}:${partner.userId}`;
   const ops = await getOpsActor();
   if (ops && actorCan(ops, "uetds.manage")) return `ops:${ops.id}`;
   return null;

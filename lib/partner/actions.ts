@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
+import { partnerHasTab } from "@/lib/partner/access";
 import { loginPartnerUser, logoutPartnerUser } from "@/lib/partner/auth";
 import { changePartnerPassword } from "@/lib/partner/password-change";
 import {
@@ -274,6 +275,9 @@ export async function partnerUpdateProfileAction(
   }
   if (actor.mustChangePassword) {
     redirect(localizedPath(locale, "/partner/change-password"));
+  }
+  if (!partnerHasTab(actor, "profile")) {
+    return { error: "failed", ok: false };
   }
   const contact = partnerContactNamesFromForm(formData);
   const result = await updatePartnerSelfProfile({

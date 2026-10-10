@@ -136,6 +136,7 @@ export async function submitUetdsNotification(input: {
   }
   const subscription = await loadDriverUetdsSubscriptionEntitlement(driver.id);
   if (
+    !subscription.standardEnabled ||
     !isUetdsDriverSubscriptionEntitled({
       enrolled: subscription.enrolled,
       periods: subscription.periods,

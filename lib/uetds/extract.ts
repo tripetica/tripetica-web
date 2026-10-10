@@ -1,4 +1,5 @@
 import { countries, normalizeIso2 } from "@/lib/geo/countries";
+import { officialUetdsCountries } from "@/lib/uetds/official-locations";
 import {
   createPassengerDraft,
   ensurePassengerCount,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/uetds/draft";
 import { normalizeUetdsPurposeText } from "@/lib/uetds/form-language";
 import { parseDescribedTripDates } from "@/lib/uetds/extracted-datetime";
+import { normalizeUetdsFare } from "@/lib/uetds/fare";
 import { normalizeUetdsPersonName } from "@/lib/uetds/passenger-name";
 
 export type UetdsExtractedPassenger = {
@@ -37,12 +39,12 @@ export type UetdsExtractedDraft = {
 };
 
 const NATIONALITY_LABEL =
-  /(?:uyruk|nationality|гражданство|nationalit[eé]|citizenship|الجنسية)\s*[:\-]?\s*([^\n,;]+)/i;
+  /(?:uyruk|ülke|ulke|country|nationality|гражданство|nationalit[eé]|citizenship|الجنسية)\s*[:\-]?\s*([^\n,;]+)/i;
 const PASSPORT_LABEL =
   /(?:pasaport|passport|паспорт|جواز)\s*(?:no|number|numarası|номер|رقم)?\s*[:\-#]?\s*([A-Z0-9][A-Z0-9\-]{4,14})/i;
 const TC_LABEL = /(?:t\.?\s*c\.?\s*kimlik|national\s*id|kimlik\s*no)\s*[:\-#]?\s*(\d{11})/i;
 const PAX_LABELED =
-  /(?:pax|yolcu(?:\s*sayısı)?|passengers?|пассажир(?:ов|а)?|ركاب)\s*[:\-]?\s*(\d{1,2})\b/i;
+  /(?:pax|yolcu(?:\s*sayısı)?|kişi\s*sayısı|kisi\s*sayisi|passengers?|пассажир(?:ов|а)?|ركاب)\s*[:\-]?\s*(\d{1,2})\b/i;
 const PAX_PREFIXED =
   /(?<![:\d])(\d{1,2})\s+(?:pax|yolcu|passengers?|пассажир(?:ов|а)?|ركاب)\b/i;
 const DATE_LABEL =
@@ -54,16 +56,17 @@ const END_TIME_LABEL =
   /(?:bırakma\s*saati|bırakış\s*saati|varış\s*saati|dropoff\s*time|drop-off\s*time|end\s*time|время\s+(?:высадки|прибытия)|وقت\s+التوصيل)\s*[:\-]?\s*(\d{1,2}[:.]\d{2})/i;
 const TIME_LABEL = /(?:saat|time|час)\s*[:\-]?\s*(\d{1,2}[:.]\d{2})/i;
 const FROM_LABEL =
-  /(?:alış\s*yeri|alış\s*noktası|başlangıç|biniş|from|pick-?up(?!\s*time)(?:\s*(?:place|location|point))?|nereden|отправление|место\s+подачи|مكان\s+الاستلام)\s*[:\-]?\s*([^\n]{3,80})/i;
+  /(?:alış\s*yeri|alış\s*noktası|(?:alış|alis)(?!\s*saati)|başlangıç|biniş|from|pick-?up(?!\s*time)(?:\s*(?:place|location|point))?|nereden|отправление|место\s+подачи|مكان\s+الاستلام)\s*[:\-]?\s*([^\n]{3,80})/i;
 const TO_LABEL =
-  /(?:bırakma\s*yeri|bırakış\s*yeri|varış(?:\s*noktası)?|to(?!\s*time)|drop-?off(?!\s*time)(?:\s*(?:place|location|point))?|nereye|назначение|destination|место\s+высадки|مكان\s+التوصيل)\s*[:\-]?\s*([^\n]{3,80})/i;
+  /(?:bırakma\s*yeri|bırakış\s*yeri|(?:bırakış|birakis|bırakma|birakma)(?!\s*saati)|varış(?:\s*noktası)?|to(?!\s*time)|drop-?off(?!\s*time)(?:\s*(?:place|location|point))?|nereye|назначение|destination|место\s+высадки|مكان\s+التوصيل)\s*[:\-]?\s*([^\n]{3,80})/i;
+const FARE_LABEL = /(?:ücret|ucret|tutar|price|fare)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/i;
 const NAME_LABEL = /(?:ad\s*soyad|name|имя|الاسم)\s*[:\-]?\s*([^\n]{3,80})/i;
 const FIRST_LABEL = /(?:first\s*name|имя|الاسم\s+الأول)\s*[:\-]\s*([^\n,]{2,40})/i;
 const LAST_LABEL = /(?:soyad|last\s*name|surname|фамилия|الكنية)\s*[:\-]\s*([^\n,]{2,40})/i;
 const GENDER_LABEL = /(?:cinsiyet|gender|пол|الجنس)\s*[:\-]?\s*([^\n,]{2,20})/i;
 const PURPOSE_LABEL = /(?:amaç|purpose|açıklama|description|цель|الوصف)\s*[:\-]\s*([^\n]{3,80})/i;
 const GROUP_LABEL = /(?:grup|group|группа)\s*(?:adı|name|название)?\s*[:\-]\s*([^\n]{2,80})/i;
-const NUMBERED_PASSENGER = /(?:^|\n)\s*(?:\d{1,2}[.)-]|yolcu\s*\d+|passenger\s*\d+)\s*[:\-]?\s*([A-Za-zÀ-ÿĞğİıÖöŞşÜüЁёА-я\u0600-\u06FF][A-Za-zÀ-ÿĞğİıÖöŞşÜüЁёА-я\u0600-\u06FF'’\-\s]{2,60})/gi;
+const NUMBERED_PASSENGER = /(?:^|\n)\s*(?:\d{1,2}[.)-]|yolcu\s*\d+|passenger\s*\d+)\s*[:\-]?\s*([A-Za-zÀ-ÿĞğİıÖöŞşÜüЁёА-я\u0600-\u06FF][A-Za-zÀ-ÿĞğİıÖöŞşÜüЁёА-я\u0600-\u06FF'’\- ]{2,60})/gi;
 
 function clip(value: string | undefined, max = 120) {
   return value?.replace(/\s+/g, " ").trim().slice(0, max) ?? "";
@@ -97,7 +100,17 @@ export function countryIso2FromName(value: string | null | undefined): string | 
       return country.iso2;
     }
   }
-  return null;
+  const aliases: Record<string, string> = {
+    england: "GB",
+    britain: "GB",
+    "great britain": "GB",
+  };
+  if (aliases[needle]) {
+    return aliases[needle];
+  }
+  const official = officialUetdsCountries().find((country) => fold(country.name) === needle);
+  const officialCode = normalizeIso2(official?.code);
+  return officialCode;
 }
 
 function parseDate(value: string) {
@@ -235,6 +248,10 @@ export function extractUetdsFromText(text: string, nowUtcMs = Date.now()): Uetds
   if (pax) {
     extracted.passengerCount = Math.min(20, Math.max(1, Number(pax)));
   }
+  const fare = normalizeUetdsFare(source.match(FARE_LABEL)?.[1]?.replace(",", ".") ?? "");
+  if (fare) {
+    extracted.fare = fare;
+  }
 
   const listed = numberedPassengers(source);
   const person = fullName ? splitPersonName(fullName) : { firstName, lastName };
@@ -255,9 +272,23 @@ export function extractUetdsFromText(text: string, nowUtcMs = Date.now()): Uetds
         }
       : null;
   if (listed.length > 0) {
-    extracted.passengers = listed.map((passenger, index) =>
-      index === 0 && firstPassenger ? { ...passenger, ...firstPassenger } : passenger,
-    );
+    extracted.passengers = listed.map((passenger, index) => {
+      const shared = passenger.nationality || !nationality
+        ? passenger
+        : { ...passenger, nationality, nationalityProvenance: "document" as const };
+      if (index !== 0 || !firstPassenger) {
+        return shared;
+      }
+      return {
+        ...shared,
+        firstName: firstPassenger.firstName || shared.firstName,
+        lastName: firstPassenger.lastName || shared.lastName,
+        nationality: firstPassenger.nationality || shared.nationality,
+        nationalityProvenance: firstPassenger.nationalityProvenance || shared.nationalityProvenance,
+        identityNumber: firstPassenger.identityNumber || shared.identityNumber,
+        gender: firstPassenger.gender || shared.gender,
+      };
+    });
   } else if (firstPassenger) {
     extracted.passengers = [firstPassenger];
   }

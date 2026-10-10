@@ -2,7 +2,7 @@ import { type GpsPresence } from "@/lib/gps/presence";
 
 export const GPS_MOTION_HOLD_MS = 180_000;
 
-export type GpsMotion = "moving" | "stopped" | "unknown";
+export type GpsMotion = "moving" | "stopped" | "still" | "unknown";
 
 export type GpsMotionMemory = {
   speedMps: number;
@@ -10,10 +10,9 @@ export type GpsMotionMemory = {
 };
 
 export function gpsSpeedIsMoving(speedMps: number | null, wasMoving = false) {
-  if (speedMps === null || !Number.isFinite(speedMps) || speedMps < 0) {
-    return wasMoving;
-  }
-  return speedMps > 0;
+  void speedMps;
+  void wasMoving;
+  return false;
 }
 
 export function gpsResolveMotion(input: {
@@ -23,30 +22,35 @@ export function gpsResolveMotion(input: {
   now: number;
   holdMs?: number;
 }): { motion: GpsMotion; memory: GpsMotionMemory | null } {
-  const holdMs = input.holdMs ?? GPS_MOTION_HOLD_MS;
-  const speed = input.speedMps;
-  const known = speed !== null && Number.isFinite(speed) && speed >= 0;
-  const age = input.sampledAt === null ? null : input.now - input.sampledAt;
-  const fresh = known && age !== null && age >= -60_000 && age <= holdMs;
-  if (known && speed === 0) {
-    return { motion: "stopped", memory: { speedMps: 0, at: input.sampledAt ?? input.now } };
-  }
-  if (fresh && speed !== null && speed > 0) {
-    return { motion: "moving", memory: { speedMps: speed, at: input.sampledAt ?? input.now } };
-  }
-  const memory = input.memory;
-  if (memory && memory.speedMps === 0) {
-    return { motion: "stopped", memory };
-  }
-  if (memory && memory.speedMps > 0 && input.now - memory.at <= holdMs) {
-    return { motion: "moving", memory };
-  }
+  void input;
   return { motion: "unknown", memory: null };
+}
+
+/** Fresh coordinates are still arriving. Older than this, the stream counts as interrupted. */
+export const GPS_MAP_FRESH_MS = 2 * 60 * 1000;
+
+/** After the server's last successful fix, the pin stays red until this age, then black. */
+export const GPS_MAP_SIGNAL_LOST_MS = 30 * 60 * 1000;
+
+export function gpsMapMarkerState(input: {
+  receivedAt: string | null;
+  nowMs: number;
+  motion: GpsMotion;
+}): GpsMarkerState {
+  const received = input.receivedAt ? Date.parse(input.receivedAt) : Number.NaN;
+  if (!Number.isFinite(received)) return "offline";
+  const age = input.nowMs - received;
+  if (age < -5 * 60 * 1000 || age > GPS_MAP_SIGNAL_LOST_MS) return "offline";
+  if (age > GPS_MAP_FRESH_MS) return "still";
+  if (input.motion === "moving") return "moving";
+  if (input.motion === "still") return "still";
+  if (input.motion === "stopped") return "stopped";
+  return "unknown";
 }
 
 export function gpsPresenceMarker(presence: GpsPresence, motion: GpsMotion): GpsMarkerState {
   if (presence !== "online") {
-    return "idle";
+    return "offline";
   }
   if (motion === "moving") {
     return "moving";
@@ -54,12 +58,15 @@ export function gpsPresenceMarker(presence: GpsPresence, motion: GpsMotion): Gps
   if (motion === "stopped") {
     return "stopped";
   }
+  if (motion === "still") {
+    return "still";
+  }
   return "unknown";
 }
 
 export type GpsIgnition = "on" | "off" | null;
 
-export type GpsMarkerState = "moving" | "stopped" | "idle" | "ignition-off" | "unknown";
+export type GpsMarkerState = "moving" | "stopped" | "still" | "idle" | "offline" | "ignition-off" | "unknown";
 
 export type GpsPopupPrefs = {
   speed: boolean;
@@ -149,24 +156,20 @@ export function gpsMarkerState(
   ignition: GpsIgnition = null,
   wasMoving = false,
 ): GpsMarkerState {
+  void speedMps;
+  void wasMoving;
   if (presence !== "online") {
-    return "idle";
+    return "offline";
   }
   if (ignition === "off") {
     return "ignition-off";
   }
-  if (speedMps === null || !Number.isFinite(speedMps) || speedMps < 0) {
-    return wasMoving ? "moving" : "unknown";
-  }
-  if (speedMps > 0) {
-    return "moving";
-  }
-  return "stopped";
+  return "unknown";
 }
 
 export function gpsPlaybackMarkerState(speedMps: number | null, gap: boolean, wasMoving = false): GpsMarkerState {
   if (gap) {
-    return "idle";
+    return "unknown";
   }
   return gpsMarkerState("online", speedMps, null, wasMoving);
 }

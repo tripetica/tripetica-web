@@ -133,17 +133,31 @@ export async function updateOpsPartnerDriverAction(
     const enrolled = String(formData.get("uetdsSubscriptionEnrolled") ?? "0") === "1";
     const currencyRaw = String(formData.get("uetdsSubscriptionCurrency") ?? "USD").trim().toUpperCase();
     const currency = isUetdsSubscriptionCurrency(currencyRaw) ? currencyRaw : null;
-    const monthlyFee = parseUetdsSubscriptionFee(
-      String(formData.get("uetdsSubscriptionMonthlyFee") ?? ""),
-    );
-    if (enrolled) {
-      if (monthlyFee == null) {
-        return { error: "invalid-subscription-fee", ok: false };
-      }
-      if (!currency) {
-        return { error: "invalid-subscription-currency", ok: false };
-      }
+    const services = {
+      standardEnabled: String(formData.get("serviceStandardEnabled") ?? "0") === "1",
+      standardFee: parseUetdsSubscriptionFee(String(formData.get("serviceStandardFee") ?? "")),
+      advancedEnabled: String(formData.get("serviceAdvancedEnabled") ?? "0") === "1",
+      advancedFee: parseUetdsSubscriptionFee(String(formData.get("serviceAdvancedFee") ?? "")),
+      mobileEnabled: String(formData.get("serviceMobileEnabled") ?? "0") === "1",
+      mobileFee: parseUetdsSubscriptionFee(String(formData.get("serviceMobileFee") ?? "")),
+    };
+    if (
+      enrolled &&
+      (
+        (services.standardEnabled && services.standardFee == null) ||
+        (services.advancedEnabled && services.advancedFee == null) ||
+        (services.mobileEnabled && services.mobileFee == null)
+      )
+    ) {
+      return { error: "invalid-subscription-fee", ok: false };
     }
+    if (!currency) {
+      return { error: "invalid-subscription-currency", ok: false };
+    }
+    const monthlyFee = services.standardEnabled || services.advancedEnabled || services.mobileEnabled
+      ? [services.standardEnabled ? services.standardFee : 0, services.advancedEnabled ? services.advancedFee : 0, services.mobileEnabled ? services.mobileFee : 0]
+          .reduce((sum, fee) => (sum ?? 0) + (fee ?? 0), 0)
+      : null;
     const periods = parseSubscriptionPeriodsFromForm(
       String(formData.get("uetdsSubscriptionPeriods") ?? ""),
     );
@@ -173,8 +187,9 @@ export async function updateOpsPartnerDriverAction(
       partnerId,
       opsUserId: actor.id,
       enrolled,
-      monthlyFee: enrolled ? monthlyFee : null,
-      currency: enrolled ? currency : null,
+      monthlyFee,
+      currency,
+      services,
       periods,
     });
     if (!subscriptionResult.ok) {

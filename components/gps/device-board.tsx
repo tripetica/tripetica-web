@@ -32,6 +32,9 @@ export function GpsDeviceBoard({
   const [presence, setPresence] = useState("");
   const [wifi, setWifi] = useState("");
   const [fix, setFix] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [model, setModel] = useState("");
+  const [installation, setInstallation] = useState("");
   const now = Date.now();
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleUpperCase("tr-TR");
@@ -39,7 +42,7 @@ export function GpsDeviceBoard({
       if (surface === "ops" && partnerId === "stock" && device.partnerId) return false;
       if (surface === "ops" && partnerId && partnerId !== "stock" && device.partnerId !== partnerId) return false;
       if (needle) {
-        const haystack = [device.plate, device.deviceCode, device.imei, device.label, device.partnerName, device.uetdsCompany]
+        const haystack = [device.plate, device.deviceCode, device.imei, device.label, device.partnerName, device.uetdsCompany, device.manufacturer, device.trackerModel, device.serialNumber]
           .filter(Boolean)
           .join(" ")
           .toLocaleUpperCase("tr-TR");
@@ -50,9 +53,12 @@ export function GpsDeviceBoard({
       if (wifi && device.wifiMode !== wifi) return false;
       if (fix === "yes" && device.gnssFix !== true) return false;
       if (fix === "no" && device.gnssFix === true) return false;
+      if (manufacturer && device.manufacturer !== manufacturer) return false;
+      if (model && device.trackerModel !== model) return false;
+      if (installation && device.installationStatus !== installation) return false;
       return true;
     });
-  }, [devices, fix, now, partnerId, presence, query, surface, wifi]);
+  }, [devices, fix, installation, manufacturer, model, now, partnerId, presence, query, surface, wifi]);
 
   return (
     <div className="gps-screen">
@@ -108,6 +114,30 @@ export function GpsDeviceBoard({
             </select>
           </label>
           <label>
+            <span>{copy.manufacturer}</span>
+            <select value={manufacturer} onChange={(event) => setManufacturer(event.target.value)}>
+              <option value="">{copy.all}</option>
+              <option value="teltonika">{copy.receiverTeltonika}</option>
+              <option value="esp32">{copy.receiverEsp32}</option>
+            </select>
+          </label>
+          <label>
+            <span>{copy.trackerModel}</span>
+            <select value={model} onChange={(event) => setModel(event.target.value)}>
+              <option value="">{copy.all}</option>
+              <option value="fmb920">FMB920</option>
+              <option value="fmc920">FMC920</option>
+            </select>
+          </label>
+          <label>
+            <span>{copy.installStatus}</span>
+            <select value={installation} onChange={(event) => setInstallation(event.target.value)}>
+              <option value="">{copy.all}</option>
+              <option value="pending">{copy.installPending}</option>
+              <option value="installed">{copy.installInstalled}</option>
+            </select>
+          </label>
+          <label>
             <span>{copy.anyFix}</span>
             <select value={fix} onChange={(event) => setFix(event.target.value)}>
               <option value="">{copy.all}</option>
@@ -122,13 +152,16 @@ export function GpsDeviceBoard({
           <table className="ops-table">
             <thead>
               <tr>
+                <th>{copy.manufacturer}</th>
+                <th>{copy.trackerModel}</th>
                 <th>{copy.deviceId}</th>
                 <th>{copy.imei}</th>
                 <th>{copy.partner}</th>
                 <th>{copy.vehicle}</th>
                 <th>{copy.company}</th>
+                <th>{copy.installStatus}</th>
                 <th>{copy.status}</th>
-                <th>{copy.seen}</th>
+                <th>{copy.lastConnection}</th>
                 <th>{copy.detail}</th>
               </tr>
             </thead>
@@ -137,11 +170,14 @@ export function GpsDeviceBoard({
                 const href = localizedPath(locale, `/ops/gps/${device.id}`);
                 return (
                   <tr key={device.id}>
+                    <td>{device.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</td>
+                    <td>{modelText(device.trackerModel, device.linkTechnology)}</td>
                     <td>{device.deviceCode}</td>
                     <td>{device.imei ?? "—"}</td>
                     <td>{device.partnerName || copy.stock}</td>
                     <td>{device.plate ?? copy.unassigned}</td>
                     <td>{device.plate ? (device.uetdsCompany || copy.companyMissing) : "—"}</td>
+                    <td>{device.installationStatus === "pending" ? copy.installPending : copy.installInstalled}</td>
                     <td>{device.status === "active" ? copy.active : copy.disabled}</td>
                     <td>{gpsClock(device.lastHeartbeatAt)}</td>
                     <td><a className="ops-btn-secondary" href={href}>{copy.detail}</a></td>
@@ -180,6 +216,12 @@ export function GpsDeviceBoard({
       )}
     </div>
   );
+}
+
+function modelText(model: "fmb920" | "fmc920" | null, link: "2g" | "4g" | null) {
+  if (model === "fmb920") return link === "2g" ? "FMB920 · 2G" : "FMB920";
+  if (model === "fmc920") return link === "4g" ? "FMC920 · 4G" : "FMC920";
+  return "—";
 }
 
 function modeLabel(copy: GpsCopy, mode: "on" | "off" | "auto") {

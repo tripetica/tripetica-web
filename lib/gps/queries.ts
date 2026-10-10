@@ -4,7 +4,8 @@ import { getPool, query } from "@/lib/db/postgres";
 import { lowBatteryActionPayload, wifiSharePayload } from "@/lib/gps/commands";
 import { GPS_COMMAND_RETRY_MS, routeSampleStep } from "@/lib/gps/contract";
 import { canDeleteGpsDevice } from "@/lib/gps/delete-access";
-import { type GpsLiveSnapshot, type GpsWifiShareCommand } from "@/lib/gps/live";
+import { type GpsLiveSnapshot, type GpsRecentFix, type GpsWifiShareCommand } from "@/lib/gps/live";
+import { gpsInitialLiveSource, gpsLiveSourceAfterAssignment, type GpsRegistrationProfile } from "@/lib/gps/registration";
 import { generateDeviceCode, generateDeviceToken, hashDeviceToken } from "@/lib/gps/token";
 
 export type GpsDeviceListItem = {
@@ -68,6 +69,15 @@ export type GpsDeviceListItem = {
   lowBatteryState: "normal" | "grace" | "keep_on" | "saving" | null;
   lowBatteryGraceRemainingSeconds: number | null;
   lowBatteryEpisodeAt: string | null;
+  manufacturer: "esp32" | "teltonika";
+  trackerModel: "fmb920" | "fmc920" | null;
+  linkTechnology: "2g" | "4g" | null;
+  installationStatus: "pending" | "installed";
+  liveSource: boolean;
+  serialNumber: string | null;
+  simPhone: string | null;
+  simOperator: string | null;
+  simApn: string | null;
 };
 
 export type GpsRoutePoint = {
@@ -161,6 +171,15 @@ type DeviceSqlRow = {
   low_battery_state: "normal" | "grace" | "keep_on" | "saving" | null;
   low_battery_grace_remaining_seconds: number | null;
   low_battery_episode_at: Date | null;
+  manufacturer: "esp32" | "teltonika";
+  tracker_model: "fmb920" | "fmc920" | null;
+  link_technology: "2g" | "4g" | null;
+  installation_status: "pending" | "installed";
+  live_source: boolean;
+  serial_number: string | null;
+  sim_phone: string | null;
+  sim_operator: string | null;
+  sim_apn: string | null;
 };
 
 const DEVICE_SELECT = `
@@ -224,6 +243,15 @@ const DEVICE_SELECT = `
     status.low_battery_state,
     status.low_battery_grace_remaining_seconds,
     status.low_battery_episode_at,
+    device.manufacturer,
+    device.tracker_model,
+    device.link_technology,
+    device.installation_status,
+    device.live_source,
+    device.serial_number,
+    device.sim_phone,
+    device.sim_operator,
+    device.sim_apn,
     credential.device_id AS credential_device_id,
     credential.revoked_at AS credential_revoked_at
   FROM gps_devices device
@@ -302,6 +330,15 @@ function mapDevice(row: DeviceSqlRow): GpsDeviceListItem {
     lowBatteryState: row.low_battery_state,
     lowBatteryGraceRemainingSeconds: row.low_battery_grace_remaining_seconds,
     lowBatteryEpisodeAt: row.low_battery_episode_at ? row.low_battery_episode_at.toISOString() : null,
+    manufacturer: row.manufacturer,
+    trackerModel: row.tracker_model,
+    linkTechnology: row.link_technology,
+    installationStatus: row.installation_status,
+    liveSource: row.live_source,
+    serialNumber: row.serial_number,
+    simPhone: row.sim_phone,
+    simOperator: row.sim_operator,
+    simApn: row.sim_apn,
   };
 }
 
@@ -315,6 +352,19 @@ export async function listGpsDevices(partnerId: string | null) {
         `${DEVICE_SELECT} ORDER BY partner.name NULLS LAST, vehicle.plate NULLS LAST, device.device_code`,
       );
   return result.rows.map(mapDevice);
+}
+
+export async function listFleetDefaultDrivers(partnerId: string) {
+  const result = await query<{ vehicle_id: string; driver_name: string }>(
+    `SELECT defaults.vehicle_id,
+            trim(driver.first_name || ' ' || driver.last_name) AS driver_name
+       FROM partner_fleet_defaults defaults
+       JOIN partner_drivers driver ON driver.id = defaults.driver_id
+      WHERE defaults.partner_id = $1
+        AND driver.deleted_at IS NULL`,
+    [partnerId],
+  );
+  return new Map(result.rows.map((row) => [row.vehicle_id, row.driver_name]));
 }
 
 export async function getGpsLive(deviceId: string, partnerId: string | null): Promise<GpsLiveSnapshot | null> {
@@ -441,7 +491,49 @@ export async function getGpsLive(deviceId: string, partnerId: string | null): Pr
     lowBatteryState: row.low_battery_state,
     lowBatteryGraceRemainingSeconds: row.low_battery_grace_remaining_seconds,
     wifiShareCommand: await latestWifiShareCommand(deviceId),
+    recent: (await listGpsRecentFixes([deviceId])).get(deviceId) ?? [],
   };
+}
+
+export async function listGpsRecentFixes(deviceIds: string[]) {
+  const grouped = new Map<string, GpsRecentFix[]>();
+  const ids = [...new Set(deviceIds.filter((id) => id.length > 0))];
+  for (const id of ids) grouped.set(id, []);
+  if (ids.length === 0) return grouped;
+  const result = await query<{
+    device_id: string;
+    recorded_at: Date;
+    latitude: string;
+    longitude: string;
+    speed_mps: string | null;
+  }>(
+    `SELECT device_id::text AS device_id,
+            recorded_at,
+            latitude::text AS latitude,
+            longitude::text AS longitude,
+            speed_mps::text AS speed_mps
+     FROM gps_positions
+     WHERE device_id = ANY($1::uuid[])
+       AND recorded_at >= NOW() - INTERVAL '20 minutes'
+     ORDER BY recorded_at ASC
+     LIMIT 4000`,
+    [ids],
+  );
+  for (const row of result.rows) {
+    const bucket = grouped.get(row.device_id);
+    if (!bucket || bucket.length >= 500) continue;
+    const latitude = Number(row.latitude);
+    const longitude = Number(row.longitude);
+    const speed = row.speed_mps === null ? null : Number(row.speed_mps);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    bucket.push({
+      at: row.recorded_at.getTime(),
+      latitude,
+      longitude,
+      speedMps: speed !== null && Number.isFinite(speed) ? speed : null,
+    });
+  }
+  return grouped;
 }
 
 async function latestWifiShareCommand(deviceId: string): Promise<GpsWifiShareCommand | null> {
@@ -679,10 +771,25 @@ export async function createGpsDevice(input: {
   deviceCode?: string | null;
   label?: string | null;
   imei: string | null;
+  receiver?: "esp32" | "teltonika";
+  trackerModel?: "fmb920" | "fmc920" | null;
+  profile?: GpsRegistrationProfile;
   assignedBy: string;
   firmware?: string | null;
 }) {
   const token = generateDeviceToken();
+  const profile = input.profile ?? {
+    receiver: input.receiver ?? "esp32",
+    manufacturer: input.receiver === "teltonika" ? "teltonika" as const : "esp32" as const,
+    trackerModel: input.receiver === "teltonika" ? input.trackerModel ?? null : null,
+    linkTechnology: input.trackerModel === "fmb920" ? "2g" as const : input.trackerModel === "fmc920" ? "4g" as const : null,
+    imei: input.imei,
+    serialNumber: null,
+    simPhone: null,
+    simOperator: null,
+    simApn: null,
+    installationStatus: input.receiver === "teltonika" ? "pending" as const : "installed" as const,
+  };
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const deviceCode = input.deviceCode || generateDeviceCode();
@@ -690,11 +797,47 @@ export async function createGpsDevice(input: {
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
+      const occupied = input.vehicleId
+        ? await client.query(
+          `SELECT 1
+           FROM gps_devices
+           WHERE vehicle_id = $1
+             AND status = 'active'
+             AND live_source
+           LIMIT 1`,
+          [input.vehicleId],
+        )
+        : { rowCount: 0 };
+      const liveSource = gpsInitialLiveSource({
+        receiver: profile.receiver,
+        hasVehicle: Boolean(input.vehicleId),
+        vehicleHasLiveSource: (occupied.rowCount ?? 0) > 0,
+      });
       const inserted = await client.query<{ id: string }>(
-        `INSERT INTO gps_devices (partner_id, vehicle_id, device_code, label, imei)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO gps_devices (
+           partner_id, vehicle_id, device_code, label, imei, receiver, tracker_model,
+           manufacturer, link_technology, serial_number, sim_phone, sim_operator, sim_apn,
+           installation_status, live_source
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING id`,
-        [input.partnerId, input.vehicleId, deviceCode, label, input.imei],
+        [
+          input.partnerId,
+          input.vehicleId,
+          deviceCode,
+          label,
+          profile.imei,
+          profile.receiver,
+          profile.trackerModel,
+          profile.manufacturer,
+          profile.linkTechnology,
+          profile.serialNumber,
+          profile.simPhone,
+          profile.simOperator,
+          profile.simApn,
+          profile.installationStatus,
+          liveSource,
+        ],
       );
       const id = inserted.rows[0]?.id;
       if (!id) {
@@ -713,6 +856,12 @@ export async function createGpsDevice(input: {
          VALUES ($1, $2, $3, $4)`,
         [id, input.partnerId, input.vehicleId, input.assignedBy],
       );
+      if (profile.receiver === "teltonika") {
+        await client.query(
+          `INSERT INTO gps_immobilizer_status (device_id) VALUES ($1)`,
+          [id],
+        );
+      }
       await client.query("COMMIT");
       return { id, token, deviceCode };
     } catch (error) {
@@ -775,13 +924,42 @@ export async function assignGpsDevice(input: {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    const current = await client.query<{ live_source: boolean }>(
+      `SELECT live_source
+       FROM gps_devices
+       WHERE id = $1
+       FOR UPDATE`,
+      [input.deviceId],
+    );
+    const row = current.rows[0];
+    if (!row) {
+      throw new Error("gps device was not assigned");
+    }
+    const occupied = input.vehicleId
+      ? await client.query(
+        `SELECT 1
+         FROM gps_devices
+         WHERE vehicle_id = $1
+           AND id <> $2
+           AND status = 'active'
+           AND live_source
+         LIMIT 1`,
+        [input.vehicleId, input.deviceId],
+      )
+      : { rowCount: 0 };
+    const liveSource = gpsLiveSourceAfterAssignment({
+      liveSource: row.live_source,
+      vehicleId: input.vehicleId,
+      destinationHasOtherLiveSource: (occupied.rowCount ?? 0) > 0,
+    });
     const updated = await client.query(
       `UPDATE gps_devices
        SET partner_id = $2,
            vehicle_id = $3,
+           live_source = $4,
            updated_at = NOW()
        WHERE id = $1`,
-      [input.deviceId, input.partnerId, input.vehicleId],
+      [input.deviceId, input.partnerId, input.vehicleId, liveSource],
     );
     if ((updated.rowCount ?? 0) !== 1) {
       throw new Error("gps device was not assigned");

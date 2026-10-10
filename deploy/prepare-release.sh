@@ -46,6 +46,7 @@ rsync -a \
   --exclude '.cursor/' \
   --exclude 'tmp/' \
   --exclude '.deploy-previous-current' \
+  --exclude 'scripts/gps-ats-probe.ts' \
   "$SOURCE/" "$RELEASE/"
 
 PREVIOUS_CURRENT=$(readlink -f /srv/tripetica/current)

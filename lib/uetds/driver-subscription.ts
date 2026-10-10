@@ -4,6 +4,13 @@
  */
 
 import { BOOKING_TIME_ZONE } from "@/lib/booking/istanbul-time";
+import {
+  emptyDriverServices,
+  selectedServiceTotal,
+  type DriverServiceSelection,
+} from "@/lib/uetds/service-subscriptions";
+
+export type { DriverServiceSelection };
 
 export const UETDS_SUBSCRIPTION_CURRENCIES = ["USD", "TRY", "EUR"] as const;
 export type UetdsSubscriptionCurrency = (typeof UETDS_SUBSCRIPTION_CURRENCIES)[number];
@@ -35,6 +42,7 @@ export type UetdsDriverSubscriptionState = {
   monthlyFee: number | null;
   currency: UetdsSubscriptionCurrency | null;
   periods: UetdsSubscriptionPeriodRecord[];
+  services: DriverServiceSelection;
 };
 
 /** Compact list-row projection shared by Ops/Partner driver tables. */
@@ -71,8 +79,8 @@ export function mapUetdsSubscriptionListSummary(input: {
   if (!enrolled) {
     return {
       enrolled: false,
-      monthlyFee: null,
-      currency: null,
+      monthlyFee,
+      currency,
       currentPeriodStatus: null,
       nextPeriodStatus: null,
     };

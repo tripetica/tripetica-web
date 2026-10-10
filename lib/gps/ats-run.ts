@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPool } from "@/lib/db/postgres";
+import { dispatchMobileAts } from "@/lib/gps/ats-mobile-dispatch";
 import { listAtsTripClocks } from "@/lib/gps/ats-trips";
 import { planAtsCycle } from "@/lib/gps/ats-window";
 import { atsPlate, nextAtsAttempt } from "@/lib/gps/ats-policy";
@@ -51,8 +52,8 @@ export async function runAtsDispatch(now = new Date()) {
   }
   const pool = getPool();
   const vehicles = await pool.query<VehicleRow>(
-    `SELECT settings.vehicle_id,
-            settings.source_device_id,
+    `SELECT device.vehicle_id,
+            device.id AS source_device_id,
             vehicle.plate,
             vehicle.deleted_at,
             device.status AS device_status,
@@ -62,13 +63,19 @@ export async function runAtsDispatch(now = new Date()) {
             company.integration_status,
             status.last_heartbeat_at,
             status.gnss_fix
-     FROM gps_ats_settings settings
-     JOIN gps_devices device ON device.id = settings.source_device_id
-     JOIN partner_vehicles vehicle ON vehicle.id = settings.vehicle_id
+     FROM gps_devices device
+     JOIN partner_vehicles vehicle ON vehicle.id = device.vehicle_id
      JOIN uetds_companies company ON company.id = vehicle.uetds_company_id
      LEFT JOIN gps_device_status status ON status.device_id = device.id
-     WHERE settings.enabled = TRUE
-       AND settings.source_device_id IS NOT NULL`,
+     WHERE device.status = 'active'
+       AND device.live_source = TRUE
+       AND vehicle.deleted_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1
+           FROM gps_ats_settings settings
+          WHERE settings.vehicle_id = device.vehicle_id
+            AND settings.enabled = FALSE
+       )`,
   );
   let sent = 0;
   let skipped = 0;
@@ -79,8 +86,14 @@ export async function runAtsDispatch(now = new Date()) {
     else if (outcome === "failed") failed += 1;
     else skipped += 1;
   }
+  const mobile = await dispatchMobileAts(now, runtime);
   const retried = await retryDueAttempts(now, runtime);
-  return { sent, skipped, failed, retried };
+  return {
+    sent: sent + mobile.sent,
+    skipped: skipped + mobile.skipped,
+    failed: failed + mobile.failed,
+    retried,
+  };
 }
 
 async function dispatchVehicle(
@@ -154,6 +167,19 @@ async function dispatchVehicle(
        ON CONFLICT DO NOTHING`,
       [submissionId, notificationId],
     );
+    await pool.query(
+      `INSERT INTO gps_ats_submission_context (
+         submission_id, notification_id, ministry_reference, company_short_name, plate, trip_start, trip_end
+       )
+       SELECT $1, notification.id, notification.ministry_reference, notification.company_short_name,
+              NULLIF(notification.snapshot->'vehicle'->>'plate', ''),
+              NULLIF(btrim(concat_ws(' ', notification.snapshot->'trip'->>'startDate', notification.snapshot->'trip'->>'startTime')), ''),
+              NULLIF(btrim(concat_ws(' ', notification.snapshot->'trip'->>'endDate', notification.snapshot->'trip'->>'endTime')), '')
+         FROM uetds_notifications notification
+        WHERE notification.id = $2
+       ON CONFLICT (submission_id, notification_id) DO NOTHING`,
+      [submissionId, notificationId],
+    );
   }
   return sendSubmission({
     submissionId,
@@ -191,10 +217,20 @@ async function retryDueAttempts(now: Date, runtime: "test" | "live") {
             submission.attempt_count,
             submission.period_slot
      FROM gps_ats_submissions submission
-     JOIN gps_ats_settings settings ON settings.vehicle_id = submission.vehicle_id AND settings.enabled = TRUE
+     JOIN gps_devices device
+       ON device.id = submission.device_id
+      AND device.vehicle_id = submission.vehicle_id
+      AND device.status = 'active'
+      AND device.live_source = TRUE
      JOIN partner_vehicles vehicle ON vehicle.id = submission.vehicle_id
      JOIN gps_positions position ON position.id = submission.position_id
-     WHERE submission.status = 'failed'
+     WHERE NOT EXISTS (
+         SELECT 1
+           FROM gps_ats_settings settings
+          WHERE settings.vehicle_id = submission.vehicle_id
+            AND settings.enabled = FALSE
+       )
+       AND submission.status = 'failed'
        AND submission.ministry_env = $2
        AND submission.attempt_count < 3
        AND submission.next_attempt_at IS NOT NULL

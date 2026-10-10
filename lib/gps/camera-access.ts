@@ -1,13 +1,14 @@
 import "server-only";
 
 import { actorCan, getOpsActor } from "@/lib/ops/session";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 import { readOpenCameraSession } from "@/lib/gps/camera-sessions";
 
 export async function cameraViewerScope(surface: string | null) {
   if (surface === "partner") {
     const actor = await getPartnerActor();
-    if (!actor || actor.mustChangePassword || !actor.isPrimaryPartner) {
+    if (!actor || actor.mustChangePassword || !actor.isPrimaryPartner || !partnerHasTab(actor, "gps")) {
       return null;
     }
     return {

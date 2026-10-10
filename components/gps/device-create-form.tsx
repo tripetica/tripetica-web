@@ -27,6 +27,8 @@ export function GpsDeviceCreateForm({
   const router = useRouter();
   const [partnerId, setPartnerId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
+  const [receiver, setReceiver] = useState("esp32");
+  const [model, setModel] = useState("fmb920");
   const [state, action, pending] = useActionState(createGpsDeviceAction, null as GpsActionState | null);
   const partnerOptions = useMemo(
     () => [
@@ -101,9 +103,47 @@ export function GpsDeviceCreateForm({
       </label>
       <label className="ops-field">
         <span>{copy.imei}</span>
-        <input name="imei" inputMode="numeric" autoComplete="off" />
-        <small>{copy.imeiHint}</small>
+        <input name="imei" inputMode="numeric" autoComplete="off" required={receiver === "teltonika"} />
+        <small>{receiver === "teltonika" ? copy.imeiRequiredHint : copy.imeiHint}</small>
       </label>
+      <label className="ops-field">
+        <span>{copy.manufacturer}</span>
+        <select name="receiver" value={receiver} onChange={(event) => setReceiver(event.target.value)}>
+          <option value="esp32">{copy.receiverEsp32}</option>
+          <option value="teltonika">{copy.receiverTeltonika}</option>
+        </select>
+      </label>
+      {receiver === "teltonika" ? (
+        <>
+          <label className="ops-field">
+            <span>{copy.trackerModel}</span>
+            <select name="trackerModel" value={model} onChange={(event) => setModel(event.target.value)}>
+              <option value="fmb920">{copy.modelFmb920}</option>
+              <option value="fmc920">{copy.modelFmc920}</option>
+            </select>
+          </label>
+          <p className="ops-note">{copy.link}: {model === "fmc920" ? copy.link4g : copy.link2g}</p>
+          <label className="ops-field">
+            <span>{copy.serial}</span>
+            <input name="serialNumber" autoComplete="off" />
+            <small>{copy.serialHint}</small>
+          </label>
+          <label className="ops-field">
+            <span>{copy.simPhone}</span>
+            <input name="simPhone" inputMode="tel" autoComplete="off" />
+          </label>
+          <label className="ops-field">
+            <span>{copy.simOperator}</span>
+            <input name="simOperator" autoComplete="off" />
+          </label>
+          <label className="ops-field">
+            <span>{copy.simApn}</span>
+            <input name="simApn" autoComplete="off" />
+            <small>{copy.simHint}</small>
+          </label>
+          <p className="ops-note">{copy.installHint}</p>
+        </>
+      ) : null}
       <button type="submit" className="ops-btn-primary" disabled={pending}>
         {copy.create}
       </button>

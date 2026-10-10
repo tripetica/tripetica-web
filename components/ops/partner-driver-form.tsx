@@ -357,16 +357,12 @@ function PartnerDriverFormEditor({
             }
           />
           <DriverUetdsSubscriptionSection
-            membershipControl={
-              <label className="ops-field">
-                <span>Üyelik Statüsü</span>
-                <select name="membershipStatus" value={membershipDraft} disabled={!canManage || savePending}
-                  onChange={(event) => setMembershipDraft(event.target.value as DriverMembershipStatus)}>
-                  <option value="standard">Standart Üye</option>
-                  <option value="gold">Gold Üye</option>
-                </select>
-              </label>
-            }
+            serviceLabels={{
+              standard: copy.serviceStandard,
+              advanced: copy.serviceAdvanced,
+              mobile: copy.serviceMobile,
+              total: copy.serviceTotal,
+            }}
             locale={panelLocale}
             value={subscriptionDraft}
             disabled={!canManage}

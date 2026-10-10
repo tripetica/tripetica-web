@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 import { isUuid } from "@/lib/ops/process-filters";
 import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
@@ -16,7 +17,7 @@ function text(value: unknown) {
 export async function GET(request: NextRequest) {
   if (!kamuLoginDevAllowed()) return NextResponse.json({ ok: false }, { status: 404 });
   const partner = await getPartnerActor();
-  if (!partner) return NextResponse.json({ ok: false }, { status: 404 });
+  if (!partner || !partnerHasTab(partner, "uetds")) return NextResponse.json({ ok: false }, { status: 404 });
   const owner = `partner:${partner.partnerId}:${partner.userId}`;
   const notificationId = request.nextUrl.searchParams.get("notification") ?? "";
   let target: PortalTripTarget | null = null;

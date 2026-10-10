@@ -16,6 +16,7 @@ import {
 } from "@/lib/partner/fleet";
 import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
 import { saveVehicleDriverPair } from "@/lib/partner/fleet-pairing";
+import { firstPartnerTabPath, partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerVehicleFormState = {
@@ -112,6 +113,9 @@ async function requirePartnerActor(locale: Locale) {
   }
   if (actor.mustChangePassword) {
     redirect(localizedPath(locale, "/partner/change-password"));
+  }
+  if (!partnerHasTab(actor, "vehicles")) {
+    redirect(localizedPath(locale, firstPartnerTabPath(actor)));
   }
   return actor;
 }

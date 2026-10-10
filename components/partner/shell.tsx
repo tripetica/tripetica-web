@@ -1,10 +1,13 @@
 import { partnerLogoutAction } from "@/lib/partner/actions";
 import { type PartnerCopy } from "@/lib/partner/copy";
+import { partnerHasTab, partnerTabForPath } from "@/lib/partner/access";
 import { PARTNER_NAV } from "@/lib/partner/nav";
 import { type PartnerActor } from "@/lib/partner/session";
 import { PartnerLowBatteryWarning } from "@/components/partner/low-battery-warning";
 import { PartnerNav } from "@/components/partner/nav";
+import { PartnerMobileShareRuntime, type MobileShareView } from "@/components/gps/mobile-share";
 import { PartnerPushControl } from "@/components/partner/push-control";
+import { PartnerShareButton } from "@/components/partner/share-button";
 import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
 import { type Locale } from "@/lib/i18n/config";
 import { type ReactNode } from "react";
@@ -14,6 +17,7 @@ type PartnerShellProps = {
   copy: PartnerCopy;
   actor: PartnerActor;
   pathWithoutLocale: string;
+  share?: MobileShareView | null;
   children: ReactNode;
 };
 
@@ -22,6 +26,7 @@ export function PartnerShell({
   copy,
   actor,
   pathWithoutLocale,
+  share = null,
   children,
 }: PartnerShellProps) {
   return (
@@ -31,7 +36,10 @@ export function PartnerShell({
           <PartnerNav
             locale={locale}
             copy={copy}
-            items={PARTNER_NAV}
+            items={PARTNER_NAV.filter((item) => {
+              const tab = partnerTabForPath(item.href);
+              return tab ? partnerHasTab(actor, tab) : false;
+            })}
             pathWithoutLocale={pathWithoutLocale}
             partnerName={actor.partnerName}
             gpsLabel={actor.isPrimaryPartner ? copy.gps : copy.gpsOnly}
@@ -39,6 +47,7 @@ export function PartnerShell({
         </div>
         <p className="partner-topbar-title">{copy.panelName}</p>
         <div className="partner-topbar-end">
+          {share?.vehicleId ? <PartnerShareButton initial={share} /> : null}
           <PartnerPushControl locale={locale} copy={copy} />
           <OpsLanguageSwitcher
             locale={locale}
@@ -55,6 +64,7 @@ export function PartnerShell({
       </header>
       <div className="ops-body">
         <main className="ops-main">
+          {actor.isOwner ? <PartnerMobileShareRuntime /> : null}
           {actor.isPrimaryPartner ? <PartnerLowBatteryWarning locale={locale} /> : null}
           {children}
         </main>

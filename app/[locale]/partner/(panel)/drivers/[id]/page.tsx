@@ -34,7 +34,6 @@ export default async function PartnerDriverDetailPage({
   if (!driver) {
     notFound();
   }
-
   return (
     <div className="ops-page partner-profile-page">
       <PartnerDriverDetail

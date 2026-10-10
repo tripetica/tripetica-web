@@ -14,6 +14,7 @@ import {
   gpsFleetPlotted,
   gpsFleetHistoryReady,
   gpsFleetMarkerClick,
+  gpsFleetStoredMarker,
   gpsFleetOpening,
   gpsFleetPoint,
   gpsFleetPopupClosed,
@@ -168,6 +169,10 @@ test("fleet endpoint stays partner scoped and the live map is the partner home",
   assert.match(map, /GPS_FLEET_GLIDE_MS/);
   assert.match(map, /gpsFleetMarkerClick/);
   assert.match(map, /loadFleetAddress\(selectedFleetRef\.current\)/);
+  assert.match(map, /gpsFleetStoredMarker/);
+  const markers = new Map<string, string>([["device:abc", "pin"]]);
+  assert.equal(gpsFleetStoredMarker(markers, "abc", "device:abc"), "pin");
+  assert.equal(gpsFleetStoredMarker(markers, "abc", null), undefined);
   assert.match(map, /followHeldRef/);
   assert.doesNotMatch(map, /fleetLabel|gps-fleet-control|showFleetNow|Tüm filoyu göster/);
   const click = map.slice(map.indexOf("gpsFleetMarkerClick"), map.indexOf("fleetMarkers.current.set"));

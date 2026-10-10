@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { gpsAddressCell } from "@/lib/gps/address-format";
-import { GPS_FLEET_FOLLOW_ZOOM, GPS_FLEET_GLIDE_MS, gpsFleetFrame, gpsFleetIdsChanged, gpsFleetMarkerClick, gpsFleetPadding } from "@/lib/gps/fleet";
+import { GPS_FLEET_FOLLOW_ZOOM, GPS_FLEET_GLIDE_MS, gpsFleetFrame, gpsFleetIdsChanged, gpsFleetMarkerClick, gpsFleetPadding, gpsFleetStoredMarker } from "@/lib/gps/fleet";
 import { gpsApplyVehicleFix, gpsSelectVehicle, type GpsFollowView } from "@/lib/gps/follow";
 import { gpsPopupRows, type GpsMarkerState, type GpsPopupPrefs } from "@/lib/gps/map-popup";
 
@@ -23,6 +23,7 @@ export type GpsVehicleMarker = GpsMapPoint & {
 
 export type GpsFleetMapPin = {
   id: string;
+  markerKey?: string;
   latitude: number;
   longitude: number;
   marker: GpsVehicleMarker;
@@ -357,7 +358,7 @@ export function GpsLiveMap({
         return;
       }
       leafletRef.current = leaflet;
-      const alive = new Set(pins.map((pin) => pin.id));
+      const alive = new Set(pins.map((pin) => pin.markerKey ?? pin.id));
       for (const [id, pin] of fleetMarkers.current) {
         if (alive.has(id)) continue;
         window.cancelAnimationFrame(fleetFrames.current.get(id) ?? 0);
@@ -369,7 +370,8 @@ export function GpsLiveMap({
       }
       for (const pin of pins) {
         const currentPrefs = modelRef.current.prefs;
-        let marker = fleetMarkers.current.get(pin.id);
+        const markerKey = pin.markerKey ?? pin.id;
+        let marker = fleetMarkers.current.get(markerKey);
         if (!marker) {
           marker = leaflet.marker([pin.latitude, pin.longitude], {
             icon: vehicleIcon(leaflet, pin.marker.state),
@@ -409,8 +411,8 @@ export function GpsLiveMap({
             followHeldRef.current = false;
             centerOn(map, next);
           });
-          fleetMarkers.current.set(pin.id, marker);
-          fleetPlaced.current.set(pin.id, fleetPlaceKey(pin));
+          fleetMarkers.current.set(markerKey, marker);
+          fleetPlaced.current.set(markerKey, fleetPlaceKey(pin));
           if (pin.id === selectedFleetRef.current) {
             holdMapMove(() => map.setView([pin.latitude, pin.longitude], GPS_FLEET_FOLLOW_ZOOM, { animate: false }));
           }
@@ -418,8 +420,8 @@ export function GpsLiveMap({
           marker.setIcon(vehicleIcon(leaflet, pin.marker.state));
           marker.setZIndexOffset(pin.id === selectedFleetRef.current ? 1000 : 0);
           const nextKey = fleetPlaceKey(pin);
-          if (fleetPlaced.current.get(pin.id) !== nextKey) {
-            fleetPlaced.current.set(pin.id, nextKey);
+          if (fleetPlaced.current.get(markerKey) !== nextKey) {
+            fleetPlaced.current.set(markerKey, nextKey);
             if (pin.id === selectedFleetRef.current) {
               glideFleet(marker, [pin.latitude, pin.longitude], pin.id, (latitude, longitude) => {
                 const current = currentView(map, selectedFleetRef.current);
@@ -463,7 +465,8 @@ export function GpsLiveMap({
 
   function loadFleetAddress(pinId: string) {
     const currentPrefs = modelRef.current.prefs;
-    const pin = fleetMarkers.current.get(pinId);
+    const model = pinsRef.current?.find((item) => item.id === pinId);
+    const pin = gpsFleetStoredMarker(fleetMarkers.current, pinId, model?.markerKey);
     if (!currentPrefs?.address || !pin || !pin.isPopupOpen()) return;
     const here = pin.getLatLng();
     const cell = gpsAddressCell(here.lat, here.lng);
@@ -490,7 +493,10 @@ export function GpsLiveMap({
         if (resolved) resolvedCell.current = cell;
         else requestedCell.current = "";
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (error instanceof DOMException && error.name === "AbortError") {
+          if (requestedCell.current === cell) requestedCell.current = "";
+          return;
+        }
         requestedCell.current = "";
         addressLine.current = "";
       }

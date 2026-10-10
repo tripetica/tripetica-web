@@ -1,4 +1,4 @@
-import { countryIso2FromName, mergeExtractedDraft, type UetdsExtractedDraft } from "@/lib/uetds/extract";
+import { countryIso2FromName, extractUetdsFromText, mergeExtractedDraft, type UetdsExtractedDraft } from "@/lib/uetds/extract";
 import { canonicalGroupPurpose, identityTypeFromValue, isUetdsTripKind, purposeForTripKind, type UetdsDraft, type UetdsTripKind } from "@/lib/uetds/draft";
 import { normalizeUetdsFare } from "@/lib/uetds/fare";
 import { normalizeUetdsPurposeText } from "@/lib/uetds/form-language";
@@ -66,8 +66,12 @@ export const UETDS_AI_EXTRACTION_SCHEMA = {
     passengers: { type: "array", maxItems: AI_EXTRACTION_MAX_PASSENGERS, items: {
       type: "object", additionalProperties: false, properties: passengerFields, required: Object.keys(passengerFields),
     } },
+    visibleText: field(
+      "Readable reservation message or document body that lists the passengers and trip fields. Exclude the phone status bar, chat delivery times, and app buttons. A disclaimer that the names are examples does not remove those names. Null only when no such text is visible.",
+      8000,
+    ),
   },
-  required: [...Object.keys(tripFields), "passengers"],
+  required: [...Object.keys(tripFields), "visibleText", "passengers"],
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -122,13 +126,18 @@ function describedClock(description: string, role: "start" | "end") {
 /** Validate the strict structured response, then omit unknown values from the canonical prefill. */
 export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = Date.now()): AiUetdsExtractedDraft {
   const value = record(raw);
+  if (value.visibleText !== undefined && value.visibleText !== null && typeof value.visibleText !== "string") {
+    throw new AiExtractionError("failed");
+  }
+  const visibleText = typeof value.visibleText === "string" ? value.visibleText.trim().slice(0, 8000) : "";
+  const sourceText = [description, visibleText].filter(Boolean).join("\n");
   if (Object.keys(value).some(key => !UETDS_AI_EXTRACTION_SCHEMA.required.includes(key)) || !Array.isArray(value.passengers) || value.passengers.length > AI_EXTRACTION_MAX_PASSENGERS) throw new AiExtractionError("failed");
   const trip = readFields(value, tripFields);
   // Read each labelled location only up to the next field, even on the same line.
   // Time labels precede the short pickup/dropoff aliases so they cannot become locations.
   const fields = /(?<![\p{L}\p{N}_])((?:alış|biniş|bırakma|bırakış|varış)\s+saati|(?:pick-?up|drop-?off|start|end)\s+(?:time|date)|(?:başlangıç|bitiş)\s+(?:tarihi|saati)|alış(?:\s+(?:yeri|noktası))?|pick-?up(?:\s+(?:place|location|point))?|bırakma(?:\s+yeri)?|bırakış(?:\s+yeri)?|drop-?off(?:\s+(?:place|location|point))?|origin|destination|ücret|ucret|fare|price|tutar|tarih|date|saat|time|uçuş(?:\s+(?:kodu|no))?|flight(?:\s+(?:code|number))?|amaç|purpose|açıklama|description|hizmet(?:\s+türü)?|tripKind|ad\s+soyad|first\s*name|last\s*name|name|soyad|surname|uyruk|nationality|cinsiyet|gender|pasaport|passport|tckn|telefon|phone|plaka|plate|grup(?:\s+adı)?|group(?:\s+name)?)(?:\s*:\s*|\s*-\s*|\s+)(?=\S)/giu;
   const labelled = { origin: new Set<string>(), destination: new Set<string>() };
-  for (const line of description.split(/\r?\n/)) {
+  for (const line of sourceText.split(/\r?\n/)) {
     const matches = [...line.matchAll(fields)];
     for (const [index, match] of matches.entries()) {
       if (/(?:saati|tarihi|time|date)$/iu.test(match[1])) continue;
@@ -157,14 +166,14 @@ export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = 
     startTime: time(trip.startTime),
     endDate: fullDate(trip.endDate),
     endTime: time(trip.endTime),
-    description,
+    description: sourceText,
     nowUtcMs,
   });
-  const startClock = describedClock(description, "start");
-  const endClock = describedClock(description, "end");
+  const startClock = describedClock(sourceText, "start");
+  const endClock = describedClock(sourceText, "end");
   if (startClock) dates.startTime = startClock;
   if (endClock) dates.endTime = endClock;
-  return {
+  const mapped: AiUetdsExtractedDraft = {
     origin: trip.origin ? preferUetdsPlaceQuery(trip.origin) || undefined : undefined,
     destination: trip.destination ? preferUetdsPlaceQuery(trip.destination) || undefined : undefined,
     startDate: dates.startDate, startTime: dates.startTime,
@@ -189,6 +198,43 @@ export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = 
       };
     }),
   };
+  const listed = extractUetdsFromText(sourceText, nowUtcMs);
+  const named = (passengers: typeof mapped.passengers) =>
+    (passengers ?? []).filter((passenger) => passenger.firstName?.trim() || passenger.lastName?.trim());
+  const samePerson = (left: { firstName?: string; lastName?: string }, right: { firstName?: string; lastName?: string }) =>
+    (left.firstName ?? "").trim().toLocaleLowerCase("tr-TR") === (right.firstName ?? "").trim().toLocaleLowerCase("tr-TR")
+    && (left.lastName ?? "").trim().toLocaleLowerCase("tr-TR") === (right.lastName ?? "").trim().toLocaleLowerCase("tr-TR");
+  const modelNamed = named(mapped.passengers);
+  const textNamed = named(listed.passengers);
+  // A disclaimer can make the model return nameless shells, or only the first person,
+  // while the readable list still contains every passenger. Keep a model person the list does not contain.
+  const textCoversModel = modelNamed.every((passenger) => textNamed.some((listedPassenger) => samePerson(passenger, listedPassenger)));
+  if (textNamed.length > modelNamed.length && textCoversModel) {
+    mapped.passengers = textNamed.map((passenger, index) => {
+      const model = modelNamed.find((item) => samePerson(item, passenger))
+        ?? (modelNamed.length === 0 ? mapped.passengers?.[index] : undefined);
+      return {
+        ...passenger,
+        identityNumber: passenger.identityNumber || (model?.identityNumber && model.identityNumber !== AI_MISSING_PASSENGER_IDENTITY ? model.identityNumber : AI_MISSING_PASSENGER_IDENTITY),
+        gender: passenger.gender || model?.gender,
+        nationality: passenger.nationality || model?.nationality,
+      };
+    });
+  } else if (mapped.passengers?.length) {
+    const shared = [...new Set((listed.passengers ?? []).map((passenger) => passenger.nationality).filter(Boolean))];
+    if (shared.length === 1) {
+      const nationality = shared[0];
+      mapped.passengers = mapped.passengers.map((passenger) =>
+        passenger.nationality ? passenger : { ...passenger, nationality },
+      );
+    }
+  }
+  if (!mapped.fare && listed.fare) mapped.fare = listed.fare;
+  if (!mapped.origin && listed.origin) mapped.origin = listed.origin;
+  if (!mapped.destination && listed.destination) mapped.destination = listed.destination;
+  if (!mapped.startTime && listed.startTime) mapped.startTime = listed.startTime;
+  if (!mapped.purpose && listed.purpose) mapped.purpose = listed.purpose;
+  return mapped;
 }
 
 export type AiExtractionMergeOptions = {

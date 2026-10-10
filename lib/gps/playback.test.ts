@@ -152,12 +152,13 @@ test("empty history and invalid points produce no frame", () => {
 
 test("history playback stays on the selected device and off the live poll", () => {
   const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
+  const routeHistory = readFileSync(new URL("../../components/gps/position-history.tsx", import.meta.url), "utf8");
   const history = readFileSync(new URL("../../components/gps/history-playback.tsx", import.meta.url), "utf8");
   const section = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
   const playback = readFileSync(new URL("./playback.ts", import.meta.url), "utf8");
   const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
-  assert.match(workspace, /key=\{`\$\{device\.id\}:\$\{fromIso\}:\$\{toIso\}`\}/);
-  assert.match(workspace, /deviceId=\{device\.id\}/);
+  assert.match(routeHistory, /key=\{`\$\{history\.deviceId\}:\$\{history\.fromIso\}:\$\{history\.toIso\}`\}/);
+  assert.match(workspace, /deviceId: device.id/);
   assert.match(history, /cancelAnimationFrame/);
   assert.match(history, /interactive: false/);
   assert.match(history, /gps-playback-vehicle/);
@@ -165,10 +166,12 @@ test("history playback stays on the selected device and off the live poll", () =
   assert.match(history, /playbackShownSample/);
   assert.doesNotMatch(history, /gps-playback-date/);
   assert.doesNotMatch(history, /gps-playback-scale/);
-  assert.match(workspace, /className="gps-range"/);
-  assert.match(workspace, /className="gps-range-fields"/);
-  assert.match(workspace, /className="gps-range-submit"/);
-  assert.match(workspace, /className="gps-range-chevron" aria-hidden="true"/);
+  assert.doesNotMatch(routeHistory, /gps-share-filters/);
+  assert.match(routeHistory, /name="from"/);
+  assert.match(routeHistory, /className="gps-range"/);
+  assert.match(routeHistory, /className="gps-range-fields"/);
+  assert.match(routeHistory, /className="gps-range-submit"/);
+  assert.match(routeHistory, /className="gps-range-chevron" aria-hidden="true"/);
   assert.match(css, /\.gps-range-fields \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
   assert.match(css, /\.gps-range-chevron \{\n  display: none;\n\}/);
   assert.match(css, /@media \(max-width: 480px\) \{\n  \.gps-range-picker \{[\s\S]*?\.gps-range-chevron \{[^}]*pointer-events: none;/);

@@ -134,8 +134,8 @@ export function GpsSectionToggle({
     <div className="gps-disclosure" ref={rootRef}>
       {open ? (
         <section className="gps-section">
-          {children}
-          <div className="ops-contact-toggle-wrap gps-disclosure-hide">
+          <div key="gps-section-body">{children}</div>
+          <div key="gps-section-hide" className="ops-contact-toggle-wrap gps-disclosure-hide">
             <button
               type="button"
               className="ops-btn-secondary ops-contact-toggle"
@@ -151,8 +151,9 @@ export function GpsSectionToggle({
           </div>
         </section>
       ) : (
-        <div className="ops-contact-toggle-wrap">
+        <div key="gps-section-closed" className="ops-contact-toggle-wrap">
           <button
+            key="gps-section-show"
             type="button"
             className="ops-btn-secondary ops-contact-toggle"
             aria-expanded={false}
@@ -168,7 +169,7 @@ export function GpsSectionToggle({
           >
             {showLabel}
           </button>
-          {notice ? <p className="gps-inline-note" role="status">{notice}</p> : null}
+          {notice ? <p key="gps-section-notice" className="gps-inline-note" role="status">{notice}</p> : null}
         </div>
       )}
     </div>

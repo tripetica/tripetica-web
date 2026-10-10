@@ -11,6 +11,7 @@ import {
   clearPartnerJobVehicle,
   type AssignJobError,
 } from "@/lib/partner/job-assignment";
+import { firstPartnerTabPath, partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export type PartnerAssignmentFormState = {
@@ -46,6 +47,9 @@ async function requirePartner(locale: Locale) {
   }
   if (actor.mustChangePassword) {
     redirect(localizedPath(locale, "/partner/change-password"));
+  }
+  if (!partnerHasTab(actor, "accepted")) {
+    redirect(localizedPath(locale, firstPartnerTabPath(actor)));
   }
   return actor;
 }

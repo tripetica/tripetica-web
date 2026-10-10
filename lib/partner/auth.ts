@@ -9,6 +9,7 @@ import {
   PARTNER_SESSION_COOKIE,
   type PartnerStatus,
 } from "@/lib/partner/constants";
+import { firstPartnerTabPath } from "@/lib/partner/access";
 import { normalizePartnerEmail } from "@/lib/partner/email";
 import { partnerLoginDenialAfterPassword } from "@/lib/partner/login-status";
 import { isPartnerAccountLoginEligible } from "@/lib/partner/policy";
@@ -41,7 +42,7 @@ export function partnerHomePath(locale: Locale, actor: PartnerActor) {
   if (actor.mustChangePassword) {
     return localizedPath(locale, "/partner/change-password");
   }
-  return localizedPath(locale, "/partner/jobs");
+  return localizedPath(locale, firstPartnerTabPath(actor));
 }
 
 export async function loginPartnerUser(emailRaw: string, password: string) {

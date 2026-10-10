@@ -11,6 +11,7 @@ import {
   setVehicleListCompany,
   setVehicleListDriver,
 } from "@/lib/partner/fleet-list-patch";
+import { firstPartnerTabPath, partnerHasTab, type PartnerTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
 function localeFromInput(value: string): Locale {
@@ -22,7 +23,7 @@ function optionalId(value: string) {
   return trimmed || null;
 }
 
-async function requirePartner(locale: string) {
+async function requirePartner(locale: string, tab: PartnerTab) {
   const resolved = localeFromInput(locale);
   const actor = await getPartnerActor();
   if (!actor) {
@@ -30,6 +31,9 @@ async function requirePartner(locale: string) {
   }
   if (actor.mustChangePassword) {
     redirect(localizedPath(resolved, "/partner/change-password"));
+  }
+  if (!partnerHasTab(actor, tab)) {
+    redirect(localizedPath(resolved, firstPartnerTabPath(actor)));
   }
   return actor;
 }
@@ -47,7 +51,7 @@ export async function patchPartnerDriverCompanyAction(input: {
   driverId: string;
   companyId: string;
 }) {
-  const actor = await requirePartner(input.locale);
+  const actor = await requirePartner(input.locale, "drivers");
   const result = await setDriverListCompany({
     partnerId: actor.partnerId,
     driverId: input.driverId,
@@ -64,7 +68,7 @@ export async function patchPartnerDriverVehicleAction(input: {
   driverId: string;
   vehicleId: string;
 }) {
-  const actor = await requirePartner(input.locale);
+  const actor = await requirePartner(input.locale, "drivers");
   const result = await setDriverListVehicle({
     partnerId: actor.partnerId,
     driverId: input.driverId,
@@ -81,7 +85,7 @@ export async function patchPartnerDriverAuthorityAction(input: {
   driverId: string;
   authorityId: string;
 }) {
-  const actor = await requirePartner(input.locale);
+  const actor = await requirePartner(input.locale, "drivers");
   const result = await setDriverListAuthority({
     partnerId: actor.partnerId,
     driverId: input.driverId,
@@ -98,7 +102,7 @@ export async function patchPartnerVehicleCompanyAction(input: {
   vehicleId: string;
   companyId: string;
 }) {
-  const actor = await requirePartner(input.locale);
+  const actor = await requirePartner(input.locale, "vehicles");
   const result = await setVehicleListCompany({
     partnerId: actor.partnerId,
     vehicleId: input.vehicleId,
@@ -115,7 +119,7 @@ export async function patchPartnerVehicleDriverAction(input: {
   vehicleId: string;
   driverId: string;
 }) {
-  const actor = await requirePartner(input.locale);
+  const actor = await requirePartner(input.locale, "vehicles");
   const result = await setVehicleListDriver({
     partnerId: actor.partnerId,
     vehicleId: input.vehicleId,

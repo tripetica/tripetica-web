@@ -1,3 +1,5 @@
+import { type GpsRecentFix } from "@/lib/gps/live";
+
 export const GPS_FLEET_FOLLOW_ZOOM = 15;
 export const GPS_FLEET_GLIDE_MS = 800;
 
@@ -11,9 +13,34 @@ export type GpsFleetVehicle = {
   headingDeg: number | null;
   recordedAt: string | null;
   lastHeartbeatAt: string | null;
+  receivedAt?: string | null;
   gnssFix?: boolean | null;
   satellites?: number | null;
+  recent?: GpsRecentFix[];
+  source?: "device" | "mobile";
+  driverName?: string | null;
+  accuracyM?: number | null;
+  partnerId?: string | null;
+  partnerName?: string | null;
+  trackerModel?: string | null;
+  manufacturer?: "esp32" | "teltonika" | null;
 };
+
+export function gpsFleetItemKey(vehicle: { id: string; source?: string | null }) {
+  return `${vehicle.source === "mobile" ? "mobile" : "device"}:${vehicle.id}`;
+}
+
+export function gpsFleetStoredMarker<T>(
+  markers: { get(key: string): T | undefined },
+  pinId: string,
+  markerKey?: string | null,
+): T | undefined {
+  if (markerKey) {
+    const keyed = markers.get(markerKey);
+    if (keyed !== undefined) return keyed;
+  }
+  return markers.get(pinId);
+}
 
 export type GpsFleetSelection = {
   selectedId: string | null;
@@ -143,9 +170,35 @@ export function readGpsFleet(body: unknown): GpsFleetVehicle[] | null {
       lastHeartbeatAt: typeof row.lastHeartbeatAt === "string" ? row.lastHeartbeatAt : null,
       gnssFix: row.gnssFix === true ? true : row.gnssFix === false ? false : null,
       satellites: numberOrNull(row.satellites),
+      recent: readRecent(row.recent),
+      source: row.source === "mobile" ? "mobile" : "device",
+      driverName: typeof row.driverName === "string" ? row.driverName : null,
+      accuracyM: numberOrNull(row.accuracyM),
+      partnerId: typeof row.partnerId === "string" ? row.partnerId : null,
+      partnerName: typeof row.partnerName === "string" ? row.partnerName : null,
+      trackerModel: typeof row.trackerModel === "string" ? row.trackerModel : null,
+      manufacturer: row.manufacturer === "esp32" || row.manufacturer === "teltonika" ? row.manufacturer : null,
     });
   }
   return vehicles;
+}
+
+function readRecent(value: unknown): GpsRecentFix[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const fixes: GpsRecentFix[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return undefined;
+    const row = item as Record<string, unknown>;
+    if (typeof row.at !== "number" || typeof row.latitude !== "number" || typeof row.longitude !== "number") return undefined;
+    if (row.speedMps !== null && typeof row.speedMps !== "number") return undefined;
+    fixes.push({
+      at: row.at,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      speedMps: row.speedMps === null ? null : row.speedMps,
+    });
+  }
+  return fixes;
 }
 
 function numberOrNull(value: unknown) {

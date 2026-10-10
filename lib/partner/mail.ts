@@ -13,12 +13,14 @@ export async function sendPartnerMail(input: {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }): Promise<OutboundMailResult> {
   return sendAccountSmtpMail(
     {
       to: input.to,
       subject: input.subject,
       text: input.text,
+      html: input.html,
       from: partnerMailFrom(),
     },
     {

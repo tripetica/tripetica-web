@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptyDraft, createPassengerDraft } from "@/lib/uetds/draft";
 import { countryIso2FromName, extractUetdsFromText, mergeExtractedDraft } from "@/lib/uetds/extract";
+import { mapAiUetdsExtraction, mergeAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
 import { isOfficialUetdsLocationReady } from "@/lib/uetds/location";
 import { prefillUetdsDraftFromReservation } from "@/lib/uetds/prefill";
 
@@ -31,7 +32,164 @@ test("text extraction fills known fields and does not invent identity numbers", 
 test("country names resolve without inventing unknown codes", () => {
   assert.equal(countryIso2FromName("Libya"), "LY");
   assert.equal(countryIso2FromName("Türkiye"), "TR");
+  assert.equal(countryIso2FromName("İngiltere"), "GB");
+  assert.equal(countryIso2FromName("England"), "GB");
   assert.equal(countryIso2FromName("Narnia"), null);
+});
+
+const EXAMPLE_LIST = `
+Not: İsimler örnek olarak oluşturulmuştur gerçek yolcu isimleri değildir.
+İsim Soyisim:
+1. Oliver Bennett
+2. Charlotte Bennett
+3. William Parker
+4. Emily Parker
+Ülke: İngiltere
+Kişi Sayısı: 4
+Saat: 15:30
+Alış: Sultanahmet
+Bırakış: İstanbul Havalimanı (IST)
+Açıklama: Transfer
+Ücret: 40 TL
+`;
+
+test("a numbered example list keeps every passenger and the shared country", () => {
+  const extracted = extractUetdsFromText(EXAMPLE_LIST);
+  assert.equal(extracted.passengers?.length, 4);
+  assert.deepEqual(extracted.passengers?.map((passenger) => [passenger.firstName, passenger.lastName, passenger.nationality]), [
+    ["Oliver", "Bennett", "GB"],
+    ["Charlotte", "Bennett", "GB"],
+    ["William", "Parker", "GB"],
+    ["Emily", "Parker", "GB"],
+  ]);
+  assert.equal(extracted.startTime, "15:30");
+  assert.equal(extracted.origin, "Sultanahmet");
+  assert.equal(extracted.destination, "İstanbul Havalimanı (IST)");
+  assert.equal(extracted.fare, "40");
+  assert.equal(extracted.passengerCount, 4);
+});
+
+test("an image extraction with an empty passenger array still uses the visible list", () => {
+  const mapped = mapAiUetdsExtraction({
+    origin: null,
+    destination: null,
+    startDate: null,
+    startTime: "15:30",
+    endDate: null,
+    endTime: null,
+    tripKind: "transfer",
+    purpose: "Transfer",
+    fare: "40",
+    flightCode: null,
+    visibleText: EXAMPLE_LIST,
+    passengers: [],
+  });
+  assert.equal(mapped.passengers?.length, 4);
+  assert.equal(mapped.passengers?.[0]?.firstName, "Oliver");
+  assert.equal(mapped.passengers?.[3]?.lastName, "Parker");
+  assert.equal(mapped.passengers?.every((passenger) => passenger.nationality === "GB"), true);
+  const merged = mergeAiUetdsExtraction(createEmptyDraft("manual"), mapped, Date.parse("2026-10-10T09:00:00Z"));
+  assert.equal(merged.draft.passengers.length, 4);
+  assert.equal(merged.draft.passengers[1]?.firstName, "Charlotte");
+  assert.equal(merged.draft.passengers[1]?.nationality, "GB");
+  assert.equal(merged.draft.fare, "40");
+  assert.equal(merged.draft.startTime, "15:30");
+  assert.equal(merged.draft.origin, "Sultanahmet");
+  assert.equal(merged.draft.destination, "İstanbul Havalimanı (IST)");
+});
+
+test("nameless model shells do not hide the readable passenger list", () => {
+  const mapped = mapAiUetdsExtraction({
+    origin: null,
+    destination: null,
+    startDate: null,
+    startTime: null,
+    endDate: null,
+    endTime: null,
+    tripKind: "transfer",
+    purpose: null,
+    fare: "40",
+    flightCode: null,
+    visibleText: EXAMPLE_LIST,
+    passengers: [
+      { firstName: null, lastName: null, nationality: "İngiltere", identityNumber: null, gender: "male" },
+      { firstName: null, lastName: null, nationality: "İngiltere", identityNumber: null, gender: "female" },
+    ],
+  });
+  assert.equal(mapped.passengers?.length, 4);
+  assert.deepEqual(
+    mapped.passengers?.map((passenger) => [passenger.firstName, passenger.lastName, passenger.nationality]),
+    [
+      ["Oliver", "Bennett", "GB"],
+      ["Charlotte", "Bennett", "GB"],
+      ["William", "Parker", "GB"],
+      ["Emily", "Parker", "GB"],
+    ],
+  );
+  assert.equal(mapped.fare, "40");
+  assert.equal(mapped.startTime, "15:30");
+  assert.equal(mapped.origin, "Sultanahmet");
+});
+
+test("a user-edited passenger name is kept when a document extraction disagrees", () => {
+  const draft = createEmptyDraft("manual");
+  draft.passengers[0] = createPassengerDraft({
+    firstName: "Ayşe",
+    lastName: "Yılmaz",
+    provenance: { ...draft.passengers[0].provenance, firstName: "user", lastName: "user" },
+  });
+  const merged = mergeExtractedDraft(draft, {
+    passengers: [{ firstName: "Oliver", lastName: "Bennett", nationality: "GB" }],
+  });
+  assert.equal(merged.draft.passengers[0]?.firstName, "Ayşe");
+  assert.equal(merged.draft.passengers[0]?.lastName, "Yılmaz");
+  assert.equal(merged.draft.passengers[0]?.nationality, "GB");
+  assert.equal(merged.conflicts.some((conflict) => conflict.path === "passengers.0.firstName"), true);
+});
+
+test("a model passenger who is not in the readable list is kept", () => {
+  const mapped = mapAiUetdsExtraction({
+    origin: null,
+    destination: null,
+    startDate: null,
+    startTime: null,
+    endDate: null,
+    endTime: null,
+    tripKind: null,
+    purpose: null,
+    fare: null,
+    flightCode: null,
+    visibleText: "1. Someone Else\nÜlke: Libya",
+    passengers: [
+      { firstName: "Oliver", lastName: "Bennett", nationality: "GB", identityNumber: "A12345678", gender: "male" },
+    ],
+  });
+  assert.equal(mapped.passengers?.length, 1);
+  assert.equal(mapped.passengers?.[0]?.firstName, "Oliver");
+  assert.equal(mapped.passengers?.[0]?.identityNumber, "A12345678");
+  assert.equal(mapped.passengers?.[0]?.nationality, "GB");
+});
+
+test("İngiltere on a structured passenger maps to the ministry country code", () => {
+  const mapped = mapAiUetdsExtraction({
+    origin: "Sultanahmet",
+    destination: "İstanbul Havalimanı (IST)",
+    startDate: null,
+    startTime: "15:30",
+    endDate: null,
+    endTime: null,
+    tripKind: "transfer",
+    purpose: "Transfer",
+    fare: "40",
+    flightCode: null,
+    visibleText: null,
+    passengers: [
+      { firstName: "Oliver Bennett", lastName: null, nationality: "İngiltere", identityNumber: null, gender: "male" },
+    ],
+  });
+  assert.equal(mapped.passengers?.[0]?.firstName, "Oliver");
+  assert.equal(mapped.passengers?.[0]?.lastName, "Bennett");
+  assert.equal(mapped.passengers?.[0]?.nationality, "GB");
 });
 
 test("extraction does not silently overwrite reservation prefill", () => {

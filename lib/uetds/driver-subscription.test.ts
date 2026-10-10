@@ -182,6 +182,34 @@ describe("uetds driver subscription", () => {
     );
   });
 
+  it("future paid month stays open when that month arrives", () => {
+    const periods = [
+      {
+        year: 2026,
+        month: 11,
+        status: "paid" as const,
+        amountSnapshot: 15,
+        currencySnapshot: "USD" as const,
+      },
+    ];
+    assert.equal(
+      isUetdsDriverSubscriptionEntitled({
+        enrolled: true,
+        periods,
+        now: new Date("2026-10-15T12:00:00+03:00"),
+      }),
+      false,
+    );
+    assert.equal(
+      isUetdsDriverSubscriptionEntitled({
+        enrolled: true,
+        periods,
+        now: new Date("2026-11-01T00:30:00+03:00"),
+      }),
+      true,
+    );
+  });
+
   it("P: legacy unenrolled drivers remain entitled", () => {
     assert.equal(
       isUetdsDriverSubscriptionEntitled({

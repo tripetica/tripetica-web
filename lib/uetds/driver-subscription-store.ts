@@ -14,11 +14,22 @@ import {
   type UetdsSubscriptionPeriodRecord,
   type UetdsSubscriptionPeriodStatus,
 } from "@/lib/uetds/driver-subscription";
+import {
+  emptyDriverServices,
+  selectedServiceTotal,
+  type DriverServiceSelection,
+} from "@/lib/uetds/service-subscriptions";
 
 type DriverSubscriptionRow = {
   uetds_subscription_enrolled_at: Date | null;
   uetds_subscription_monthly_fee: string | null;
   uetds_subscription_currency: string | null;
+  service_standard_enabled: boolean;
+  service_standard_fee: string | null;
+  service_advanced_enabled: boolean;
+  service_advanced_fee: string | null;
+  service_mobile_gps_enabled: boolean;
+  service_mobile_gps_fee: string | null;
 };
 
 type PeriodRow = {
@@ -56,7 +67,13 @@ export async function getDriverUetdsSubscription(
   const driver = await query<DriverSubscriptionRow>(
     `SELECT uetds_subscription_enrolled_at,
             uetds_subscription_monthly_fee,
-            uetds_subscription_currency
+            uetds_subscription_currency,
+            service_standard_enabled,
+            service_standard_fee,
+            service_advanced_enabled,
+            service_advanced_fee,
+            service_mobile_gps_enabled,
+            service_mobile_gps_fee
        FROM partner_drivers
       WHERE id = $1
         AND deleted_at IS NULL`,
@@ -64,7 +81,14 @@ export async function getDriverUetdsSubscription(
   );
   const row = driver.rows[0];
   if (!row) {
-    return { enrolled: false, enrolledAt: null, monthlyFee: null, currency: null, periods: [] };
+    return {
+      enrolled: false,
+      enrolledAt: null,
+      monthlyFee: null,
+      currency: null,
+      periods: [],
+      services: emptyDriverServices(),
+    };
   }
   const periods = await query<PeriodRow>(
     `SELECT period_year, period_month, status, amount_snapshot, currency_snapshot
@@ -78,12 +102,21 @@ export async function getDriverUetdsSubscription(
     isUetdsSubscriptionCurrency(row.uetds_subscription_currency)
       ? row.uetds_subscription_currency
       : null;
+  const services: DriverServiceSelection = {
+    standardEnabled: row.service_standard_enabled,
+    standardFee: money(row.service_standard_fee),
+    advancedEnabled: row.service_advanced_enabled,
+    advancedFee: money(row.service_advanced_fee),
+    mobileEnabled: row.service_mobile_gps_enabled,
+    mobileFee: money(row.service_mobile_gps_fee),
+  };
   return {
     enrolled: Boolean(row.uetds_subscription_enrolled_at),
     enrolledAt: row.uetds_subscription_enrolled_at?.toISOString() ?? null,
-    monthlyFee: money(row.uetds_subscription_monthly_fee),
+    monthlyFee: selectedServiceTotal(services) ?? money(row.uetds_subscription_monthly_fee),
     currency,
     periods: periods.rows.map(mapPeriod),
+    services,
   };
 }
 
@@ -94,6 +127,7 @@ export async function saveDriverUetdsSubscription(input: {
   enrolled: boolean;
   monthlyFee: number | null;
   currency: UetdsSubscriptionCurrency | null;
+  services?: DriverServiceSelection;
   periods: Array<{
     year: number;
     month: number;
@@ -122,6 +156,8 @@ export async function saveDriverUetdsSubscription(input: {
     return { ok: false as const, error: "not-found" as const };
   }
 
+  const services = input.services;
+  const billed = services ? selectedServiceTotal(services) : input.monthlyFee;
   await query(
     `UPDATE partner_drivers
         SET uetds_subscription_enrolled_at = CASE
@@ -130,6 +166,12 @@ export async function saveDriverUetdsSubscription(input: {
             END,
             uetds_subscription_monthly_fee = $4,
             uetds_subscription_currency = $5,
+            service_standard_enabled = COALESCE($7::boolean, service_standard_enabled),
+            service_standard_fee = CASE WHEN $7::boolean IS NULL THEN service_standard_fee ELSE $8 END,
+            service_advanced_enabled = COALESCE($9::boolean, service_advanced_enabled),
+            service_advanced_fee = CASE WHEN $9::boolean IS NULL THEN service_advanced_fee ELSE $10 END,
+            service_mobile_gps_enabled = COALESCE($11::boolean, service_mobile_gps_enabled),
+            service_mobile_gps_fee = CASE WHEN $11::boolean IS NULL THEN service_mobile_gps_fee ELSE $12 END,
             last_edited_by_ops_user_id = $6
       WHERE id = $1
         AND partner_id = $2
@@ -138,11 +180,30 @@ export async function saveDriverUetdsSubscription(input: {
       input.driverId,
       input.partnerId,
       input.enrolled,
-      input.enrolled ? input.monthlyFee : null,
-      input.enrolled ? input.currency : null,
+      input.enrolled ? billed : billed,
+      input.currency,
       input.opsUserId,
+      services ? services.standardEnabled : null,
+      services?.standardEnabled ? services.standardFee : null,
+      services ? services.advancedEnabled : null,
+      services?.advancedEnabled ? services.advancedFee : null,
+      services ? services.mobileEnabled : null,
+      services?.mobileEnabled ? services.mobileFee : null,
     ],
   );
+  if (existing.services.mobileEnabled && services && !services.mobileEnabled) {
+    await query(
+      `UPDATE gps_mobile_sessions
+          SET status = 'stopped', stopped_at = NOW(), stop_reason = 'subscription_closed'
+        WHERE driver_id = $1 AND status = 'active'`,
+      [input.driverId],
+    );
+    await query(
+      `INSERT INTO gps_mobile_events (partner_id, driver_id, kind)
+       VALUES ($1, $2, 'subscription_closed')`,
+      [input.partnerId, input.driverId],
+    );
+  }
 
   for (const period of input.periods) {
     const previous =
@@ -153,7 +214,7 @@ export async function saveDriverUetdsSubscription(input: {
       snapshot = buildPaidPeriodSnapshot({
         status: period.status,
         previous,
-        monthlyFee: input.monthlyFee,
+        monthlyFee: billed,
         currency: input.currency,
       });
     } catch {
@@ -198,6 +259,8 @@ export async function loadDriverUetdsSubscriptionEntitlement(driverId: string) {
   return {
     enrolled: state.enrolled,
     periods: state.periods,
+    standardEnabled: state.services.standardEnabled,
+    advancedEnabled: state.services.advancedEnabled,
   };
 }
 

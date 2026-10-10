@@ -14,7 +14,7 @@ function source(path: string) {
 }
 
 describe("uetds driver subscription list UX", () => {
-  it("11: unenrolled list summary stays empty (view does not enroll)", () => {
+  it("11: unenrolled list keeps the selected fee and hides period status", () => {
     assert.deepEqual(
       mapUetdsSubscriptionListSummary({
         enrolledAt: null,
@@ -24,8 +24,8 @@ describe("uetds driver subscription list UX", () => {
       }),
       {
         enrolled: false,
-        monthlyFee: null,
-        currency: null,
+        monthlyFee: 9,
+        currency: "USD",
         currentPeriodStatus: null,
         nextPeriodStatus: null,
       },

@@ -37,6 +37,8 @@ export type PartnerActor = {
   partnerName: string;
   partnerCode: string;
   isPrimaryPartner: boolean;
+  isOwner: boolean;
+  tabs: import("@/lib/partner/access").PartnerTab[];
   mustChangePassword: boolean;
 };
 
@@ -53,6 +55,8 @@ type SessionRow = {
   partner_code: string;
   partner_status: PartnerStatus;
   is_primary_partner: boolean;
+  is_owner: boolean;
+  tabs: string[] | null;
 };
 
 export function hashPartnerSessionToken(token: string) {
@@ -171,7 +175,13 @@ export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
         p.name AS partner_name,
         p.partner_code,
         p.status AS partner_status,
-        p.is_primary_partner
+        p.is_primary_partner,
+        u.is_owner,
+        COALESCE((
+          SELECT array_agg(g.tab)
+            FROM partner_user_grants g
+           WHERE g.user_id = u.id
+        ), '{}') AS tabs
      FROM partner_sessions s
      JOIN partner_users u ON u.id = s.user_id
      JOIN partners p ON p.id = u.partner_id
@@ -212,6 +222,10 @@ export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
     isPrimaryPartner: row.is_primary_partner,
+    isOwner: row.is_owner,
+    tabs: (row.tabs ?? []).filter((tab): tab is import("@/lib/partner/access").PartnerTab =>
+      ["jobs", "accepted", "drivers", "vehicles", "gps", "uetds", "edevlet", "profile", "billing", "users"].includes(tab),
+    ),
     mustChangePassword: row.must_change_password,
   };
 });

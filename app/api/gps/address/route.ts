@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { lookupGpsAddress, parseGpsAddressQuery } from "@/lib/gps/address";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 async function canReadAddress() {
   const partner = await getPartnerActor();
-  if (partner && !partner.mustChangePassword) {
+  if (partner && !partner.mustChangePassword && partnerHasTab(partner, "gps")) {
     return true;
   }
   const ops = await getOpsActor();

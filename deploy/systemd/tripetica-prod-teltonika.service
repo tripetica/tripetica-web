@@ -1,0 +1,54 @@
+# Production Teltonika AVL listener. Digital-output commands stay closed.
+[Unit]
+Description=Tripetica production Teltonika AVL listener
+After=network-online.target postgresql.service tripetica-prod.service
+Wants=postgresql.service network-online.target
+ConditionPathExists=/srv/tripetica/current/scripts/teltonika-listen-prod.ts
+
+[Service]
+Type=simple
+User=tripetica-worker
+Group=tripetica-worker
+WorkingDirectory=/srv/tripetica/current
+ExecStartPre=/usr/local/lib/tripetica/assert-expected-database /srv/tripetica/current/.env.production.local
+ExecStart=/usr/bin/npm run teltonika:listen:prod
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+Nice=5
+UMask=0077
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/var/lib/tripetica-worker
+Environment=npm_config_cache=/var/lib/tripetica-worker/npm-cache
+Environment=NODE_ENV=production
+Environment=EXPECTED_DATABASE=tripetica
+Environment=TELTONIKA_LISTENER=approved
+Environment=TELTONIKA_BIND=0.0.0.0
+Environment=TELTONIKA_PORT=5027
+Environment=PG_POOL_MAX=4
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/tripetica-worker
+InaccessiblePaths=/root/tripetica-web
+BindReadOnlyPaths=/srv/tripetica/current/.env.production.local:/srv/tripetica/current/.env.local
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

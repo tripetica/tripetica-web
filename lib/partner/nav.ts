@@ -8,7 +8,8 @@ export type PartnerNavItem = {
     | "/partner/uetds"
     | "/partner/edevlet-authorities"
     | "/partner/profile"
-    | "/partner/employer-billing";
+    | "/partner/employer-billing"
+    | "/partner/users";
   labelKey:
     | "jobs"
     | "accepted"
@@ -18,7 +19,8 @@ export type PartnerNavItem = {
     | "uetds"
     | "edevletAuthorities"
     | "profile"
-    | "employerBilling";
+    | "employerBilling"
+    | "users";
 };
 
 export const PARTNER_NAV: PartnerNavItem[] = [
@@ -31,4 +33,5 @@ export const PARTNER_NAV: PartnerNavItem[] = [
   { href: "/partner/edevlet-authorities", labelKey: "edevletAuthorities" },
   { href: "/partner/profile", labelKey: "profile" },
   { href: "/partner/employer-billing", labelKey: "employerBilling" },
+  { href: "/partner/users", labelKey: "users" },
 ];

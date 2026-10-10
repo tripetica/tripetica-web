@@ -8,6 +8,7 @@ import { isLocale, type Locale } from "@/lib/i18n/config";
 import { isUuid } from "@/lib/ops/process-filters";
 import { localizedPath } from "@/lib/i18n/path";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
+import { partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 import { extractAiUetdsDocument } from "@/lib/uetds/ai-extraction";
 import { AiExtractionError, type AiExtractionErrorCode, type AiUetdsExtractedDraft } from "@/lib/uetds/ai-extraction-schema";
@@ -63,7 +64,7 @@ async function requireActor(scope: UetdsFleetScope, permission: "uetds.view" | "
     return { type: "ops" as const, userId: actor.id, partnerId: null };
   }
   const actor = await getPartnerActor();
-  if (!actor || actor.mustChangePassword) {
+  if (!actor || actor.mustChangePassword || !partnerHasTab(actor, "uetds")) {
     return null;
   }
   return { type: "partner" as const, userId: actor.userId, partnerId: actor.partnerId };

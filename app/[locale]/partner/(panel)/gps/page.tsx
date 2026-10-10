@@ -5,11 +5,14 @@ import { localizedPath } from "@/lib/i18n/path";
 import { isPartnerCommand } from "@/lib/gps/commands";
 import { gpsCopy } from "@/lib/gps/copy";
 import { type GpsFleetVehicle } from "@/lib/gps/fleet";
-import { listGpsCommands, listGpsDevices, listGpsRoute, type GpsRoutePoint } from "@/lib/gps/queries";
+import { gpsIsLiveMapSource } from "@/lib/gps/registration";
+import { listFleetDefaultDrivers, listGpsCommands, listGpsDevices, listGpsRoute, type GpsRoutePoint } from "@/lib/gps/queries";
 import { readGpsRange } from "@/lib/gps/range";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopy } from "@/lib/partner/copy";
 import { partnerHasGpsDeviceControls } from "@/lib/partner/gps-access";
+import { listMobileFleet, listMobileRoute, listMobileSessionEvents } from "@/lib/gps/mobile-store";
+import { shareHistoryWindow, type ShareHistoryPreset } from "@/lib/gps/share-history";
 
 export const dynamic = "force-dynamic";
 
@@ -23,26 +26,31 @@ export default async function PartnerGpsPage({
   }
   const actor = await requirePartnerPage(locale);
   const deviceControls = partnerHasGpsDeviceControls(actor.isPrimaryPartner);
-  const devices = await listGpsDevices(actor.partnerId);
+  const devices = (await listGpsDevices(actor.partnerId)).filter(gpsIsLiveMapSource);
+  const [mobileVehicles, assignedDrivers] = await Promise.all([
+    listMobileFleet(actor.partnerId),
+    listFleetDefaultDrivers(actor.partnerId),
+  ]);
   const panel = asPanelLocale(locale);
   const copy = deviceControls ? gpsCopy[panel] : { ...gpsCopy[panel], title: partnerCopy[panel].gpsOnly };
-  if (devices.length === 0) {
-    return (
-      <div className="gps-screen">
-        <header className="gps-head">
-          <h1>{copy.title}</h1>
-        </header>
-        <p className="gps-empty">{copy.empty}</p>
-      </div>
-    );
-  }
-
   const query = await searchParams;
   const requested = one(query.vehicle);
-  const selected = devices.length === 1
-    ? devices[0]
-    : devices.find((device) => device.id === requested) ?? null;
+  const selected = devices.find((device) => device.id === requested)
+    ?? (devices.length === 1 && !mobileVehicles.some((vehicle) => vehicle.id === requested) ? devices[0] : null);
+  const mobileFocus = mobileVehicles.find((vehicle) => vehicle.id === requested) ?? (devices.length === 0 ? mobileVehicles[0] ?? null : null);
   const range = readGpsRange(one(query.from), one(query.to));
+  const mobileRoute = mobileFocus && !("error" in range)
+    ? await listMobileRoute({ sessionId: mobileFocus.id, partnerId: actor.partnerId, from: range.from, to: range.to })
+    : [];
+  const eventsPreset = sharePreset(one(query.events));
+  const shareWindow = shareHistoryWindow({
+    preset: eventsPreset,
+    fromRaw: one(query.eventFrom),
+    toRaw: one(query.eventTo),
+  });
+  const shareEvents = mobileFocus && !("error" in shareWindow)
+    ? await listMobileSessionEvents(mobileFocus.id, actor.partnerId, shareWindow)
+    : [];
   const route = selected?.partnerId && selected.vehicleId && !("error" in range)
     ? await listGpsRoute({
       deviceId: selected.id,
@@ -80,7 +88,13 @@ export default async function PartnerGpsPage({
       canManage
       showDeviceList={false}
       viewerId={actor.userId}
-      fleetVehicles={devices.map(fleetVehicle)}
+      fleetVehicles={[...devices.map((device) => fleetVehicle(device, assignedDrivers)), ...mobileVehicles]}
+      mobileFocus={selected ? null : mobileFocus}
+      shareEvents={shareEvents}
+      sharePreset={eventsPreset}
+      shareFromLocal={"error" in shareWindow ? "" : shareWindow.fromLocal}
+      shareToLocal={"error" in shareWindow ? "" : shareWindow.toLocal}
+      mobileRoute={{ total: mobileRoute.length, step: 1, points: mobileRoute }}
       historyPath={localizedPath(locale, "/partner/gps")}
       rangeSearch={rangeParams.toString()}
       deviceControls={deviceControls}
@@ -88,7 +102,10 @@ export default async function PartnerGpsPage({
   );
 }
 
-function fleetVehicle(device: Awaited<ReturnType<typeof listGpsDevices>>[number]): GpsFleetVehicle {
+function fleetVehicle(
+  device: Awaited<ReturnType<typeof listGpsDevices>>[number],
+  drivers: Map<string, string>,
+): GpsFleetVehicle {
   return {
     id: device.id,
     plate: device.plate,
@@ -99,9 +116,17 @@ function fleetVehicle(device: Awaited<ReturnType<typeof listGpsDevices>>[number]
     headingDeg: device.headingDeg,
     recordedAt: device.recordedAt,
     lastHeartbeatAt: device.lastHeartbeatAt,
+    receivedAt: device.lastHeartbeatAt,
     gnssFix: device.gnssFix,
     satellites: device.satellites,
+    source: "device",
+    driverName: device.vehicleId ? drivers.get(device.vehicleId) ?? null : null,
   };
+}
+
+function sharePreset(value: string | undefined): ShareHistoryPreset {
+  if (value === "today" || value === "yesterday" || value === "3d" || value === "range") return value;
+  return "week";
 }
 
 function one(value: string | string[] | undefined) {

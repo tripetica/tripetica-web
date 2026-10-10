@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
 import { OpsDriverSubscriptionInlineCells } from "@/components/uetds/driver-subscription-list-cells";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
-import { patchOpsDriverMembershipAction, searchOpsDriversAction } from "@/lib/ops/driver-actions";
+import { searchOpsDriversAction } from "@/lib/ops/driver-actions";
 import {
   patchOpsDriverAuthorityAction,
   patchOpsDriverCompanyAction,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/ops/fleet-list-actions";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { type OpsDriverListItem } from "@/lib/ops/drivers";
+import { serviceSubscriptionNames } from "@/lib/uetds/service-subscriptions";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { partnerStatusBadgeClass, partnerStatusLabel } from "@/lib/ops/partner-labels";
 import { pageCount } from "@/lib/ops/format";
@@ -29,7 +30,6 @@ import {
   type FleetChoicesByPartner,
 } from "@/lib/partner/fleet-pairing-rules";
 import { formatPartnerFleetPhone, formatUetdsCompanyListLabel } from "@/lib/partner/fleet-view";
-import { type DriverMembershipStatus } from "@/lib/ops/driver-membership";
 import {
   addSubscriptionMonths,
   istanbulSubscriptionPeriodKey,
@@ -118,12 +118,6 @@ export function OpsDriverTable({
     }, 180);
     return () => window.clearTimeout(handle);
   }, [query, dir, page]);
-
-  function onMembershipChange(driverId: string, status: DriverMembershipStatus) {
-    setItems((current) =>
-      current.map((item) => (item.id === driverId ? { ...item, membershipStatus: status } : item)),
-    );
-  }
 
   function onSummaryChange(driverId: string, summary: UetdsDriverSubscriptionListSummary) {
     setItems((current) =>
@@ -306,17 +300,12 @@ export function OpsDriverTable({
                     </span>
                   </td>
                   <td className="ops-driver-membership">
-                    <OpsDriverMembershipCell
-                      locale={locale}
-                      driverId={driver.id}
-                      partnerId={driver.partnerId}
-                      status={driver.membershipStatus}
-                      canManage={canManage}
-                      goldLabel={copy.membershipGold}
-                      standardLabel={copy.membershipStandard}
-                      saveFailedLabel={copy.driverSaveFailed}
-                      onChange={onMembershipChange}
-                    />
+                    {serviceSubscriptionNames(driver.services, {
+                      standard: copy.serviceStandard,
+                      advanced: copy.serviceAdvanced,
+                      mobile: copy.serviceMobile,
+                      none: copy.serviceNone,
+                    })}
                   </td>
                   <td>
                     <a href={localizedPath(locale, `/ops/partners/${driver.partnerId}`)}>
@@ -365,82 +354,6 @@ export function OpsDriverTable({
             <span />
           )}
         </div>
-      ) : null}
-    </>
-  );
-}
-
-function OpsDriverMembershipCell({
-  locale,
-  driverId,
-  partnerId,
-  status,
-  canManage,
-  goldLabel,
-  standardLabel,
-  saveFailedLabel,
-  onChange,
-}: {
-  locale: Locale;
-  driverId: string;
-  partnerId: string;
-  status: DriverMembershipStatus;
-  canManage: boolean;
-  goldLabel: string;
-  standardLabel: string;
-  saveFailedLabel: string;
-  onChange: (driverId: string, status: DriverMembershipStatus) => void;
-}) {
-  const [draft, setDraft] = useState(status);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const source = `${driverId}:${status}`;
-  const [seen, setSeen] = useState(source);
-  if (seen !== source) {
-    setSeen(source);
-    setDraft(status);
-    setError(null);
-  }
-
-  if (!canManage) {
-    return <>{status === "gold" ? goldLabel : standardLabel}</>;
-  }
-
-  return (
-    <>
-      <select
-        className="ops-driver-sub-select ops-driver-membership-select"
-        aria-label={status === "gold" ? goldLabel : standardLabel}
-        value={draft}
-        disabled={pending}
-        onChange={(event) => {
-          const next = event.target.value === "gold" ? "gold" : "standard";
-          if (next === status) return;
-          setDraft(next);
-          startTransition(async () => {
-            const result = await patchOpsDriverMembershipAction({
-              locale,
-              driverId,
-              partnerId,
-              status: next,
-            });
-            if (!result.ok || result.driverId !== driverId) {
-              setDraft(status);
-              setError(saveFailedLabel);
-              return;
-            }
-            setError(null);
-            onChange(driverId, result.status);
-          });
-        }}
-      >
-        <option value="standard">{standardLabel}</option>
-        <option value="gold">{goldLabel}</option>
-      </select>
-      {error ? (
-        <span className="ops-driver-sub-error" role="alert">
-          {error}
-        </span>
       ) : null}
     </>
   );

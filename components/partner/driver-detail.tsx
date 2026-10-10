@@ -469,6 +469,12 @@ export function PartnerDriverDetail({
         </DetailRow>
 
         <DriverUetdsSubscriptionSection
+          serviceLabels={{
+            standard: copy.serviceStandard,
+            advanced: copy.serviceAdvanced,
+            mobile: copy.serviceMobile,
+            total: copy.serviceTotal,
+          }}
           locale={panelLocale}
           value={subscriptionDraft}
           readOnly

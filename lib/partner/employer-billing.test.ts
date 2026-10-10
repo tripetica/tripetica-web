@@ -21,7 +21,7 @@ const AUTHORIZED = "Recep YILDIRIM";
 test("partner menu uses the requested section labels", () => {
   assert.deepEqual(
     PARTNER_NAV.map((item) => item.labelKey),
-    ["jobs", "accepted", "drivers", "vehicles", "gps", "uetds", "edevletAuthorities", "profile", "employerBilling"],
+    ["jobs", "accepted", "drivers", "vehicles", "gps", "uetds", "edevletAuthorities", "profile", "employerBilling", "users"],
   );
   assert.equal(partnerCopy.tr.jobs, "Açık İşler");
   assert.equal(partnerCopy.tr.accepted, "İşlerim");

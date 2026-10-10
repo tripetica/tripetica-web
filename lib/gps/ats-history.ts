@@ -29,11 +29,18 @@ export async function loadGpsAtsNotificationHistory(
   const pool = getPool();
   const counts = await pool.query<{ succeeded: number; failed: number }>(
     `SELECT
-       COUNT(*) FILTER (WHERE submission.status = 'succeeded')::int AS succeeded,
-       COUNT(*) FILTER (WHERE submission.status = 'failed')::int AS failed
-     FROM gps_ats_submission_notifications link
-     JOIN gps_ats_submissions submission ON submission.id = link.submission_id
-     WHERE link.notification_id = $1`,
+       COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded,
+       COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+     FROM (
+       SELECT submission.status
+         FROM gps_ats_submission_notifications link
+         JOIN gps_ats_submissions submission ON submission.id = link.submission_id
+        WHERE link.notification_id = $1
+       UNION ALL
+       SELECT status
+         FROM gps_mobile_ats_submissions
+        WHERE notification_id = $1
+     ) attempts`,
     [notificationId],
   );
   const rows = await pool.query<{
@@ -45,17 +52,30 @@ export async function loadGpsAtsNotificationHistory(
     sonuc_mesaji: string | null;
     last_error: string | null;
   }>(
-    `SELECT submission.id,
-            submission.submitted_at,
-            submission.queued_at,
-            submission.gnss_time,
-            submission.status,
-            submission.sonuc_mesaji,
-            submission.last_error
-     FROM gps_ats_submission_notifications link
-     JOIN gps_ats_submissions submission ON submission.id = link.submission_id
-     WHERE link.notification_id = $1
-     ORDER BY submission.queued_at DESC, submission.id DESC
+    `SELECT id, submitted_at, queued_at, gnss_time, status, sonuc_mesaji, last_error
+     FROM (
+       SELECT submission.id,
+              submission.submitted_at,
+              submission.queued_at,
+              submission.gnss_time,
+              submission.status,
+              submission.sonuc_mesaji,
+              submission.last_error
+         FROM gps_ats_submission_notifications link
+         JOIN gps_ats_submissions submission ON submission.id = link.submission_id
+        WHERE link.notification_id = $1
+       UNION ALL
+       SELECT id,
+              submitted_at,
+              queued_at,
+              gnss_time,
+              status,
+              sonuc_mesaji,
+              NULL::text AS last_error
+         FROM gps_mobile_ats_submissions
+        WHERE notification_id = $1
+     ) attempts
+     ORDER BY queued_at DESC, id DESC
      LIMIT $2 OFFSET $3`,
     [notificationId, ATS_HISTORY_PAGE_SIZE + 1, offset],
   );
