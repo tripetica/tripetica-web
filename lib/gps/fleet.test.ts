@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { gpsCopy } from "@/lib/gps/copy";
+import { gpsVehicleIdentity } from "@/lib/gps/vehicle-identity";
 import { googleMapsUrl, yandexMapsUrl } from "@/lib/gps/format";
 import { gpsApplyVehicleFix, gpsOpenPopup, gpsSelectVehicle } from "@/lib/gps/follow";
 import {
@@ -14,11 +15,13 @@ import {
   gpsFleetPlotted,
   gpsFleetHistoryReady,
   gpsFleetMarkerClick,
+  partnerGpsFocus,
   gpsFleetStoredMarker,
   gpsFleetOpening,
   gpsFleetPoint,
   gpsFleetPopupClosed,
   gpsFleetUnlocated,
+  mergeGpsFleetIdentity,
   readGpsFleet,
   type GpsFleetVehicle,
 } from "@/lib/gps/fleet";
@@ -38,6 +41,7 @@ function vehicle(id: string, point: { latitude: number; longitude: number } | nu
     headingDeg: extra.headingDeg ?? null,
     recordedAt: extra.recordedAt ?? "2026-10-07T21:00:00.000Z",
     lastHeartbeatAt: extra.lastHeartbeatAt ?? "2026-10-07T21:00:00.000Z",
+    ...extra,
   };
 }
 
@@ -122,6 +126,52 @@ test("one vehicle starts selected with the popup closed and can be opened again"
   assert.deepEqual(gpsFleetMarkerClick(closed, "only"), { selectedId: "only", popupId: "only" });
   assert.equal(gpsFleetHistoryReady(1, "only"), true);
   assert.equal(gpsFleetHistoryReady(1, null), true);
+});
+
+test("partner GPS selects the only vehicle and waits when several vehicles are on the map", () => {
+  assert.deepEqual(partnerGpsFocus({
+    devices: [{ id: "device-a", vehicleId: "vehicle-a" }],
+    mobile: [],
+    requestedId: null,
+  }), { deviceId: "device-a", mobileId: null });
+  assert.deepEqual(partnerGpsFocus({
+    devices: [],
+    mobile: [{ id: "mobile-a", vehicleId: "vehicle-a" }],
+    requestedId: null,
+  }), { deviceId: null, mobileId: "mobile-a" });
+  assert.deepEqual(partnerGpsFocus({
+    devices: [{ id: "device-a", vehicleId: "vehicle-a" }],
+    mobile: [{ id: "mobile-a", vehicleId: "vehicle-a" }],
+    requestedId: null,
+  }), { deviceId: "device-a", mobileId: null });
+  assert.deepEqual(partnerGpsFocus({
+    devices: [{ id: "device-a", vehicleId: "vehicle-a" }, { id: "device-b", vehicleId: "vehicle-b" }],
+    mobile: [],
+    requestedId: null,
+  }), { deviceId: null, mobileId: null });
+  assert.deepEqual(partnerGpsFocus({
+    devices: [],
+    mobile: [{ id: "mobile-a", vehicleId: "vehicle-a" }, { id: "mobile-b", vehicleId: "vehicle-b" }],
+    requestedId: null,
+  }), { deviceId: null, mobileId: null });
+  assert.deepEqual(partnerGpsFocus({
+    devices: [{ id: "device-a", vehicleId: "vehicle-a" }],
+    mobile: [{ id: "mobile-b", vehicleId: "vehicle-b" }],
+    requestedId: null,
+  }), { deviceId: null, mobileId: null });
+  assert.deepEqual(partnerGpsFocus({
+    devices: [{ id: "device-a", vehicleId: "vehicle-a" }, { id: "device-b", vehicleId: "vehicle-b" }],
+    mobile: [],
+    requestedId: "device-b",
+  }), { deviceId: "device-b", mobileId: null });
+  const fleet = [
+    vehicle("device-a", istanbul, { vehicleId: "vehicle-a", source: "device" }),
+    vehicle("device-b", bursa, { vehicleId: "vehicle-b", source: "device" }),
+  ];
+  const refreshed = mergeGpsFleetIdentity(fleet, fleet.map((item) => ({ ...item, latitude: 41.2, vehicleId: null })));
+  const selected = refreshed.find((item) => item.id === "device-b");
+  assert.equal(selected?.vehicleId, "vehicle-b");
+  assert.equal(selected?.latitude, 41.2);
 });
 
 test("many vehicles start unselected and history waits for a map choice", () => {
@@ -210,4 +260,78 @@ test("fleet payload drops invalid coordinates and rejects a bad body", () => {
   assert.equal(vehicles?.[1]?.latitude, null);
   assert.equal(readGpsFleet({ ok: true }), null);
   assert.equal(readGpsFleet(null), null);
+  const kept = readGpsFleet({
+    vehicles: [
+      { id: "device-1", deviceCode: "TPT-A", plate: "34 A", latitude: 41, longitude: 29, speedMps: null, headingDeg: null, recordedAt: null, lastHeartbeatAt: null, vehicleId: "vehicle-1", source: "device" },
+      { id: "session-1", deviceCode: "Driver", plate: "34 B", latitude: 41, longitude: 29, speedMps: null, headingDeg: null, recordedAt: null, lastHeartbeatAt: null, vehicleId: "vehicle-2", source: "mobile" },
+    ],
+  });
+  assert.equal(kept?.[0]?.vehicleId, "vehicle-1");
+  assert.equal(kept?.[1]?.vehicleId, "vehicle-2");
+});
+
+test("a live fleet refresh keeps the vehicle identity when the payload omits it", () => {
+  const previous = [
+    vehicle("device-1", istanbul, { vehicleId: "vehicle-1", source: "device" }),
+    vehicle("session-1", bursa, { vehicleId: "vehicle-2", source: "mobile", deviceCode: "Driver" }),
+  ];
+  const refreshed = readGpsFleet({
+    vehicles: [
+      { id: "device-1", deviceCode: "TPT-A", plate: "34 A", latitude: 41.02, longitude: 28.98, speedMps: 4, headingDeg: null, recordedAt: "2026-10-13T18:00:00Z", lastHeartbeatAt: null },
+      { id: "session-1", deviceCode: "Driver", plate: "34 B", latitude: 40.2, longitude: 29.1, speedMps: null, headingDeg: null, recordedAt: null, lastHeartbeatAt: null, source: "mobile" },
+    ],
+  });
+  assert.ok(refreshed);
+  const merged = mergeGpsFleetIdentity(previous, refreshed);
+  assert.equal(merged[0]?.vehicleId, "vehicle-1");
+  assert.equal(merged[0]?.latitude, 41.02);
+  assert.equal(merged[1]?.vehicleId, "vehicle-2");
+  const reassigned = mergeGpsFleetIdentity(previous, [{ ...refreshed[0], vehicleId: "vehicle-9" }]);
+  assert.equal(reassigned[0]?.vehicleId, "vehicle-9");
+});
+
+test("34EGP847 is selected by its device id and the plate line keeps make and model", () => {
+  const egpDevice = "085f67c2-ee45-4173-b730-9161a33782cc";
+  const otherDevice = "506702d6-63d9-49be-a3f8-03ba5fcc8311";
+  const egpVehicle = "f0c1c94d-35b6-4263-a935-300bf6534341";
+  const otherVehicle = "a75ea33f-490c-4a83-b4dd-3bb396877996";
+  const devices = [
+    { id: otherDevice, vehicleId: otherVehicle },
+    { id: egpDevice, vehicleId: egpVehicle },
+  ];
+  assert.deepEqual(partnerGpsFocus({ devices, mobile: [{ id: "mobile-egp", vehicleId: egpVehicle }], requestedId: null }), { deviceId: null, mobileId: null });
+  assert.deepEqual(partnerGpsFocus({ devices, mobile: [], requestedId: egpDevice }), { deviceId: egpDevice, mobileId: null });
+  assert.deepEqual(partnerGpsFocus({ devices, mobile: [], requestedId: egpVehicle }), { deviceId: null, mobileId: null });
+  assert.deepEqual(gpsVehicleIdentity({ plate: "34EGP847", brand: "Mercedes-Benz", model: "Vito" }), { plate: "34EGP847", name: "Mercedes-Benz Vito" });
+  assert.deepEqual(gpsVehicleIdentity({ plate: "34EGP847", brand: " ", model: null }), { plate: "34EGP847", name: null });
+  assert.equal(gpsVehicleIdentity({ plate: " ", brand: "Mercedes-Benz", model: "Vito" }), null);
+  assert.equal(gpsCopy.tr.mapPick, "Haritadan bir araç seçin");
+  assert.equal(gpsCopy.en.mapPick, "Select a vehicle on the map");
+  assert.equal(gpsCopy.ru.mapPick, "Выберите автомобиль на карте");
+  const previous = [vehicle(egpDevice, istanbul, { plate: "34EGP847", vehicleId: egpVehicle, brand: "Mercedes-Benz", model: "Vito", source: "device" })];
+  const refreshed = readGpsFleet({
+    vehicles: [{ id: egpDevice, deviceCode: "TPT", plate: "34EGP847", latitude: 41.02, longitude: 28.98, speedMps: 0, headingDeg: null, recordedAt: null, lastHeartbeatAt: null, vehicleId: egpVehicle, source: "device" }],
+  });
+  assert.ok(refreshed);
+  const merged = mergeGpsFleetIdentity(previous, refreshed);
+  assert.equal(merged[0]?.plate, "34EGP847");
+  assert.equal(merged[0]?.brand, "Mercedes-Benz");
+  assert.equal(merged[0]?.model, "Vito");
+  assert.equal(merged[0]?.latitude, 41.02);
+  const named = mergeGpsFleetIdentity(previous, [{ ...refreshed[0], brand: null, model: null }]);
+  assert.equal(named[0]?.brand, null);
+  assert.equal(named[0]?.model, null);
+  const live = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
+  const history = readFileSync(new URL("../../components/gps/position-history.tsx", import.meta.url), "utf8");
+  const drive = readFileSync(new URL("../../components/gps/drive-report.tsx", import.meta.url), "utf8");
+  const playback = readFileSync(new URL("../../components/gps/history-playback.tsx", import.meta.url), "utf8");
+  const immobilizer = readFileSync(new URL("../teltonika/immobilizer.ts", import.meta.url), "utf8");
+  assert.match(live, /copy\.live[\s\S]{0,500}GpsVehicleIdentity/);
+  assert.match(live, /copy\.maintenanceTitle[\s\S]{0,240}GpsVehicleIdentity/);
+  assert.match(live, /copy\.deviceInfo[\s\S]{0,900}GpsVehicleIdentity/);
+  assert.match(history, /copy\.route[\s\S]{0,220}GpsVehicleIdentity/);
+  assert.match(drive, /copy\.driveTitle[\s\S]{0,220}GpsVehicleIdentity/);
+  assert.match(playback, /gps-playback-distance/);
+  assert.match(playback, /rangeDistance/);
+  assert.match(immobilizer, /return request === "on" \? "setdigout 1" : "setdigout 0";/);
 });

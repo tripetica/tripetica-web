@@ -214,6 +214,9 @@ async function changeOwnDriverStatus(
   formData: FormData,
   mode: "activate" | "deactivate",
 ): Promise<PartnerDriverFormState> {
+  if (String(formData.get("intent") ?? "") !== mode) {
+    return { error: "failed", ok: false };
+  }
   const locale = localeFromForm(formData);
   const actor = await requirePartnerActor(locale);
   const driverId = String(formData.get("id") ?? "");

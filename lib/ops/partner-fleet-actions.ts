@@ -28,7 +28,11 @@ import {
   parseSubscriptionPeriodsFromForm,
   parseUetdsSubscriptionFee,
 } from "@/lib/uetds/driver-subscription";
-import { saveDriverUetdsSubscription } from "@/lib/uetds/driver-subscription-store";
+import { selectedServiceTotal } from "@/lib/uetds/service-subscriptions";
+import { getVehicleUetdsSubscription, saveVehicleUetdsSubscription, vehicleHasActivePhysicalGps } from "@/lib/uetds/vehicle-subscription-store";
+import { gpsAtsEnableAllowed } from "@/lib/uetds/vehicle-subscription-plan";
+import { parseAtsMinistrySource, planAtsSourceSave } from "@/lib/gps/ats-source";
+import { getVehicleAtsMinistrySource, saveVehicleAtsMinistrySource } from "@/lib/gps/ats-source-store";
 
 export type OpsFleetFormState = {
   error:
@@ -57,6 +61,10 @@ export type OpsFleetFormState = {
     | "invalid-uetds-company"
     | "invalid-subscription-fee"
     | "invalid-subscription-currency"
+    | "ats-source-invalid"
+    | "ats-source-invalid-mobile"
+    | "ats-source-close"
+    | "gps-ats-needs-device"
     | "failed"
     | null;
   ok: boolean;
@@ -130,38 +138,6 @@ export async function updateOpsPartnerDriverAction(
     if (membership !== null && !isDriverMembershipStatus(membership)) {
       return { error: "invalid-fields", ok: false };
     }
-    const enrolled = String(formData.get("uetdsSubscriptionEnrolled") ?? "0") === "1";
-    const currencyRaw = String(formData.get("uetdsSubscriptionCurrency") ?? "USD").trim().toUpperCase();
-    const currency = isUetdsSubscriptionCurrency(currencyRaw) ? currencyRaw : null;
-    const services = {
-      standardEnabled: String(formData.get("serviceStandardEnabled") ?? "0") === "1",
-      standardFee: parseUetdsSubscriptionFee(String(formData.get("serviceStandardFee") ?? "")),
-      advancedEnabled: String(formData.get("serviceAdvancedEnabled") ?? "0") === "1",
-      advancedFee: parseUetdsSubscriptionFee(String(formData.get("serviceAdvancedFee") ?? "")),
-      mobileEnabled: String(formData.get("serviceMobileEnabled") ?? "0") === "1",
-      mobileFee: parseUetdsSubscriptionFee(String(formData.get("serviceMobileFee") ?? "")),
-    };
-    if (
-      enrolled &&
-      (
-        (services.standardEnabled && services.standardFee == null) ||
-        (services.advancedEnabled && services.advancedFee == null) ||
-        (services.mobileEnabled && services.mobileFee == null)
-      )
-    ) {
-      return { error: "invalid-subscription-fee", ok: false };
-    }
-    if (!currency) {
-      return { error: "invalid-subscription-currency", ok: false };
-    }
-    const monthlyFee = services.standardEnabled || services.advancedEnabled || services.mobileEnabled
-      ? [services.standardEnabled ? services.standardFee : 0, services.advancedEnabled ? services.advancedFee : 0, services.mobileEnabled ? services.mobileFee : 0]
-          .reduce((sum, fee) => (sum ?? 0) + (fee ?? 0), 0)
-      : null;
-    const periods = parseSubscriptionPeriodsFromForm(
-      String(formData.get("uetdsSubscriptionPeriods") ?? ""),
-    );
-
     const result = await updatePartnerDriver({
       partnerId,
       driverId: recordId,
@@ -180,24 +156,6 @@ export async function updateOpsPartnerDriverAction(
     if (!result.ok) {
       logFleetFailure("update-driver", result.error, { partnerId, recordId });
       return { error: result.error, ok: false };
-    }
-
-    const subscriptionResult = await saveDriverUetdsSubscription({
-      driverId: recordId,
-      partnerId,
-      opsUserId: actor.id,
-      enrolled,
-      monthlyFee,
-      currency,
-      services,
-      periods,
-    });
-    if (!subscriptionResult.ok) {
-      logFleetFailure("update-driver-subscription", subscriptionResult.error, {
-        partnerId,
-        recordId,
-      });
-      return { error: subscriptionResult.error, ok: false };
     }
 
     if (membership !== null && !await saveDriverMembership(partnerId, recordId, membership)) {
@@ -353,6 +311,96 @@ export async function updateOpsPartnerVehicleAction(
     if (!result.ok) {
       logFleetFailure("update-vehicle", result.error, { partnerId, recordId });
       return { error: result.error, ok: false };
+    }
+    if (formData.has("uetdsSubscriptionEnrolled")) {
+      const currencyRaw = String(formData.get("uetdsSubscriptionCurrency") ?? "USD").trim().toUpperCase();
+      const currency = isUetdsSubscriptionCurrency(currencyRaw) ? currencyRaw : null;
+      const services = {
+        standardEnabled: String(formData.get("serviceStandardEnabled") ?? "0") === "1",
+        standardFee: parseUetdsSubscriptionFee(String(formData.get("serviceStandardFee") ?? "")),
+        advancedEnabled: String(formData.get("serviceAdvancedEnabled") ?? "0") === "1",
+        advancedFee: parseUetdsSubscriptionFee(String(formData.get("serviceAdvancedFee") ?? "")),
+        gpsAtsEnabled: String(formData.get("serviceGpsAtsEnabled") ?? "0") === "1",
+        gpsAtsFee: parseUetdsSubscriptionFee(String(formData.get("serviceGpsAtsFee") ?? "")),
+        mobileEnabled: String(formData.get("serviceMobileEnabled") ?? "0") === "1",
+        mobileFee: parseUetdsSubscriptionFee(String(formData.get("serviceMobileFee") ?? "")),
+      };
+      const enrolled = String(formData.get("uetdsSubscriptionEnrolled") ?? "0") === "1";
+      if (
+        enrolled &&
+        (
+          (services.standardEnabled && services.standardFee == null) ||
+          (services.advancedEnabled && services.advancedFee == null) ||
+          (services.gpsAtsEnabled && services.gpsAtsFee == null) ||
+          (services.mobileEnabled && services.mobileFee == null)
+        )
+      ) {
+        return { error: "invalid-subscription-fee", ok: false };
+      }
+      if (!currency) {
+        return { error: "invalid-subscription-currency", ok: false };
+      }
+      const currentSubscription = await getVehicleUetdsSubscription(recordId);
+      if (!gpsAtsEnableAllowed({
+        hasActivePhysicalDevice: await vehicleHasActivePhysicalGps(recordId),
+        currentlyEnabled: currentSubscription.services.gpsAtsEnabled,
+        requestedEnabled: services.gpsAtsEnabled,
+      })) {
+        return { error: "gps-ats-needs-device", ok: false };
+      }
+      const requestedSource = parseAtsMinistrySource(String(formData.get("atsMinistrySource") ?? ""));
+      const currentSource = requestedSource ? await getVehicleAtsMinistrySource(recordId) : null;
+      const sourcePlan = requestedSource && currentSource
+        ? planAtsSourceSave({
+            currentSource,
+            nextSource: requestedSource,
+            gpsAtsEnabled: services.gpsAtsEnabled,
+            mobileEnabled: services.mobileEnabled,
+            confirm: String(formData.get("atsSourceClose") ?? ""),
+          })
+        : null;
+      if (sourcePlan && !sourcePlan.ok) {
+        return {
+          error: sourcePlan.error === "ats-source-invalid" && requestedSource === "mobile"
+            ? "ats-source-invalid-mobile"
+            : sourcePlan.error,
+          ok: false,
+        };
+      }
+      const closing = Boolean(
+        currentSource && sourcePlan?.ok && sourcePlan.source !== currentSource
+        && (sourcePlan.source === "none" || (currentSource === "physical" && !services.gpsAtsEnabled) || (currentSource === "mobile" && !services.mobileEnabled)),
+      );
+      if (closing && sourcePlan?.ok) {
+        const moved = await saveVehicleAtsMinistrySource({
+          vehicleId: recordId,
+          source: sourcePlan.source,
+          opsUserId: actor.id,
+        });
+        if (!moved.ok) return { error: "failed", ok: false };
+      }
+      const subscriptionResult = await saveVehicleUetdsSubscription({
+        vehicleId: recordId,
+        partnerId,
+        opsUserId: actor.id,
+        enrolled,
+        monthlyFee: selectedServiceTotal(services),
+        currency,
+        services,
+        periods: parseSubscriptionPeriodsFromForm(String(formData.get("uetdsSubscriptionPeriods") ?? "")),
+      });
+      if (!subscriptionResult.ok) {
+        logFleetFailure("update-vehicle-subscription", subscriptionResult.error, { partnerId, recordId });
+        return { error: subscriptionResult.error, ok: false };
+      }
+      if (!closing && sourcePlan?.ok && currentSource && sourcePlan.source !== currentSource) {
+        const moved = await saveVehicleAtsMinistrySource({
+          vehicleId: recordId,
+          source: sourcePlan.source,
+          opsUserId: actor.id,
+        });
+        if (!moved.ok) return { error: "failed", ok: false };
+      }
     }
     const saved = await getPartnerVehicle(partnerId, recordId);
     if (!saved) {

@@ -6,6 +6,7 @@ import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { uetdsFormCopyFor } from "@/lib/uetds/copy";
 import { loadGpsAtsNotificationHistory } from "@/lib/gps/ats-history";
+import { atsReportHref, atsReportIsOpen } from "@/lib/gps/ats-history-page";
 import { getPartnerUetdsNotification } from "@/lib/partner/uetds-notifications";
 import { hydrateMinistryLastPassengerNotify } from "@/lib/uetds/manage";
 
@@ -16,7 +17,7 @@ export default async function PartnerUetdsNotificationDetailPage({
   searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
-  searchParams: Promise<{ editMethod?: string; atsPage?: string }>;
+  searchParams: Promise<{ editMethod?: string; ats?: string; atsPage?: string }>;
 }) {
   const { locale, id } = await params;
   const query = await searchParams;
@@ -34,14 +35,8 @@ export default async function PartnerUetdsNotificationDetailPage({
   const showAiEdit = await notificationHasGoldDriver(notification.id, notification.partnerId);
   const atsPage = Math.max(1, Number(query.atsPage) || 1);
   const ats = await loadGpsAtsNotificationHistory(notification.id, atsPage);
-  const atsHref = (page: number) => {
-    const params = new URLSearchParams();
-    if (query.editMethod === "1") params.set("editMethod", "1");
-    if (page > 1) params.set("atsPage", String(page));
-    const search = params.toString();
-    const path = localizedPath(locale, `/partner/uetds/notifications/${notification.id}`);
-    return search ? `${path}?${search}` : path;
-  };
+  const atsPath = localizedPath(locale, `/partner/uetds/notifications/${notification.id}`);
+  const atsHref = (page: number) => atsReportHref(atsPath, { page, editMethod: query.editMethod, open: true });
   return (
     <UetdsNotificationDetailView
       notification={notification}
@@ -67,6 +62,8 @@ export default async function PartnerUetdsNotificationDetailPage({
       actor="partner"
       locale={locale}
       ats={ats}
+      atsVisible={atsReportIsOpen(query)}
+      atsCloseHref={atsReportHref(atsPath, { page: 1, editMethod: query.editMethod, open: false })}
       atsPrevHref={atsPage > 1 ? atsHref(atsPage - 1) : null}
       atsNextHref={ats.hasMore ? atsHref(atsPage + 1) : null}
     />

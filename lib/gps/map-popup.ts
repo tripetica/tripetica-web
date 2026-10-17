@@ -66,9 +66,32 @@ export function gpsPresenceMarker(presence: GpsPresence, motion: GpsMotion): Gps
 
 export type GpsIgnition = "on" | "off" | null;
 
-export type GpsMarkerState = "moving" | "stopped" | "still" | "idle" | "offline" | "ignition-off" | "unknown";
+export type GpsMarkerState = "moving" | "stopped" | "still" | "idle" | "offline" | "ignition-off" | "unknown" | "din-off" | "din-stopped" | "din-moving" | "din-unknown" | "din-pending";
+
+export const TELTONIKA_MAP_MOVING_MPS = 1;
+/** Server receive age after which a Teltonika pin is treated as fully disconnected. Not the GNSS time and not the normal send interval. */
+export const TELTONIKA_LINK_LOST_MS = 15 * 60 * 1000;
+
+/** Teltonika map color. ESP32 and mobile GPS keep gpsMapMarkerState. receivedAt is the server packet time. */
+export function teltonikaMarkerState(input: {
+  receivedAt: string | null;
+  nowMs: number;
+  din1: "on" | "off" | null;
+  speedMps: number | null;
+}): "din-off" | "din-stopped" | "din-moving" | "din-unknown" | "din-pending" {
+  const received = input.receivedAt ? Date.parse(input.receivedAt) : Number.NaN;
+  const age = Number.isFinite(received) ? input.nowMs - received : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(received) || age < -5 * 60 * 1000 || age > TELTONIKA_LINK_LOST_MS) return "din-unknown";
+  if (input.speedMps !== null && Number.isFinite(input.speedMps) && input.speedMps >= TELTONIKA_MAP_MOVING_MPS) {
+    return "din-moving";
+  }
+  if (input.din1 === "off") return "din-off";
+  if (input.din1 === "on") return "din-stopped";
+  return "din-pending";
+}
 
 export type GpsPopupPrefs = {
+  driver: boolean;
   speed: boolean;
   clock: boolean;
   coordinates: boolean;
@@ -76,6 +99,7 @@ export type GpsPopupPrefs = {
 };
 
 export const GPS_POPUP_DEFAULTS: GpsPopupPrefs = {
+  driver: false,
   speed: true,
   clock: true,
   coordinates: true,
@@ -103,6 +127,7 @@ export function gpsPopupRows(
   prefs: GpsPopupPrefs,
   fields: {
     plate: string;
+    driver?: string | null;
     speed: string | null;
     clock: string | null;
     coordinates: string | null;
@@ -113,6 +138,10 @@ export function gpsPopupRows(
   const plate = gpsPopupText(fields.plate);
   if (plate) {
     rows.push(plate);
+  }
+  if (prefs.driver) {
+    const driver = gpsPopupText(fields.driver);
+    if (driver) rows.push(driver);
   }
   if (prefs.speed) {
     const speed = gpsPopupText(fields.speed);
@@ -140,6 +169,7 @@ export function readGpsPopupPrefs(raw: string | null): GpsPopupPrefs {
   try {
     const parsed = JSON.parse(raw) as Partial<GpsPopupPrefs>;
     return {
+      driver: parsed.driver === true,
       speed: parsed.speed !== false,
       clock: parsed.clock !== false,
       coordinates: parsed.coordinates !== false,

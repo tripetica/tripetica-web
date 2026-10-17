@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import styles from "./driver-subscription-controls.module.css";
 
 import {
   formatUetdsSubscriptionFee,
+  parseUetdsSubscriptionFee,
   serializeSubscriptionPeriodsForForm,
   subscriptionPeriodLabel,
   subscriptionUiWindow,
@@ -88,12 +89,13 @@ type StatusLabels = {
 const SERVICE_ROWS = [
   ["standard", "standardEnabled", "standardFee"],
   ["advanced", "advancedEnabled", "advancedFee"],
+  ["gpsAts", "gpsAtsEnabled", "gpsAtsFee"],
   ["mobile", "mobileEnabled", "mobileFee"],
 ] as const;
 
 type DriverSubscriptionEditorProps = {
   membershipControl?: ReactNode;
-  serviceLabels: { standard: string; advanced: string; mobile: string; total: string };
+  serviceLabels: { standard: string; advanced: string; gpsAts: string; mobile: string; total: string };
   locale: "tr" | "en" | "ru";
   value: DriverSubscriptionDraft;
   disabled?: boolean;
@@ -105,6 +107,8 @@ type DriverSubscriptionEditorProps = {
   monthsLabel: string;
   statusLabels: StatusLabels;
   enrollHint: string;
+  gpsAtsSelectable?: boolean;
+  gpsAtsLockedText?: string;
   onChange: (next: DriverSubscriptionDraft) => void;
 };
 
@@ -122,6 +126,8 @@ export function DriverUetdsSubscriptionSection({
   monthsLabel,
   statusLabels,
   enrollHint,
+  gpsAtsSelectable = true,
+  gpsAtsLockedText = "",
   onChange,
 }: DriverSubscriptionEditorProps) {
   const window = subscriptionUiWindow();
@@ -129,7 +135,11 @@ export function DriverUetdsSubscriptionSection({
   const total = selectedServiceTotal(value.services);
   const periodChosen = Object.values(value.periodStatuses).some((status) => status === "paid" || status === "free");
   const enrolledForSave = value.enrolled || periodChosen;
-  function toggleService(enabledKey: "standardEnabled" | "advancedEnabled" | "mobileEnabled", feeKey: "standardFee" | "advancedFee" | "mobileFee", checked: boolean) {
+  function toggleService(
+    enabledKey: "standardEnabled" | "advancedEnabled" | "gpsAtsEnabled" | "mobileEnabled",
+    feeKey: "standardFee" | "advancedFee" | "gpsAtsFee" | "mobileFee",
+    checked: boolean,
+  ) {
     const fee = value.services[feeKey];
     onChange({
       ...value,
@@ -146,44 +156,47 @@ export function DriverUetdsSubscriptionSection({
       {!membershipControl ? <h2 className="uetds-driver-subscription-title">{sectionTitle}</h2> : null}
 
       <div className="uetds-driver-subscription-services">
-        {SERVICE_ROWS.map(([name, enabledKey, feeKey]) => (
+        {SERVICE_ROWS.map(([name, enabledKey, feeKey]) => {
+          const gpsAtsLocked = name === "gpsAts" && !gpsAtsSelectable && !value.services.gpsAtsEnabled;
+          return (
           <div key={name} className="uetds-driver-subscription-fee-row">
-            <label className="uetds-driver-subscription-check">
-              <input
-                type="checkbox"
-                checked={value.services[enabledKey]}
-                disabled={locked}
-                onChange={(event) => toggleService(enabledKey, feeKey, event.target.checked)}
-              />
-              <span>{serviceLabels[name]}</span>
-            </label>
+            <div className="uetds-driver-subscription-choice" title={gpsAtsLocked ? gpsAtsLockedText : undefined}>
+              <label className="uetds-driver-subscription-check">
+                <input
+                  type="checkbox"
+                  checked={value.services[enabledKey]}
+                  disabled={locked || gpsAtsLocked}
+                  aria-describedby={gpsAtsLocked ? "gps-ats-device-note" : undefined}
+                  onChange={(event) => toggleService(enabledKey, feeKey, event.target.checked)}
+                />
+                <span>{serviceLabels[name]}</span>
+              </label>
+              {gpsAtsLocked ? (
+                <p id="gps-ats-device-note" className="uetds-driver-subscription-lock-note">{gpsAtsLockedText}</p>
+              ) : null}
+            </div>
             <label className="ops-field">
               <span>{feeLabel}</span>
               {readOnly ? (
                 <p className="partner-billing-value">
-                  {value.services[enabledKey] ? formatUetdsSubscriptionFee(value.services[feeKey]) || "—" : "—"} {value.currency}
+                  {value.services[enabledKey] ? formatUetdsSubscriptionFee(value.services[feeKey], locale) || "—" : "—"} {value.currency}
                 </p>
               ) : (
-                <input
-                  inputMode="decimal"
-                  value={value.services[feeKey] == null ? "" : String(value.services[feeKey])}
+                <SubscriptionFeeInput
+                  locale={locale}
+                  value={value.services[feeKey]}
                   disabled={locked || !value.services[enabledKey]}
-                  onChange={(event) => {
-                    const parsed = event.target.value.trim();
-                    onChange({
-                      ...value,
-                      services: {
-                        ...value.services,
-                        [feeKey]: parsed === "" ? null : Number(parsed),
-                      },
-                    });
-                  }}
+                  onFee={(fee) => onChange({
+                    ...value,
+                    services: { ...value.services, [feeKey]: fee },
+                  })}
                 />
               )}
             </label>
           </div>
-        ))}
-        <p className="partner-billing-value">{serviceLabels.total}: {total == null ? "—" : total.toFixed(2)} {value.currency}</p>
+          );
+        })}
+        <p className="partner-billing-value">{serviceLabels.total}: {total == null ? "—" : formatUetdsSubscriptionFee(total, locale)} {value.currency}</p>
         {!readOnly ? (
           <label className="ops-field">
             <span>{currencyLabel}</span>
@@ -249,9 +262,11 @@ export function DriverUetdsSubscriptionSection({
           <input type="hidden" name="uetdsSubscriptionEnrolled" value={enrolledForSave ? "1" : "0"} />
           <input type="hidden" name="serviceStandardEnabled" value={value.services.standardEnabled ? "1" : "0"} />
           <input type="hidden" name="serviceAdvancedEnabled" value={value.services.advancedEnabled ? "1" : "0"} />
+          <input type="hidden" name="serviceGpsAtsEnabled" value={value.services.gpsAtsEnabled ? "1" : "0"} />
           <input type="hidden" name="serviceMobileEnabled" value={value.services.mobileEnabled ? "1" : "0"} />
           <input type="hidden" name="serviceStandardFee" value={value.services.standardFee ?? ""} />
           <input type="hidden" name="serviceAdvancedFee" value={value.services.advancedFee ?? ""} />
+          <input type="hidden" name="serviceGpsAtsFee" value={value.services.gpsAtsFee ?? ""} />
           <input type="hidden" name="serviceMobileFee" value={value.services.mobileFee ?? ""} />
           <input type="hidden" name="uetdsSubscriptionPeriods" value={serializeDriverSubscriptionDraft(value)} />
           {!value.enrolled ? (
@@ -263,5 +278,40 @@ export function DriverUetdsSubscriptionSection({
         </>
       ) : null}
     </section>
+  );
+}
+
+function SubscriptionFeeInput({
+  locale,
+  value,
+  disabled,
+  onFee,
+}: {
+  locale: "tr" | "en" | "ru";
+  value: number | null;
+  disabled: boolean;
+  onFee: (fee: number | null) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? (value == null ? "" : formatUetdsSubscriptionFee(value, locale));
+  return (
+    <input
+      inputMode="decimal"
+      value={shown}
+      disabled={disabled}
+      onChange={(event) => {
+        const raw = event.target.value;
+        if (raw.trim() === "") {
+          setText("");
+          onFee(null);
+          return;
+        }
+        if (!/^\d*([.,]\d{0,2})?$/.test(raw.trim())) return;
+        setText(raw);
+        const parsed = parseUetdsSubscriptionFee(raw);
+        if (parsed != null) onFee(parsed);
+      }}
+      onBlur={() => setText(null)}
+    />
   );
 }

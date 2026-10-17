@@ -6,6 +6,8 @@ import {
   parseImeiFrame,
   type TeltonikaPacket,
 } from "@/lib/teltonika/codec";
+import { encodeCodec12, parseCodec12, TELTONIKA_CODEC12 } from "@/lib/teltonika/codec12";
+import { IMMOBILIZER_COMMAND_TIMEOUT_MS } from "@/lib/teltonika/immobilizer";
 
 export const TELTONIKA_DEFAULT_PORT = 5027;
 export const TELTONIKA_MAX_CONNECTIONS = 32;
@@ -19,6 +21,9 @@ export type TeltonikaStoreResult = {
 export type TeltonikaHandlers = {
   authorize(imei: string): Promise<boolean>;
   store(imei: string, packet: TeltonikaPacket): Promise<TeltonikaStoreResult>;
+  pullCommand?(imei: string): Promise<{ id: string; text: string } | null>;
+  finishCommand?(commandId: string, responseText: string): Promise<void>;
+  timeoutCommand?(commandId: string): Promise<void>;
 };
 
 export function startTeltonikaServer(input: {
@@ -56,6 +61,8 @@ function attachSocket(
   let phase: "imei" | "avl" = "imei";
   let imei = "";
   let reading = false;
+  let awaiting: { id: string } | null = null;
+  let commandTimer: ReturnType<typeof setTimeout> | null = null;
   const pending: Buffer[] = [];
   socket.setTimeout(TELTONIKA_IDLE_MS);
   const release = () => {
@@ -108,6 +115,31 @@ function attachSocket(
         imei = frame.value;
         phase = "avl";
         socket.write(imeiResponse(true));
+        await offerCommand();
+        continue;
+      }
+      if (
+        awaiting
+        && buffer.length >= 9
+        && buffer.readUInt32BE(0) === 0
+        && buffer[8] === TELTONIKA_CODEC12
+      ) {
+        const response = parseCodec12(buffer);
+        if ("need" in response) break;
+        if (!response.ok) {
+          socket.destroy();
+          return;
+        }
+        buffer = Buffer.from(response.rest);
+        const commandId = awaiting.id;
+        awaiting = null;
+        clearCommandTimer();
+        try {
+          await handlers.finishCommand?.(commandId, response.value.text);
+        } catch {
+          socket.destroy();
+          return;
+        }
         continue;
       }
       const frame = parseAvlFrame(buffer);
@@ -130,11 +162,36 @@ function attachSocket(
         return;
       }
       socket.write(encodeAck(stored.ack));
+      await offerCommand();
     }
     reading = false;
     if (pending.length > 0) {
       reading = true;
       void pump();
     }
+  }
+
+  function clearCommandTimer() {
+    if (commandTimer) clearTimeout(commandTimer);
+    commandTimer = null;
+  }
+
+  async function offerCommand() {
+    if (awaiting || !imei || !handlers.pullCommand) return;
+    let command: { id: string; text: string } | null = null;
+    try {
+      command = await handlers.pullCommand(imei);
+    } catch {
+      return;
+    }
+    if (!command) return;
+    awaiting = { id: command.id };
+    socket.write(encodeCodec12(command.text));
+    commandTimer = setTimeout(() => {
+      const commandId = awaiting?.id;
+      awaiting = null;
+      commandTimer = null;
+      if (commandId) void handlers.timeoutCommand?.(commandId);
+    }, IMMOBILIZER_COMMAND_TIMEOUT_MS);
   }
 }

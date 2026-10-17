@@ -15,7 +15,7 @@ import {
   wifiSsidError,
 } from "@/lib/gps/contract";
 import { softwareRebootPayload, wifiConfigPayload } from "@/lib/gps/commands";
-import { gpsRegistrationProfile, gpsSecretRegistrationField } from "@/lib/gps/registration";
+import { gpsRegistrationProfile, gpsSecretRegistrationField, gpsSimOperator, gpsSimPhone } from "@/lib/gps/registration";
 import { gpsReceiver } from "@/lib/teltonika/accept";
 import { trackerModel } from "@/lib/teltonika/immobilizer";
 import { canDeleteGpsDevice } from "@/lib/gps/delete-access";
@@ -31,6 +31,8 @@ import {
   rotateGpsDeviceToken,
   setGpsDeviceStatus,
   updateGpsImei,
+  updateGpsSimOperator,
+  updateGpsSimPhone,
 } from "@/lib/gps/queries";
 
 export type GpsActionState = {
@@ -118,8 +120,8 @@ export async function createGpsDeviceAction(
     model: receiver === "teltonika" ? model : null,
     imei: imeiRaw,
     serial: receiver === "teltonika" ? String(formData.get("serialNumber") ?? "") : "",
-    simPhone: receiver === "teltonika" ? String(formData.get("simPhone") ?? "") : "",
-    simOperator: receiver === "teltonika" ? String(formData.get("simOperator") ?? "") : "",
+    simPhone: String(formData.get("simPhone") ?? ""),
+    simOperator: String(formData.get("simOperator") ?? ""),
     simApn: receiver === "teltonika" ? String(formData.get("simApn") ?? "") : "",
   });
   if (!profile.ok) {
@@ -232,6 +234,48 @@ export async function updateGpsImeiAction(formData: FormData) {
     const constraint = postgresConstraint(error);
     redirect(`${path}?error=${postgresCode(error) === "23505" && constraint.includes("imei") ? "imei" : "failed"}`);
   }
+  revalidateGps(deviceId);
+  redirect(path);
+}
+
+export async function updateGpsSimOperatorAction(formData: FormData) {
+  const locale = readLocale(formData);
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const simOperator = gpsSimOperator(String(formData.get("simOperator") ?? ""));
+  const actor = await getOpsActor();
+  if (!locale || !deviceId || !actor || !actorCan(actor, "gps.manage")) {
+    return;
+  }
+  const path = localizedPath(locale, `/ops/gps/${deviceId}`);
+  if (!simOperator) {
+    redirect(`${path}?error=invalid`);
+  }
+  const device = await getGpsDevice(deviceId, null);
+  if (!device) {
+    redirect(`${path}?error=failed`);
+  }
+  await updateGpsSimOperator(deviceId, simOperator);
+  revalidateGps(deviceId);
+  redirect(path);
+}
+
+export async function updateGpsSimPhoneAction(formData: FormData) {
+  const locale = readLocale(formData);
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  const simPhone = gpsSimPhone(String(formData.get("simPhone") ?? ""));
+  const actor = await getOpsActor();
+  if (!locale || !deviceId || !actor || !actorCan(actor, "gps.manage")) {
+    return;
+  }
+  const path = localizedPath(locale, `/ops/gps/${deviceId}`);
+  if (simPhone === undefined) {
+    redirect(`${path}?error=invalid`);
+  }
+  const device = await getGpsDevice(deviceId, null);
+  if (!device) {
+    redirect(`${path}?error=failed`);
+  }
+  await updateGpsSimPhone(deviceId, simPhone);
   revalidateGps(deviceId);
   redirect(path);
 }

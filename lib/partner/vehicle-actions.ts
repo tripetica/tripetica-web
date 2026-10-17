@@ -220,6 +220,9 @@ async function changeOwnVehicleStatus(
   formData: FormData,
   mode: "activate" | "deactivate",
 ): Promise<PartnerVehicleFormState> {
+  if (String(formData.get("intent") ?? "") !== mode) {
+    return { error: "failed", ok: false };
+  }
   const locale = localeFromForm(formData);
   const actor = await requirePartnerActor(locale);
   const vehicleId = String(formData.get("id") ?? "");

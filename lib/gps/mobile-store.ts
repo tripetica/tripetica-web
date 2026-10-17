@@ -1,9 +1,9 @@
 import "server-only";
 
 import { getPool, query } from "@/lib/db/postgres";
-import { acceptMobilePoint, MOBILE_GPS_FRESH_MS, mobileFixFresh, mobileShareAllowed } from "@/lib/gps/mobile";
+import { acceptMobilePoint, MOBILE_GPS_FRESH_MS, mobileFixFresh, mobileShareAllowed, mobileShareStartDecision } from "@/lib/gps/mobile";
 import { isUetdsDriverSubscriptionEntitled } from "@/lib/uetds/driver-subscription";
-import { getDriverUetdsSubscription } from "@/lib/uetds/driver-subscription-store";
+import { getVehicleUetdsSubscription } from "@/lib/uetds/vehicle-subscription-store";
 import { annotateMobileSpeeds, resolveMobileSpeed, shouldStoreMobilePoint, type MobileSpeedFix } from "@/lib/gps/mobile-speed";
 import { normalizeEmail } from "@/lib/uetds/service-subscriptions";
 
@@ -31,7 +31,8 @@ type MatchRow = {
 async function matchingDrivers(actor: MobileActor) {
   if (actor.surface === "driver" && actor.driverId) {
     const result = await query<MatchRow>(
-      `SELECT d.id, d.partner_id, d.first_name, d.last_name, d.status, d.service_mobile_gps_enabled,
+      `SELECT d.id, d.partner_id, d.first_name, d.last_name, d.status,
+              COALESCE(dv.service_mobile_gps_enabled, FALSE) AS service_mobile_gps_enabled,
               dv.id AS vehicle_id, dv.plate, uc.short_name AS company_name
          FROM partner_drivers d
          LEFT JOIN partner_fleet_defaults fd ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
@@ -45,7 +46,8 @@ async function matchingDrivers(actor: MobileActor) {
   const email = normalizeEmail(actor.email);
   if (!email) return [];
   const result = await query<MatchRow>(
-    `SELECT d.id, d.partner_id, d.first_name, d.last_name, d.status, d.service_mobile_gps_enabled,
+    `SELECT d.id, d.partner_id, d.first_name, d.last_name, d.status,
+            COALESCE(dv.service_mobile_gps_enabled, FALSE) AS service_mobile_gps_enabled,
             dv.id AS vehicle_id, dv.plate, uc.short_name AS company_name
        FROM partner_drivers d
        LEFT JOIN partner_fleet_defaults fd ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
@@ -62,7 +64,7 @@ async function matchingDrivers(actor: MobileActor) {
 export async function loadMobileShare(actor: MobileActor) {
   const rows = await matchingDrivers(actor);
   const row = rows.length === 1 ? rows[0] : null;
-  const subscription = row ? await getDriverUetdsSubscription(row.id) : null;
+  const subscription = row?.vehicle_id ? await getVehicleUetdsSubscription(row.vehicle_id) : null;
   const allowed = mobileShareAllowed({
     matches: rows.length,
     driverActive: row?.status === "active",
@@ -76,11 +78,13 @@ export async function loadMobileShare(actor: MobileActor) {
   const session = await query<{
     id: string;
     last_fix_at: Date | null;
+    last_stream_at: Date | null;
     last_accuracy_m: string | null;
     share_enabled: boolean;
     client_token: string | null;
+    started_at: Date;
   }>(
-    `SELECT id, last_fix_at, last_accuracy_m, share_enabled, client_token
+    `SELECT id, last_fix_at, last_stream_at, last_accuracy_m, share_enabled, client_token, started_at
        FROM gps_mobile_sessions
       WHERE driver_id = $1 AND status = 'active'
       LIMIT 1`,
@@ -110,6 +114,8 @@ export async function loadMobileShare(actor: MobileActor) {
     tokenBound: Boolean(active?.client_token),
     tokenMatches: Boolean(active) && (active?.client_token ?? "") === token,
     lastFixAt,
+    lastStreamAt: active?.last_stream_at?.toISOString() ?? null,
+    startedAt: active?.started_at?.toISOString() ?? null,
     accuracyM: active?.last_accuracy_m == null ? null : Number(active.last_accuracy_m),
     fresh: mobileFixFresh(lastFixAt),
   };
@@ -121,50 +127,88 @@ export async function startMobileShare(actor: MobileActor) {
   if (actor.surface === "partner" && !share.vehicleId) return { ok: false as const, error: "forbidden" as const };
   const token = actor.clientToken?.trim() ?? "";
   if (!token) return { ok: false as const, error: "forbidden" as const };
-  if (share.sessionId && share.sharing && share.tokenMatches) {
-    return { ok: true as const, sessionId: share.sessionId, share };
-  }
-  if (share.sessionId && share.sharing && !share.tokenBound) {
-    await query(
-      `UPDATE gps_mobile_sessions SET client_token = $2 WHERE id = $1 AND client_token IS NULL`,
-      [share.sessionId, token],
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query<{
+      id: string;
+      share_enabled: boolean;
+      client_token: string | null;
+      last_stream_at: Date | null;
+      started_at: Date;
+    }>(
+      `SELECT id, share_enabled, client_token, last_stream_at, started_at
+         FROM gps_mobile_sessions
+        WHERE driver_id = $1 AND status = 'active'
+        FOR UPDATE`,
+      [share.driverId],
     );
-    return { ok: true as const, sessionId: share.sessionId, share: { ...share, tokenMatches: true } };
-  }
-  if (share.sessionId && share.sharing && !share.tokenMatches) {
-    return { ok: false as const, error: "other-device" as const };
-  }
-  if (share.sessionId) {
-    await query(
-      `UPDATE gps_mobile_sessions
-          SET status = 'stopped', stopped_at = NOW(), stop_reason = 'stopped', share_enabled = FALSE
-        WHERE id = $1 AND status = 'active'`,
-      [share.sessionId],
+    const row = locked.rows[0] ?? null;
+    const decision = mobileShareStartDecision({
+      hasSession: Boolean(row),
+      sharing: Boolean(row?.share_enabled),
+      tokenMatches: Boolean(row) && (row?.client_token ?? "") === token,
+      tokenBound: Boolean(row?.client_token),
+      lastStreamAt: row?.last_stream_at?.getTime() ?? null,
+      startedAt: row?.started_at.getTime() ?? null,
+      now: Date.now(),
+    });
+    if (decision === "blocked") {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "other-device" as const };
+    }
+    if (row && (decision === "resume" || decision === "bind-token")) {
+      if (decision === "bind-token") {
+        await client.query(
+          `UPDATE gps_mobile_sessions SET client_token = $2 WHERE id = $1 AND client_token IS NULL`,
+          [row.id, token],
+        );
+      }
+      await client.query("COMMIT");
+      return { ok: true as const, sessionId: row.id, share: { ...share, sessionId: row.id, sharing: true, tokenMatches: true } };
+    }
+    if (row) {
+      const reason = row.share_enabled ? "stream_lost" : "stopped";
+      await client.query(
+        `UPDATE gps_mobile_sessions
+            SET status = 'stopped', stopped_at = NOW(), stop_reason = $2, share_enabled = FALSE
+          WHERE id = $1 AND status = 'active'`,
+        [row.id, reason],
+      );
+      await client.query(
+        `INSERT INTO gps_mobile_events (partner_id, driver_id, vehicle_id, session_id, kind)
+         SELECT $1, $2, $3, $4, $5
+          WHERE NOT EXISTS (
+            SELECT 1 FROM gps_mobile_events
+             WHERE session_id = $4 AND kind = $5
+          )`,
+        [share.partnerId, share.driverId, share.vehicleId, row.id, reason],
+      );
+    }
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO gps_mobile_sessions (partner_id, driver_id, vehicle_id, surface, status, share_enabled, client_token)
+       VALUES ($1, $2, $3, $4, 'active', TRUE, $5)
+       RETURNING id`,
+      [share.partnerId, share.driverId, share.vehicleId, actor.surface, token],
     );
-    await query(
+    const sessionId = inserted.rows[0]?.id;
+    if (!sessionId) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "failed" as const };
+    }
+    await client.query(
       `INSERT INTO gps_mobile_events (partner_id, driver_id, vehicle_id, session_id, kind)
-       SELECT $1, $2, $3, $4, 'stopped'
-        WHERE NOT EXISTS (
-          SELECT 1 FROM gps_mobile_events
-           WHERE session_id = $4 AND kind = 'stopped'
-        )`,
-      [share.partnerId, share.driverId, share.vehicleId, share.sessionId],
+       VALUES ($1, $2, $3, $4, 'started')`,
+      [share.partnerId, share.driverId, share.vehicleId, sessionId],
     );
+    await client.query("COMMIT");
+    return { ok: true as const, sessionId, share: { ...share, sessionId, sharing: true, tokenMatches: true } };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  const inserted = await query<{ id: string }>(
-    `INSERT INTO gps_mobile_sessions (partner_id, driver_id, vehicle_id, surface, status, share_enabled, client_token)
-     VALUES ($1, $2, $3, $4, 'active', TRUE, $5)
-     RETURNING id`,
-    [share.partnerId, share.driverId, share.vehicleId, actor.surface, token],
-  );
-  const sessionId = inserted.rows[0]?.id;
-  if (!sessionId) return { ok: false as const, error: "failed" as const };
-  await query(
-    `INSERT INTO gps_mobile_events (partner_id, driver_id, vehicle_id, session_id, kind)
-     VALUES ($1, $2, $3, $4, 'started')`,
-    [share.partnerId, share.driverId, share.vehicleId, sessionId],
-  );
-  return { ok: true as const, sessionId, share: { ...share, sessionId, sharing: true } };
 }
 
 export async function stopMobileShare(actor: MobileActor, reason: "stopped" | "permission_denied" | "stream_lost" | "stream_resumed") {
@@ -416,6 +460,7 @@ export async function listMobileFleet(partnerId: string) {
     driver_id: string;
     driver_name: string;
     plate: string | null;
+    vehicle_id: string | null;
     latitude: number | null;
     longitude: number | null;
     speed_mps: string | null;
@@ -430,6 +475,7 @@ export async function listMobileFleet(partnerId: string) {
             d.id AS driver_id,
             trim(d.first_name || ' ' || d.last_name) AS driver_name,
             vehicle.plate,
+            vehicle.id AS vehicle_id,
             position.latitude,
             position.longitude,
             position.speed_mps::text AS speed_mps,
@@ -445,7 +491,7 @@ export async function listMobileFleet(partnerId: string) {
       WHERE d.partner_id = $1
         AND d.deleted_at IS NULL
         AND d.status = 'active'
-        AND d.service_mobile_gps_enabled
+        AND vehicle.service_mobile_gps_enabled
         AND position.latitude BETWEEN -90 AND 90
         AND position.longitude BETWEEN -180 AND 180
       ORDER BY d.id, position.recorded_at DESC`,
@@ -488,6 +534,7 @@ export async function listMobileFleet(partnerId: string) {
     return [{
       id: row.id,
       plate: row.plate,
+      vehicleId: row.vehicle_id,
       deviceCode: row.driver_name,
       latitude: Number(row.latitude),
       longitude: Number(row.longitude),

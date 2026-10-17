@@ -1,5 +1,5 @@
 import { normalizeUetdsFare } from "@/lib/uetds/fare";
-import { officialUetdsCountryByCode } from "@/lib/uetds/official-locations";
+import { officialUetdsCountryByCode, officialUetdsNationalityCode } from "@/lib/uetds/official-locations";
 import { partnerPassengerIdentityFields } from "@/lib/partner/job-view";
 import {
   emptyUetdsLocation,
@@ -126,7 +126,7 @@ export function createPassengerDraft(
 ): UetdsPassengerDraft {
   return {
     key: input.key || createPassengerKey(),
-    nationality: input.nationality?.trim() ?? "",
+    nationality: officialUetdsNationalityCode(input.nationality) ?? input.nationality?.trim() ?? "",
     identityType: input.identityType ?? "passport",
     identityNumber: input.identityNumber?.trim() ?? "",
     firstName: input.firstName?.trim() ?? "",
@@ -374,6 +374,19 @@ export function missingMandatoryFields(draft: UetdsDraft) {
     }
   });
   return missing;
+}
+
+/** Drop the nationality required message once every passenger has an official country. */
+export function nationalityErrorsAfterSelection(
+  messages: string[],
+  nationalityMessage: string,
+  passengers: Array<{ nationality: string }>,
+) {
+  const missing = passengers.some((passenger) => !officialUetdsCountryByCode(passenger.nationality));
+  if (missing) {
+    return messages;
+  }
+  return messages.filter((message) => message !== nationalityMessage);
 }
 
 export function blockingUetdsDraftIssues(draft: UetdsDraft) {

@@ -79,13 +79,13 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const arabicPanel = pathname.match(
-    /^\/ar\/(ops|partner|driver|driver-task|sofor|sofor-gorevi)(\/.*)?$/,
+    /^\/ar\/(ops|driver-task|sofor|sofor-gorevi)(\/.*)?$/,
   );
   if (arabicPanel) {
     const url = request.nextUrl.clone();
     const area = arabicPanel[1];
     const rest = arabicPanel[2] ?? "";
-    const locale = area === "ops" || area === "partner" ? "en" : "tr";
+    const locale = area === "ops" ? "en" : "tr";
     url.pathname = `/${locale}/${area}${rest}`;
     return NextResponse.redirect(url, 308);
   }
@@ -116,7 +116,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const driverPortalMatch = pathname.match(/^\/(tr|en|ru)\/driver(?:\/(.*))?$/);
+  const driverPortalMatch = pathname.match(/^\/(tr|en|ru|ar)\/driver(?:\/(.*))?$/);
   if (driverPortalMatch) {
     const locale = driverPortalMatch[1];
     const rest = driverPortalMatch[2] ?? "";
@@ -131,7 +131,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const partnerMatch = pathname.match(/^\/(tr|en|ru)\/partner(?:\/(.*))?$/);
+  const partnerMatch = pathname.match(/^\/(tr|en|ru|ar)\/partner(?:\/(.*))?$/);
   if (partnerMatch) {
     const locale = partnerMatch[1];
     const rest = partnerMatch[2] ?? "";

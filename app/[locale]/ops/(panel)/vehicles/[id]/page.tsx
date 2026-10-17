@@ -6,6 +6,8 @@ import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getOpsVehicle } from "@/lib/ops/vehicles";
+import { getVehicleUetdsSubscription, vehicleHasActivePhysicalGps } from "@/lib/uetds/vehicle-subscription-store";
+import { getVehicleAtsMinistrySource, listVehicleAtsSourceAudits, vehicleHasOpenAtsTrip } from "@/lib/gps/ats-source-store";
 import { actorCan } from "@/lib/ops/session";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +20,14 @@ export default async function OpsVehicleDetailPage({
     notFound();
   }
   const actor = await requireOpsPage(locale, "partners.view");
-  const [vehicle, activeUetdsCompanies] = await Promise.all([
+  const [vehicle, activeUetdsCompanies, subscription, atsSource, atsAudits, hasActiveAtsTrip, gpsAtsSelectable] = await Promise.all([
     getOpsVehicle(id),
     listActiveUetdsCompanyOptions(),
+    getVehicleUetdsSubscription(id),
+    getVehicleAtsMinistrySource(id),
+    listVehicleAtsSourceAudits(id),
+    vehicleHasOpenAtsTrip(id),
+    vehicleHasActivePhysicalGps(id),
   ]);
   if (!vehicle) {
     notFound();
@@ -40,6 +47,11 @@ export default async function OpsVehicleDetailPage({
       }}
       backHref={localizedPath(locale, "/ops/vehicles")}
       returnTo="ops-vehicles"
+      subscription={subscription}
+      atsSource={atsSource}
+      atsAudits={atsAudits}
+      hasActiveAtsTrip={hasActiveAtsTrip}
+      gpsAtsSelectable={gpsAtsSelectable}
     />
   );
 }

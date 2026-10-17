@@ -14,7 +14,7 @@ import { type PortalNextDraft } from "@/lib/uetds/ai-edit-snapshot";
 import { readUnfinishedPortalSync } from "@/lib/uetds/ai-edit-target";
 import { markAiEditPortalSyncFinished } from "@/lib/uetds/ai-edit-target-store";
 import { type PortalEditPlan } from "@/lib/uetds/kamu-portal/live-update";
-import { chromiumExecutable, openChromiumLoginControls } from "@/lib/uetds/kamu-login-browser";
+import { chromiumExecutable, expectedChromiumPath, openChromiumLoginControls } from "@/lib/uetds/kamu-login-browser";
 import { openLiveBridgeControls } from "@/lib/uetds/kamu-login-live-bridge";
 import {
   adoptKamuLoginSession,
@@ -66,8 +66,14 @@ function browserLaunchCode(error: unknown) {
   return "launch_failed";
 }
 
+function browserLaunchDetail(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return message.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
 function logBrowserLaunchFailure(error: unknown) {
-  console.error(`kamu_browser_launch_failed executable=${chromiumExecutable()} code=${browserLaunchCode(error)}`);
+  const executable = chromiumExecutable() || "missing";
+  console.error(`kamu_browser_launch_failed executable=${executable} expected=${expectedChromiumPath()} code=${browserLaunchCode(error)} detail=${browserLaunchDetail(error)}`);
 }
 
 function tripTargetFromSnapshot(snapshotJson: string): PortalTripTarget | null {

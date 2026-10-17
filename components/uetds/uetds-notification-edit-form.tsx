@@ -6,7 +6,6 @@ import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { SearchableSelect } from "@/components/partner/searchable-select";
 import { UetdsLocationField } from "@/components/uetds/uetds-location-field";
 import { UetdsPassengerRemoveButton } from "@/components/uetds/uetds-passenger-remove-button";
-import { countries } from "@/lib/geo/countries";
 import { type Locale } from "@/lib/i18n/config";
 import {
   replaceCompany,
@@ -29,6 +28,7 @@ import {
   type UetdsDraft,
   type UetdsPassengerDraft,
 } from "@/lib/uetds/draft";
+import { officialUetdsCountries, officialUetdsNationalityCode } from "@/lib/uetds/official-locations";
 import { describeUetdsEditChanges, diffUetdsEdit } from "@/lib/uetds/manage-diff";
 import { type UetdsEditWindow, uetdsDateInputValue, uetdsTimeInputValue } from "@/lib/uetds/edit-policy";
 import { isExistingMinistryPassenger } from "@/lib/uetds/passenger-class";
@@ -42,7 +42,8 @@ import { applyUetdsStartToEnd, isUetdsEndAfterStart } from "@/lib/uetds/trip-tim
 type UetdsNotificationEditFormProps = {
   locale: Locale;
   copy: UetdsFormCopy;
-  actor: "partner" | "ops";
+  actor: "partner" | "ops" | "driver";
+  lockDriver?: boolean;
   ministryEnv: "test" | "live" | null;
   notificationId: string;
   seferReferansNo: string;
@@ -61,7 +62,7 @@ function manageMessage(
   copy: UetdsFormCopy,
   detail?: string | null,
   ministryEnv?: "test" | "live" | null,
-  actor?: "partner" | "ops",
+  actor?: "partner" | "ops" | "driver",
 ) {
   if (error === "start-locked") {
     return copy.editStartLocked;
@@ -128,7 +129,7 @@ function manageMessage(
     return copy.missingDriverIdentity;
   }
   if (error === "subscription") {
-    return actor === "partner" ? copy.reasonSubscriptionPartner : copy.reasonSubscription;
+    return actor !== "ops" ? copy.reasonSubscriptionPartner : copy.reasonSubscription;
   }
   if (error === "reservation-scope") {
     return copy.forbidden;
@@ -172,6 +173,7 @@ export function UetdsNotificationEditForm({
   authorities,
   seferCompanyId,
   listHref,
+  lockDriver = false,
 }: UetdsNotificationEditFormProps) {
   const [draft, setDraft] = useState(initialDraft);
   const [authorityId, setAuthorityId] = useState(() => {
@@ -252,16 +254,16 @@ export function UetdsNotificationEditForm({
     (changes.includes("driver") || changes.includes("vehicle"));
   const countryOptions = useMemo(
     () =>
-      countries()
+      officialUetdsCountries()
         .map((country) => ({
-          value: country.iso2,
-          label: country.names[locale] || country.names.en,
+          value: country.code,
+          label: country.name,
         }))
         .sort((a, b) => a.label.localeCompare(b.label, locale)),
     [locale],
   );
 
-  const validation = useUetdsValidation(draft, copy, fleetBlocked);
+  const validation = useUetdsValidation(draft, copy);
 
   function updateLocation(key: "originLocation" | "destinationLocation", location: UetdsLocation) {
     setDraft((current) => ({
@@ -290,10 +292,14 @@ export function UetdsNotificationEditForm({
   }
 
   function updatePassenger(index: number, patch: Partial<UetdsPassengerDraft>) {
+    const nextPatch = { ...patch };
+    if (typeof nextPatch.nationality === "string") {
+      nextPatch.nationality = officialUetdsNationalityCode(nextPatch.nationality) ?? nextPatch.nationality.trim();
+    }
     setDraft((current) => ({
       ...current,
       passengers: current.passengers.map((passenger, itemIndex) =>
-        itemIndex === index ? { ...passenger, ...patch } : passenger,
+        itemIndex === index ? { ...passenger, ...nextPatch } : passenger,
       ),
     }));
   }
@@ -553,6 +559,7 @@ export function UetdsNotificationEditForm({
               options={driverOptions}
               placeholder={copy.selectDriver}
               emptyLabel={copy.noDrivers}
+              disabled={lockDriver}
               onChange={(value) => {
                 const nextDriver = drivers.find((item) => item.id === value);
                 setDraft((current) =>
@@ -584,6 +591,7 @@ export function UetdsNotificationEditForm({
               options={vehicleOptions}
               placeholder={copy.selectVehicle}
               emptyLabel={copy.noVehicles}
+              disabled={lockDriver && vehicles.length <= 1}
               onChange={(value) => setDraft((current) => ({ ...current, vehicleId: value }))}
             />
           </label>

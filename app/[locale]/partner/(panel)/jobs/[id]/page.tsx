@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { PartnerJobDetail } from "@/components/partner/job-detail";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { getPartnerJob } from "@/lib/partner/jobs";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function PartnerOpenJobDetailPage({
 
   return (
     <div className="ops-page partner-profile-page">
-      <PartnerJobDetail locale={locale} copy={partnerCopy[asPanelLocale(locale)]} job={job} />
+      <PartnerJobDetail locale={locale} copy={partnerCopyFor(locale)} job={job} />
     </div>
   );
 }

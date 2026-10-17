@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { DriverPermissionsEditor } from "@/components/partner/driver-permissions";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
-import { PartnerDriverSubscriptionReadOnlyCells } from "@/components/uetds/driver-subscription-list-cells";
+import { emptyDriverPermissions, type DriverPermissions } from "@/lib/driver-portal/permissions";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { type PartnerCopy } from "@/lib/partner/copy";
-import { serviceSubscriptionNames } from "@/lib/uetds/service-subscriptions";
 import {
   patchPartnerDriverAuthorityAction,
   patchPartnerDriverCompanyAction,
@@ -26,11 +26,6 @@ import {
 } from "@/lib/partner/driver-list-view";
 import { formatPartnerDriverLanguages } from "@/lib/partner/driver-languages";
 import { formatPartnerFleetPhone, type PartnerDriverRecord } from "@/lib/partner/fleet-view";
-import {
-  addSubscriptionMonths,
-  istanbulSubscriptionPeriodKey,
-  subscriptionPeriodLabel,
-} from "@/lib/uetds/driver-subscription";
 
 type PartnerDriverListProps = {
   locale: Locale;
@@ -38,6 +33,7 @@ type PartnerDriverListProps = {
   drivers: PartnerDriverRecord[];
   companies: readonly UetdsCompanyRef[];
   fleetChoices: FleetChoicesByPartner;
+  permissions: Record<string, DriverPermissions>;
   addHref: string;
   justAdded?: boolean;
 };
@@ -48,6 +44,7 @@ export function PartnerDriverList({
   drivers,
   companies,
   fleetChoices,
+  permissions,
   addHref,
   justAdded = false,
 }: PartnerDriverListProps) {
@@ -64,20 +61,7 @@ export function PartnerDriverList({
     setRows(drivers);
   }
   const [dir, setDir] = useState<DriverNameSortDir>("asc");
-  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
-  const period = istanbulSubscriptionPeriodKey();
-  const periodLabel = subscriptionPeriodLabel(period, panelLocale);
-  const nextPeriodLabel = subscriptionPeriodLabel(addSubscriptionMonths(period, 1), panelLocale);
-  const subscriptionLabels = {
-    fee: copy.uetdsSubscriptionFee,
-    currency: copy.uetdsSubscriptionCurrency,
-    unpaid: copy.uetdsSubscriptionUnpaid,
-    paid: copy.uetdsSubscriptionPaid,
-    free: copy.uetdsSubscriptionFree,
-    notManaged: copy.uetdsSubscriptionNotManaged,
-    invalidFee: "",
-    saveFailed: "",
-  };
+  const [openPermissions, setOpenPermissions] = useState<string | null>(null);
 
   useEffect(() => {
     if (!justAdded || typeof window === "undefined") {
@@ -152,25 +136,27 @@ export function PartnerDriverList({
                 <th>{copy.defaultVehicle}</th>
                 <th>{copy.defaultEdevletAuthority}</th>
                 <th>{copy.driverStatus}</th>
-                <th>{copy.membershipStatusColumn}</th>
-                <th className="ops-driver-sub-fee">{copy.uetdsSubscriptionFee}</th>
-                <th className="ops-driver-sub-currency">{copy.uetdsSubscriptionCurrency}</th>
-                <th className="ops-driver-sub-status">
-                  {periodLabel} / {copy.uetdsSubscriptionStatusColumn}
-                </th>
-                <th className="ops-driver-sub-status">
-                  {nextPeriodLabel} / {copy.uetdsSubscriptionStatusColumn}
-                </th>
                 <th>{copy.driverDetail}</th>
               </tr>
             </thead>
             <tbody>
               {visible.map((driver, index) => (
-                <tr key={driver.id}>
+                <Fragment key={driver.id}>
+                <tr>
                   <td>{index + 1}</td>
-                  <td>{driver.fullName}</td>
-                  <td>{formatPartnerFleetPhone(driver.phone)}</td>
-                  <td>{driver.email?.trim() || "—"}</td>
+                  <td>
+                    <div>{driver.fullName}</div>
+                    <button
+                      type="button"
+                      className="ops-btn-ghost driver-permissions-toggle"
+                      aria-expanded={openPermissions === driver.id}
+                      onClick={() => setOpenPermissions((current) => current === driver.id ? null : driver.id)}
+                    >
+                      {openPermissions === driver.id ? copy.driverPermissionsHide : copy.driverPermissionsShow}
+                    </button>
+                  </td>
+                  <td className="ltr-isolate" dir="ltr">{formatPartnerFleetPhone(driver.phone)}</td>
+                  <td className="ltr-isolate" dir="ltr">{driver.email?.trim() || "—"}</td>
                   <td>{formatPartnerDriverLanguages(driver.languageCodes, locale)}</td>
                   <td>
                     <FleetInlineSelect
@@ -270,21 +256,6 @@ export function PartnerDriverList({
                     </span>
                   </td>
                   <td>
-                    {serviceSubscriptionNames(driver.services ?? {
-                      standardEnabled: false, standardFee: null, advancedEnabled: false, advancedFee: null, mobileEnabled: false, mobileFee: null,
-                    }, {
-                      standard: copy.serviceStandard,
-                      advanced: copy.serviceAdvanced,
-                      mobile: copy.serviceMobile,
-                      none: copy.serviceNone,
-                    })}
-                  </td>
-                  <PartnerDriverSubscriptionReadOnlyCells
-                    locale={locale}
-                    summary={driver.uetdsSubscription}
-                    labels={subscriptionLabels}
-                  />
-                  <td>
                     <a
                       className="ops-row-detail"
                       href={localizedPath(locale, `/partner/drivers/${driver.id}`)}
@@ -293,6 +264,25 @@ export function PartnerDriverList({
                     </a>
                   </td>
                 </tr>
+                {openPermissions === driver.id ? (
+                  <tr className="driver-permissions-row">
+                    <td colSpan={10}>
+                      <DriverPermissionsEditor
+                        driverId={driver.id}
+                        initial={permissions[driver.id] ?? emptyDriverPermissions()}
+                        copy={copy}
+                      />
+                      <button
+                        type="button"
+                        className="ops-btn-ghost driver-permissions-toggle"
+                        onClick={() => setOpenPermissions(null)}
+                      >
+                        {copy.driverPermissionsHide}
+                      </button>
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               ))}
             </tbody>
           </table>

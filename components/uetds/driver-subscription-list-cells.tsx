@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
-  patchOpsDriverSubscriptionCurrencyAction,
-  patchOpsDriverSubscriptionFeeAction,
-  patchOpsDriverSubscriptionNextStatusAction,
-  patchOpsDriverSubscriptionStatusAction,
-} from "@/lib/ops/driver-actions";
+  patchOpsVehicleSubscriptionCurrencyAction,
+  patchOpsVehicleSubscriptionFeeAction,
+  patchOpsVehicleSubscriptionNextStatusAction,
+  patchOpsVehicleSubscriptionStatusAction,
+} from "@/lib/ops/vehicle-subscription-actions";
 import { type Locale } from "@/lib/i18n/config";
 import {
   addSubscriptionMonths,
@@ -34,11 +34,11 @@ export type DriverSubscriptionListLabels = {
 
 type Props = {
   locale: Locale;
-  driverId: string;
+  vehicleId: string;
   canManage: boolean;
   summary: UetdsDriverSubscriptionListSummary;
   labels: DriverSubscriptionListLabels;
-  onSummaryChange: (driverId: string, summary: UetdsDriverSubscriptionListSummary) => void;
+  onSummaryChange: (vehicleId: string, summary: UetdsDriverSubscriptionListSummary) => void;
 };
 
 function panelLocale(locale: Locale): "tr" | "en" | "ru" {
@@ -47,7 +47,7 @@ function panelLocale(locale: Locale): "tr" | "en" | "ru" {
 
 export function OpsDriverSubscriptionInlineCells({
   locale,
-  driverId,
+  vehicleId,
   canManage,
   summary,
   labels,
@@ -56,7 +56,7 @@ export function OpsDriverSubscriptionInlineCells({
   const period = istanbulSubscriptionPeriodKey();
   const periodLabel = subscriptionPeriodLabel(period, panelLocale(locale));
   const [feeDraft, setFeeDraft] = useState(
-    formatUetdsSubscriptionFee(summary.monthlyFee) || "",
+    formatUetdsSubscriptionFee(summary.monthlyFee, panelLocale(locale)) || "",
   );
   const [currencyDraft, setCurrencyDraft] = useState<UetdsSubscriptionCurrency | "">(
     summary.currency ?? "",
@@ -77,7 +77,7 @@ export function OpsDriverSubscriptionInlineCells({
   const editable = canManage && enrolled;
 
   useEffect(() => {
-    setFeeDraft(formatUetdsSubscriptionFee(summary.monthlyFee) || "");
+    setFeeDraft(formatUetdsSubscriptionFee(summary.monthlyFee, panelLocale(locale)) || "");
     setCurrencyDraft(summary.currency ?? "");
     setStatusDraft(summary.currentPeriodStatus ?? "");
     setNextStatusDraft(summary.nextPeriodStatus ?? "");
@@ -88,12 +88,12 @@ export function OpsDriverSubscriptionInlineCells({
     summary.currentPeriodStatus,
     summary.nextPeriodStatus,
     summary.enrolled,
-    driverId,
+    vehicleId,
   ]);
 
   function applyServerSummary(next: UetdsDriverSubscriptionListSummary) {
-    onSummaryChange(driverId, next);
-    setFeeDraft(formatUetdsSubscriptionFee(next.monthlyFee) || "");
+    onSummaryChange(vehicleId, next);
+    setFeeDraft(formatUetdsSubscriptionFee(next.monthlyFee, panelLocale(locale)) || "");
     setCurrencyDraft(next.currency ?? "");
     setStatusDraft(next.currentPeriodStatus ?? "");
     setNextStatusDraft(next.nextPeriodStatus ?? "");
@@ -101,19 +101,19 @@ export function OpsDriverSubscriptionInlineCells({
   }
 
   function revertFee() {
-    setFeeDraft(formatUetdsSubscriptionFee(summary.monthlyFee) || "");
+    setFeeDraft(formatUetdsSubscriptionFee(summary.monthlyFee, panelLocale(locale)) || "");
   }
 
   function saveFee() {
     if (!editable || pendingField) return;
     const parsed = parseUetdsSubscriptionFee(feeDraft);
-    const current = formatUetdsSubscriptionFee(summary.monthlyFee);
+    const current = formatUetdsSubscriptionFee(summary.monthlyFee, panelLocale(locale));
     if (parsed == null) {
       setError(labels.invalidFee);
       revertFee();
       return;
     }
-    if (formatUetdsSubscriptionFee(parsed) === current) {
+    if (formatUetdsSubscriptionFee(parsed, panelLocale(locale)) === current) {
       setFeeDraft(current);
       setError(null);
       return;
@@ -121,14 +121,14 @@ export function OpsDriverSubscriptionInlineCells({
     const seq = ++requestSeq.current;
     setPendingField("fee");
     startTransition(async () => {
-      const result = await patchOpsDriverSubscriptionFeeAction({
+      const result = await patchOpsVehicleSubscriptionFeeAction({
         locale,
-        driverId,
+        vehicleId,
         monthlyFee: feeDraft,
       });
       if (seq !== requestSeq.current) return;
       setPendingField(null);
-      if (!result.ok || result.driverId !== driverId) {
+      if (!result.ok || result.summary == null || result.vehicleId !== vehicleId) {
         setError(result.error === "invalid-subscription-fee" ? labels.invalidFee : labels.saveFailed);
         revertFee();
         return;
@@ -147,14 +147,14 @@ export function OpsDriverSubscriptionInlineCells({
     setCurrencyDraft(next as UetdsSubscriptionCurrency);
     setPendingField("currency");
     startTransition(async () => {
-      const result = await patchOpsDriverSubscriptionCurrencyAction({
+      const result = await patchOpsVehicleSubscriptionCurrencyAction({
         locale,
-        driverId,
+        vehicleId,
         currency: next,
       });
       if (seq !== requestSeq.current) return;
       setPendingField(null);
-      if (!result.ok || result.driverId !== driverId) {
+      if (!result.ok || result.summary == null || result.vehicleId !== vehicleId) {
         setError(labels.saveFailed);
         setCurrencyDraft(summary.currency ?? "");
         return;
@@ -173,16 +173,16 @@ export function OpsDriverSubscriptionInlineCells({
     setStatusDraft(next as UetdsSubscriptionPeriodStatus);
     setPendingField("status");
     startTransition(async () => {
-      const result = await patchOpsDriverSubscriptionStatusAction({
+      const result = await patchOpsVehicleSubscriptionStatusAction({
         locale,
-        driverId,
+        vehicleId,
         status: next,
         year: period.year,
         month: period.month,
       });
       if (seq !== requestSeq.current) return;
       setPendingField(null);
-      if (!result.ok || result.driverId !== driverId) {
+      if (!result.ok || result.summary == null || result.vehicleId !== vehicleId) {
         setError(labels.saveFailed);
         setStatusDraft(summary.currentPeriodStatus ?? "");
         return;
@@ -204,16 +204,16 @@ export function OpsDriverSubscriptionInlineCells({
     setNextStatusDraft(nextStatus as UetdsSubscriptionPeriodStatus);
     setPendingField("next");
     startTransition(async () => {
-      const result = await patchOpsDriverSubscriptionNextStatusAction({
+      const result = await patchOpsVehicleSubscriptionNextStatusAction({
         locale,
-        driverId,
+        vehicleId,
         status: nextStatus,
         year: nextPeriod.year,
         month: nextPeriod.month,
       });
       if (seq !== requestSeq.current) return;
       setPendingField(null);
-      if (!result.ok || result.driverId !== driverId) {
+      if (!result.ok || result.summary == null || result.vehicleId !== vehicleId) {
         setError(labels.saveFailed);
         setNextStatusDraft(summary.nextPeriodStatus ?? "");
         return;
@@ -272,7 +272,7 @@ export function OpsDriverSubscriptionInlineCells({
             }}
           />
         ) : (
-          formatUetdsSubscriptionFee(summary.monthlyFee) || "—"
+          formatUetdsSubscriptionFee(summary.monthlyFee, panelLocale(locale)) || "—"
         )}
         {error && pendingField === null ? (
           <span className="ops-driver-sub-error" role="alert">
@@ -389,7 +389,7 @@ export function PartnerDriverSubscriptionReadOnlyCells({
   return (
     <>
       <td className="ops-driver-sub-fee">
-        {formatUetdsSubscriptionFee(summary.monthlyFee) || "—"}
+        {formatUetdsSubscriptionFee(summary.monthlyFee, panelLocale(locale)) || "—"}
       </td>
       <td className="ops-driver-sub-currency">{summary.currency || "—"}</td>
       <td className="ops-driver-sub-status">

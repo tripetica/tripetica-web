@@ -22,6 +22,46 @@ function vehicleSortLabel(vehicle: OpsFleetChoice) {
   return vehicle.plate?.trim() || vehicle.driverName?.trim() || vehicle.deviceCode;
 }
 
+export function opsFleetChoices(
+  vehicles: readonly {
+    id: string;
+    partnerId?: string | null;
+    partnerName?: string | null;
+    plate: string | null;
+    driverName?: string | null;
+    deviceCode: string;
+    source?: "device" | "mobile" | null;
+  }[],
+  stockLabel: string,
+): OpsFleetChoice[] {
+  const choices: OpsFleetChoice[] = [];
+  for (const vehicle of vehicles) {
+    if (vehicle.partnerId && vehicle.partnerName) {
+      choices.push({
+        id: vehicle.id,
+        partnerId: vehicle.partnerId,
+        partnerName: vehicle.partnerName,
+        plate: vehicle.plate,
+        driverName: vehicle.driverName ?? null,
+        deviceCode: vehicle.deviceCode,
+        source: vehicle.source === "mobile" ? "mobile" : "device",
+      });
+      continue;
+    }
+    if (vehicle.source === "mobile" || vehicle.partnerId) continue;
+    choices.push({
+      id: vehicle.id,
+      partnerId: "stock",
+      partnerName: stockLabel,
+      plate: null,
+      driverName: null,
+      deviceCode: vehicle.deviceCode,
+      source: "device",
+    });
+  }
+  return choices;
+}
+
 export function groupOpsFleet(vehicles: readonly OpsFleetChoice[]): OpsFleetGroup[] {
   const groups = new Map<string, OpsFleetGroup>();
   for (const vehicle of vehicles) {

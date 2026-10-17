@@ -1,22 +1,86 @@
 const MINUTE = 60 * 1000;
 
-export const MOBILE_REMINDER_LEAD_MS = 30 * MINUTE;
+export const MOBILE_REMINDER_LEAD_MS = 5 * MINUTE;
+export const MOBILE_REMINDER_INTERVAL_MS = 10 * MINUTE;
+export const MOBILE_REMINDER_CHECK_WINDOW_MS = MINUTE;
+/** A server accept older than this is not a current share at the checkpoint. */
 export const MOBILE_REMINDER_FRESH_MS = 2 * MINUTE;
-export const MOBILE_GAP_ALERT_MS = 10 * MINUTE;
+
+export type MobileReminderPhase = "missing" | "interrupted";
 
 export type ReminderAudience = "driver" | "owner";
 
 export function mobileReminderSlot(input: { startMs: number; endMs: number; nowMs: number }): number | null {
   if (!Number.isFinite(input.startMs) || !Number.isFinite(input.endMs) || input.endMs <= input.startMs) return null;
-  if (input.nowMs < input.startMs - MOBILE_REMINDER_LEAD_MS || input.nowMs >= input.endMs) return null;
-  let slot: number | null = null;
-  for (let at = input.startMs - MOBILE_REMINDER_LEAD_MS; at <= input.startMs - 10 * MINUTE; at += 10 * MINUTE) {
-    if (at <= input.nowMs) slot = at;
-  }
-  for (let at = input.startMs - 5 * MINUTE; at < input.endMs; at += 5 * MINUTE) {
-    if (at <= input.nowMs) slot = at;
-  }
+  if (input.nowMs >= input.endMs) return null;
+  const first = input.startMs - MOBILE_REMINDER_LEAD_MS;
+  if (input.nowMs < first) return null;
+  const index = Math.floor((input.nowMs - first) / MOBILE_REMINDER_INTERVAL_MS);
+  const slot = first + index * MOBILE_REMINDER_INTERVAL_MS;
+  if (slot >= input.endMs) return null;
+  if (input.nowMs >= slot + MOBILE_REMINDER_CHECK_WINDOW_MS) return null;
   return slot;
+}
+
+/** A recent server accept counts even when the stored coordinate did not change. */
+export function mobileShareHeard(lastHeardAtMs: number | null, nowMs: number) {
+  if (lastHeardAtMs == null || !Number.isFinite(lastHeardAtMs)) return false;
+  const age = nowMs - lastHeardAtMs;
+  if (age < 0) return lastHeardAtMs - nowMs <= 5 * MINUTE;
+  return age < MOBILE_REMINDER_FRESH_MS;
+}
+
+export function mobileReminderDue(input: {
+  startMs: number;
+  endMs: number;
+  nowMs: number;
+  lastHeardAtMs: number | null;
+}) {
+  if (mobileShareHeard(input.lastHeardAtMs, input.nowMs)) return null;
+  return mobileReminderSlot(input);
+}
+
+export function mobileReminderPhase(nowMs: number, startMs: number): MobileReminderPhase {
+  return nowMs < startMs ? "missing" : "interrupted";
+}
+
+export function mobileReminderRuntimeAllowed(env: { NODE_ENV?: string; EXPECTED_DATABASE?: string }) {
+  if (env.EXPECTED_DATABASE === "tripetica_dev" && env.NODE_ENV !== "production") return true;
+  if (env.EXPECTED_DATABASE === "tripetica" && env.NODE_ENV === "production") return true;
+  return false;
+}
+
+/** One item per device. The same browser must not get both the driver and owner copy. */
+export function uniquePushEndpoints<T extends { endpoint: string }>(rows: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const row of rows) {
+    if (!row.endpoint || seen.has(row.endpoint)) continue;
+    seen.add(row.endpoint);
+    unique.push(row);
+  }
+  return unique;
+}
+
+export function reminderPushSources(input: { samePerson: boolean; audience: ReminderAudience }): Array<"driver" | "owner"> {
+  if (input.samePerson) return ["driver", "owner"];
+  return [input.audience === "owner" ? "owner" : "driver"];
+}
+
+/**
+ * Another open trip for the same driver shares one send only inside the
+ * current one-minute checkpoint. Its next planned checkpoint stays open.
+ */
+export const MOBILE_REMINDER_COOLDOWN_MS = MOBILE_REMINDER_CHECK_WINDOW_MS;
+
+export function recentReminderBlocks(input: { lastSentAtMs: number | null; nowMs: number }) {
+  if (input.lastSentAtMs == null || !Number.isFinite(input.lastSentAtMs)) return false;
+  return input.nowMs - input.lastSentAtMs < MOBILE_REMINDER_COOLDOWN_MS;
+}
+
+/** The trip's own previous checkpoint must not close its next one-minute window. */
+export function overlappingTripReminderBlocks(input: { otherTripSentAtMs: number | null; nowMs: number }) {
+  return recentReminderBlocks({ lastSentAtMs: input.otherTripSentAtMs, nowMs: input.nowMs });
 }
 
 export function reminderTargets(input: { ownerIsDriver: boolean }): Array<{ audience: ReminderAudience; channel: "push" | "email" }> {
@@ -33,80 +97,81 @@ export function reminderTargets(input: { ownerIsDriver: boolean }): Array<{ audi
   ];
 }
 
-export function mobileGapAlert(input: {
-  shareEnabled: boolean;
-  lastReceivedAtMs: number | null;
-  nowMs: number;
-  tripOpen: boolean;
-}): { send: true; anchorMs: number } | { send: false; reason: "inactive" | "never" | "grace" } {
-  if (!input.shareEnabled || !input.tripOpen) return { send: false, reason: "inactive" };
-  if (input.lastReceivedAtMs == null || !Number.isFinite(input.lastReceivedAtMs)) return { send: false, reason: "never" };
-  if (input.nowMs - input.lastReceivedAtMs < MOBILE_GAP_ALERT_MS) return { send: false, reason: "grace" };
-  return { send: true, anchorMs: input.lastReceivedAtMs };
-}
-
-export function driverGapCopy(input: { plate: string; lastFix: string }) {
-  return {
-    title: "Tripetica – GPS Bağlantı Uyarısı",
-    preview: `${input.plate} · Son konum ${input.lastFix}`,
-    body: [
-      `${input.plate} plakalı aracınızdan 10 dakikadır güncel konum alınamıyor.`,
-      `Son konum: ${input.lastFix}`,
-      "Konum paylaşımınız açık görünüyor, ancak veri akışı durmuş. Lütfen internet ve konum izinlerini kontrol edin. Gerekirse Konum Paylaşmayı Durdur butonuna basıp yeniden Konum Paylaş ile başlatın.",
-      "ATS veri gönderimi için güncel GPS paylaşımının sürdürülmesi gereklidir.",
-    ].join("\n"),
-  };
-}
-
-export function ownerGapCopy(input: { plate: string; driverName: string; lastFix: string; start: string; end: string; pickup: string; dropoff: string }) {
-  return {
-    title: "Tripetica – GPS Bağlantı Uyarısı",
-    preview: `${input.plate} · ${input.driverName} · Son konum ${input.lastFix}`,
-    body: [
-      `${input.plate} plakalı aracınızın şoförü ${input.driverName} için konum paylaşımı açık görünüyor, ancak 10 dakikadır güncel konum alınamıyor.`,
-      `Son konum: ${input.lastFix}`,
-      `Başlangıç: ${input.start}`,
-      `Bitiş: ${input.end}`,
-      `Alış: ${input.pickup || "—"}`,
-      `Bırakış: ${input.dropoff || "—"}`,
-      "Veri akışının neden durduğu bu kayıttan kesin olarak bilinmiyor. ATS veri gönderimi için güncel GPS paylaşımının sürdürülmesi gereklidir.",
-    ].join("\n"),
-  };
-}
-
 export function ownerIsDriver(input: { driverEmail: string | null; ownerEmail: string | null }) {
   const driver = input.driverEmail?.trim().toLowerCase() ?? "";
   const owner = input.ownerEmail?.trim().toLowerCase() ?? "";
   return driver.length > 0 && driver === owner;
 }
 
-export function driverReminderCopy(input: { plate: string; start: string; end: string; pickup: string; dropoff: string }) {
+function reminderFacts(input: { plate: string; date: string; start: string; end: string; pickup: string; dropoff: string }) {
+  return [
+    `Plaka: ${input.plate}`,
+    `Sefer tarihi: ${input.date || "—"}`,
+    `Başlangıç: ${input.start || "—"}`,
+    `Bitiş: ${input.end || "—"}`,
+    `Alış: ${input.pickup || "—"}`,
+    `Bırakış: ${input.dropoff || "—"}`,
+  ];
+}
+
+function reminderLead(input: { phase: MobileReminderPhase; plate: string; driverName?: string }) {
+  if (input.driverName) {
+    const state = input.phase === "missing" ? "konum paylaşımı başlatılmadı" : "güncel GPS konumu alınamıyor";
+    return `${input.plate} plakalı aracın şoförü ${input.driverName} için U-ETDS seferinde ${state}.`;
+  }
+  if (input.phase === "missing") {
+    return `${input.plate} plakalı aracınızın U-ETDS seferi için konum paylaşımı başlatılmadı.`;
+  }
+  return `${input.plate} plakalı aracınızın U-ETDS seferi için güncel GPS konumu alınamıyor.`;
+}
+
+export function driverReminderCopy(input: {
+  phase: MobileReminderPhase;
+  plate: string;
+  date: string;
+  start: string;
+  end: string;
+  pickup: string;
+  dropoff: string;
+}) {
+  const title = input.phase === "missing"
+    ? "Mobil GPS Konum Paylaşımı Başlatılmadı"
+    : "Mobil GPS Konum Paylaşımı Kesildi";
   return {
-    title: "Tripetica – Mobil GPS / ATS Uyarısı",
-    preview: `Seferiniz için güncel konum alınamıyor. ${input.plate} · ${input.start}`,
+    title,
+    preview: `${input.plate} · ${input.date} ${input.start}`.trim(),
     body: [
-      "Seferiniz için güncel konum alınamıyor. ATS veri gönderimi için konum paylaşımınızın aktif olması ve güncel GPS verisinin sisteme ulaşması gereklidir.",
+      reminderLead({ phase: input.phase, plate: input.plate }),
       "",
-      `Plaka: ${input.plate}`,
-      `Başlangıç: ${input.start}`,
-      `Bitiş: ${input.end}`,
-      `Alış: ${input.pickup || "—"}`,
-      `Bırakış: ${input.dropoff || "—"}`,
+      "Bakanlığa ATS konum bildirimlerinin doğru yapılabilmesi için lütfen Tripetica’ya girerek Konum Paylaş butonuna basın ve konum paylaşımını başlatın.",
+      "",
+      ...reminderFacts(input),
     ].join("\n"),
   };
 }
 
-export function ownerReminderCopy(input: { plate: string; driverName: string; start: string; end: string; pickup: string; dropoff: string }) {
+export function ownerReminderCopy(input: {
+  phase: MobileReminderPhase;
+  plate: string;
+  driverName: string;
+  date: string;
+  start: string;
+  end: string;
+  pickup: string;
+  dropoff: string;
+}) {
+  const title = input.phase === "missing"
+    ? "Mobil GPS Konum Paylaşımı Başlatılmadı"
+    : "Mobil GPS Konum Paylaşımı Kesildi";
   return {
-    title: "Tripetica – Şoför Konum Uyarısı",
+    title,
     preview: `${input.plate} · ${input.driverName} · ${input.start}`,
     body: [
-      `${input.plate} plakalı aracınızın şoförü ${input.driverName} için tanımlı seferde güncel GPS konumu alınamıyor. ATS veri gönderiminin aksamaması için lütfen konum paylaşımını kontrol ettiriniz.`,
+      reminderLead({ phase: input.phase, plate: input.plate, driverName: input.driverName }),
       "",
-      `Başlangıç: ${input.start}`,
-      `Bitiş: ${input.end}`,
-      `Alış: ${input.pickup || "—"}`,
-      `Bırakış: ${input.dropoff || "—"}`,
+      "Bakanlığa ATS konum bildirimlerinin doğru yapılabilmesi için lütfen Tripetica’ya girerek Konum Paylaş butonuna basın ve konum paylaşımını başlatın.",
+      "",
+      ...reminderFacts(input),
     ].join("\n"),
   };
 }

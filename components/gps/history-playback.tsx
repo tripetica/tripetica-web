@@ -65,6 +65,8 @@ export function GpsHistoryPlayback({
   toIso,
   copy,
   formatSpeed = gpsSpeed,
+  rangeDistance = null,
+  rangeNotes = [],
 }: {
   deviceId: string;
   plate: string;
@@ -73,6 +75,8 @@ export function GpsHistoryPlayback({
   toIso: string;
   copy: GpsCopy;
   formatSpeed?: (mps: number | null) => string;
+  rangeDistance?: string | null;
+  rangeNotes?: string[];
 }) {
   const fixes = useMemo(() => playbackFixes(points), [points]);
   const display = useMemo(() => gpsDisplayTrack(fixes), [fixes]);
@@ -311,6 +315,8 @@ export function GpsHistoryPlayback({
           <span className="gps-playback-time">{readout.date && readout.time ? `${readout.date} ${readout.time}` : readout.time}</span>
           <span className="gps-playback-speed">{readout.speed}</span>
           <span className="gps-playback-coord">{readout.coord}</span>
+          {rangeDistance ? <p className="gps-playback-distance">{rangeDistance}</p> : null}
+          {rangeNotes.map((note) => <p key={note} className="gps-playback-distance-note">{note}</p>)}
         </div>
         <p className="gps-playback-gap">{readout.gap}</p>
         <input

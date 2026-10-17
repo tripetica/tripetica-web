@@ -1,7 +1,7 @@
 import { prefillUetdsFare } from "@/lib/uetds/prefill-fare";
 import { notFound } from "next/navigation";
 import { UetdsNotificationForm } from "@/components/uetds/uetds-notification-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { uetdsFormCopyFor } from "@/lib/uetds/copy";
@@ -56,7 +56,7 @@ export default async function PartnerUetdsNotificationAiEditPage({
   });
   return (
     <UetdsNotificationForm
-      locale={asPanelLocale(locale)}
+      locale={locale}
       copy={uetdsFormCopyFor(locale)}
       actor="partner"
       ministryEnv={resolveUetdsMinistryRuntime()}

@@ -14,6 +14,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 async function main() {
   const { getPool } = await import("@/lib/db/postgres");
   const { authorizeTeltonikaImei, storeTeltonikaPacket } = await import("@/lib/teltonika/store");
+  const { claimStarterCommand, finishStarterCommand, timeoutStarterCommand } = await import("@/lib/teltonika/immobilizer-store");
   const { startTeltonikaServer } = await import("@/lib/teltonika/server");
   const identity = await getPool().query<{ database: string }>("SELECT current_database() AS database");
   if (identity.rows[0]?.database !== "tripetica") {
@@ -25,6 +26,12 @@ async function main() {
     handlers: {
       authorize: authorizeTeltonikaImei,
       store: (imei, packet) => storeTeltonikaPacket(imei, packet),
+      pullCommand: async (imei) => {
+        const claimed = await claimStarterCommand(imei);
+        return claimed ? { id: claimed.id, text: claimed.command_text } : null;
+      },
+      finishCommand: finishStarterCommand,
+      timeoutCommand: timeoutStarterCommand,
     },
   });
   const address = server.address();

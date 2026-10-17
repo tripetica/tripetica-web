@@ -303,7 +303,7 @@ export function DriverTaskScreen({
         <dl>
           <div>
             <dt>Rezervasyon No</dt>
-            <dd>{view.reservationCode}</dd>
+            <dd className="ltr-isolate" dir="ltr">{view.reservationCode}</dd>
           </div>
           {view.fields.map((field) => (
             <div key={field.label}>
@@ -324,7 +324,7 @@ export function DriverTaskScreen({
                 )}
               </dd>
               {field.label === "Tarih / Saat" && view.flightStatus?.flightCode ? (
-                <p className="driver-task-flight-code">Uçuş: {view.flightStatus.flightCode}</p>
+                <p className="driver-task-flight-code ltr-isolate" dir="ltr">Uçuş: {view.flightStatus.flightCode}</p>
               ) : null}
               {field.address ? (
                 <p className="driver-task-location-address">{field.address}</p>
@@ -363,7 +363,7 @@ export function DriverTaskScreen({
                 <div>
                   <dt>Telefon</dt>
                   <dd>
-                    <a href={`tel:${view.contact.phone.replace(/[^\d+]/g, "")}`}>
+                    <a className="ltr-isolate" dir="ltr" href={`tel:${view.contact.phone.replace(/[^\d+]/g, "")}`}>
                       {view.contact.phone}
                     </a>
                   </dd>
@@ -372,7 +372,7 @@ export function DriverTaskScreen({
               {view.contact.email ? (
                 <div>
                   <dt>E-posta</dt>
-                  <dd>{view.contact.email}</dd>
+                  <dd className="ltr-isolate" dir="ltr">{view.contact.email}</dd>
                 </div>
               ) : null}
             </dl>

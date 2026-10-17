@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { UetdsNotificationForm } from "@/components/uetds/uetds-notification-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { createEmptyDraft, type UetdsDraft } from "@/lib/uetds/draft";
@@ -81,7 +81,7 @@ export default async function PartnerUetdsNewNotificationPage({
   });
   return (
     <UetdsNotificationForm
-      locale={asPanelLocale(locale)}
+      locale={locale}
       copy={uetdsFormCopyFor(locale)}
       actor="partner"
       ministryEnv={resolveUetdsMinistryRuntime()}

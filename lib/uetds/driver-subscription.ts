@@ -113,7 +113,7 @@ export function isUetdsSubscriptionPeriodStatus(
 }
 
 export function parseUetdsSubscriptionFee(raw: string): number | null {
-  const trimmed = raw.trim().replace(",", ".");
+  const trimmed = raw.trim().replace(/\s/g, "").replace(",", ".");
   if (!trimmed) return null;
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
   const value = Number(trimmed);
@@ -121,9 +121,13 @@ export function parseUetdsSubscriptionFee(raw: string): number | null {
   return Math.round(value * 100) / 100;
 }
 
-export function formatUetdsSubscriptionFee(value: number | null | undefined) {
+export function formatUetdsSubscriptionFee(
+  value: number | null | undefined,
+  locale: "tr" | "en" | "ru" = "en",
+) {
   if (value == null || !Number.isFinite(value)) return "";
-  return value.toFixed(2);
+  const text = value.toFixed(2);
+  return locale === "tr" ? text.replace(".", ",") : text;
 }
 
 /** List/table display: formatted fee or an em dash when empty. */

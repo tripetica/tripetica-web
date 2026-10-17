@@ -1,13 +1,17 @@
-/** A fix qualifies when it is not older than this relative to the trip start. */
-export const MOBILE_ATS_MAX_FIX_AGE_MS = 2 * 60 * 60 * 1000;
+/**
+ * Oldest real fix that may be used, measured backward from the trip start.
+ * After the trip starts this is not a moving freshness limit: a fix inside
+ * the window keeps its own GNSS time until the trip ends.
+ */
+export const MOBILE_ATS_MAX_FIX_AGE_MS = 60 * 60 * 1000;
 
 export type MobileAtsReplay =
   | { send: false; eligible: true; decision: "use_last"; measuredAt: string }
   | { send: false; eligible: false; decision: "reject_before_window" | "reject_missing" | "reject_trip" | "reject_mismatch"; measuredAt: string | null };
 
 /**
- * The two-hour check is against the trip start, not against each later send.
- * Once a real fix is inside [start − 2h, now], the same measurement may be
+ * The sixty-minute check is against the trip start, not against each later send.
+ * Once a real fix is inside [start − 60min, now], the same measurement may be
  * repeated until the trip ends. This planner never relabels konumZamani and
  * never authorizes a ministry call by itself (`send` stays false).
  */

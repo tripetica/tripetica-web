@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { gpsAddressCell } from "@/lib/gps/address-format";
 import { GPS_FLEET_FOLLOW_ZOOM, GPS_FLEET_GLIDE_MS, gpsFleetFrame, gpsFleetIdsChanged, gpsFleetMarkerClick, gpsFleetPadding, gpsFleetStoredMarker } from "@/lib/gps/fleet";
 import { gpsApplyVehicleFix, gpsSelectVehicle, type GpsFollowView } from "@/lib/gps/follow";
+import { GPS_MAP_LABEL_DEFAULTS, gpsMapLabelHtml, gpsMapLabelLines, gpsMapLabelOffsets, type GpsMapLabelPrefs } from "@/lib/gps/map-labels";
 import { gpsPopupRows, type GpsMarkerState, type GpsPopupPrefs } from "@/lib/gps/map-popup";
 
 type GpsMapPoint = { latitude: number; longitude: number };
@@ -14,6 +15,7 @@ const GLIDE_MS = 800;
 
 export type GpsVehicleMarker = GpsMapPoint & {
   plate: string;
+  driver?: string | null;
   speed: string | null;
   clock: string | null;
   coordinates: string | null;
@@ -35,6 +37,7 @@ export function GpsLiveMap({
   track,
   marker,
   prefs,
+  labels,
   addressPending = "Adres aranıyor…",
   active = true,
   pins,
@@ -46,6 +49,7 @@ export function GpsLiveMap({
   track: GpsMapPoint[];
   marker?: GpsVehicleMarker | null;
   prefs?: GpsPopupPrefs;
+  labels?: GpsMapLabelPrefs;
   addressPending?: string;
   active?: boolean;
   pins?: GpsFleetMapPin[];
@@ -67,7 +71,10 @@ export function GpsLiveMap({
   const pendingText = useRef(addressPending);
   pendingText.current = addressPending;
   const modelRef = useRef({ marker, prefs });
+  const labelsRef = useRef(labels ?? GPS_MAP_LABEL_DEFAULTS);
+  const labelCache = useRef(new Map<LeafletMarker, string>());
   const pinsRef = useRef(pins);
+  labelsRef.current = labels ?? GPS_MAP_LABEL_DEFAULTS;
   const onSelectRef = useRef(onVehicleSelect);
   const selectedFleetRef = useRef<string | null>(selectedVehicleId);
   const followHeldRef = useRef(false);
@@ -109,6 +116,38 @@ export function GpsLiveMap({
     }
     pin.setIcon(vehicleIcon(leaflet, current.state));
     fillPopup(node, current, currentPrefs, addressLine.current);
+  }
+
+  function paintLabels() {
+    const prefsNow = labelsRef.current;
+    const fleet = pinsRef.current ?? [];
+    const offsets = gpsMapLabelOffsets(fleet.map((pin) => ({
+      id: pin.markerKey ?? pin.id,
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+    })));
+    const seen = new Set<LeafletMarker>();
+    for (const pin of fleet) {
+      const marker = fleetMarkers.current.get(pin.markerKey ?? pin.id);
+      if (!marker) continue;
+      seen.add(marker);
+      syncMapLabel(
+        marker,
+        gpsMapLabelLines(prefsNow, { plate: pin.marker.plate, driver: pin.marker.driver }),
+        offsets.get(pin.markerKey ?? pin.id) ?? [0, -16],
+        labelCache.current,
+      );
+    }
+    const single = markerRef.current;
+    const model = modelRef.current.marker;
+    if (single && model && fleet.length === 0) {
+      seen.add(single);
+      syncMapLabel(single, gpsMapLabelLines(prefsNow, { plate: model.plate, driver: model.driver }), [0, -16], labelCache.current);
+    }
+    for (const marker of labelCache.current.keys()) {
+      if (seen.has(marker)) continue;
+      labelCache.current.delete(marker);
+    }
   }
 
   loadAddressRef.current = () => {
@@ -276,6 +315,7 @@ export function GpsLiveMap({
         });
         markerRef.current = pin;
         paint();
+        paintLabels();
         if (!framedRef.current && trackKey === "[]") {
           holdMapMove(() => map.setView(next, 15));
         }
@@ -310,9 +350,11 @@ export function GpsLiveMap({
     marker?.state,
     marker?.headingDeg,
     marker?.plate,
+    marker?.driver,
     marker?.speed,
     marker?.clock,
     marker?.coordinates,
+    prefs?.driver,
     prefs?.speed,
     prefs?.clock,
     prefs?.coordinates,
@@ -437,6 +479,7 @@ export function GpsLiveMap({
         const node = fleetPopups.current.get(pin.id);
         if (node && currentPrefs) fillPopup(node, pin.marker, currentPrefs, pin.id === addressPin.current ? addressLine.current : "");
       }
+      paintLabels();
       const ids = pins.map((pin) => pin.id);
       if (!selectedFleetRef.current && (fittedIds.current === null || gpsFleetIdsChanged(fittedIds.current, ids))) {
         holdMapMove(() => fitFleet(map, pins));
@@ -447,6 +490,10 @@ export function GpsLiveMap({
       cancelled = true;
     };
   }, [mapEpoch, pins, prefs, selectedVehicleId]);
+
+  useEffect(() => {
+    paintLabels();
+  }, [labels?.plate, labels?.driver, pins, marker?.plate, marker?.driver]);
 
   return <div ref={host} className="gps-map" />;
 
@@ -545,6 +592,32 @@ function fitFleet(map: LeafletMap, pins: readonly GpsFleetMapPin[]) {
   });
 }
 
+function syncMapLabel(
+  marker: LeafletMarker,
+  lines: string[],
+  offset: [number, number],
+  cache: Map<LeafletMarker, string>,
+) {
+  const html = gpsMapLabelHtml(lines);
+  const signature = `${html}@${offset[0]},${offset[1]}`;
+  if (cache.get(marker) === signature) return;
+  cache.set(marker, signature);
+  const current = marker.getTooltip();
+  if (!html) {
+    if (current) marker.unbindTooltip();
+    return;
+  }
+  if (current) marker.unbindTooltip();
+  marker.bindTooltip(html, {
+    permanent: true,
+    direction: "top",
+    offset,
+    opacity: 1,
+    className: "gps-fleet-label",
+    interactive: false,
+  });
+}
+
 export function vehicleIcon(
   leaflet: typeof import("leaflet"),
   state: GpsMarkerState,
@@ -568,6 +641,7 @@ function fillPopup(
   node.replaceChildren();
   const rows = gpsPopupRows(prefs, {
     plate: marker.plate,
+    driver: marker.driver,
     speed: marker.speed,
     clock: marker.clock,
     coordinates: marker.coordinates,

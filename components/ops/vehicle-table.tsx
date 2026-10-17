@@ -24,6 +24,14 @@ import {
 } from "@/lib/partner/fleet-view";
 import { partnerVehicleClassLabel } from "@/lib/partner/vehicle-class";
 import { vehicleStatusLabel } from "@/lib/partner/vehicle-labels";
+import { OpsDriverSubscriptionInlineCells } from "@/components/uetds/driver-subscription-list-cells";
+import { serviceSubscriptionNames } from "@/lib/uetds/service-subscriptions";
+import {
+  addSubscriptionMonths,
+  istanbulSubscriptionPeriodKey,
+  subscriptionPeriodLabel,
+  type UetdsDriverSubscriptionListSummary,
+} from "@/lib/uetds/driver-subscription";
 
 type OpsVehicleTableProps = {
   locale: Locale;
@@ -55,6 +63,10 @@ export function OpsVehicleTable({
   const [items, setItems] = useState(initialItems);
   const [fleetChoices, setFleetChoices] = useState(initialFleetChoices);
   const [total, setTotal] = useState(initialTotal);
+  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
+  const period = istanbulSubscriptionPeriodKey();
+  const periodLabel = subscriptionPeriodLabel(period, panelLocale);
+  const nextPeriodLabel = subscriptionPeriodLabel(addSubscriptionMonths(period, 1), panelLocale);
   const pages = pageCount(total, pageSize);
   const startIndex = (page - 1) * pageSize;
   const skipFirstFetch = useRef(true);
@@ -123,7 +135,12 @@ export function OpsVehicleTable({
                 <th>{copy.uetdsCompanyColumn}</th>
                 <th>{copy.defaultDriver}</th>
                 <th>{copy.status}</th>
+                <th>{copy.membershipStatusColumn}</th>
                 <th>{copy.linkedPartner}</th>
+                <th className="ops-driver-sub-fee">{copy.uetdsSubscriptionFee}</th>
+                <th className="ops-driver-sub-currency">{copy.uetdsSubscriptionCurrency}</th>
+                <th className="ops-driver-sub-status">{periodLabel} / {copy.uetdsSubscriptionStatusColumn}</th>
+                <th className="ops-driver-sub-status">{nextPeriodLabel} / {copy.uetdsSubscriptionStatusColumn}</th>
                 <th>{copy.details}</th>
               </tr>
             </thead>
@@ -213,10 +230,38 @@ export function OpsVehicleTable({
                     </span>
                   </td>
                   <td>
+                    {serviceSubscriptionNames(vehicle.services, {
+                      standard: copy.serviceStandard,
+                      advanced: copy.serviceAdvanced,
+                      gpsAts: copy.serviceGpsAts,
+                      mobile: copy.serviceMobile,
+                      none: copy.serviceNone,
+                    })}
+                  </td>
+                  <td>
                     <a href={localizedPath(locale, `/ops/partners/${vehicle.partnerId}`)}>
                       {vehicle.partnerName}
                     </a>
                   </td>
+                  <OpsDriverSubscriptionInlineCells
+                    locale={locale}
+                    vehicleId={vehicle.id}
+                    canManage={canManage}
+                    summary={vehicle.uetdsSubscription}
+                    labels={{
+                      fee: copy.uetdsSubscriptionFee,
+                      currency: copy.uetdsSubscriptionCurrency,
+                      unpaid: copy.uetdsSubscriptionUnpaid,
+                      paid: copy.uetdsSubscriptionPaid,
+                      free: copy.uetdsSubscriptionFree,
+                      notManaged: copy.uetdsSubscriptionNotManaged,
+                      invalidFee: copy.invalidSubscriptionFee,
+                      saveFailed: copy.vehicleSaveFailed,
+                    }}
+                    onSummaryChange={(vehicleId, summary: UetdsDriverSubscriptionListSummary) => {
+                      setItems((current) => current.map((item) => item.id === vehicleId ? { ...item, uetdsSubscription: summary } : item));
+                    }}
+                  />
                   <td>
                     <a
                       className="ops-row-detail"

@@ -107,6 +107,8 @@ export async function getDriverUetdsSubscription(
     standardFee: money(row.service_standard_fee),
     advancedEnabled: row.service_advanced_enabled,
     advancedFee: money(row.service_advanced_fee),
+    gpsAtsEnabled: false,
+    gpsAtsFee: null,
     mobileEnabled: row.service_mobile_gps_enabled,
     mobileFee: money(row.service_mobile_gps_fee),
   };

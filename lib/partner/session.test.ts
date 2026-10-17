@@ -20,17 +20,15 @@ function source(path: string) {
 }
 
 const DAY = 60 * 60 * 24;
-const HOUR = 60 * 60;
-
 test("partner session max age is 30 days sliding window", () => {
   assert.equal(PARTNER_SESSION_MAX_AGE_SECONDS, DAY * 30);
   assert.equal(PARTNER_SESSION_RENEW_WITHIN_SECONDS, DAY * 7);
   assert.equal(PARTNER_SESSION_COOKIE, "tripetica_partner_session");
 });
 
-test("Ops now also has 30 days; driver/account TTLs remain unchanged", () => {
+test("Ops, partner, and driver sessions last 30 days", () => {
   assert.equal(OPS_SESSION_MAX_AGE_SECONDS, DAY * 30);
-  assert.equal(DRIVER_PORTAL_SESSION_MAX_AGE_SECONDS, HOUR * 12);
+  assert.equal(DRIVER_PORTAL_SESSION_MAX_AGE_SECONDS, DAY * 30);
   assert.equal(ACCOUNT_SESSION_MAX_AGE_SECONDS, DAY * 30);
   assert.notEqual(PARTNER_SESSION_COOKIE, OPS_SESSION_COOKIE);
 });

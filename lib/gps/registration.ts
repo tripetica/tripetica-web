@@ -20,6 +20,25 @@ const SERIAL_PATTERN = /^[A-Za-z0-9-]{1,40}$/;
 const PHONE_PATTERN = /^\+?[0-9]{8,15}$/;
 const APN_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 
+/** Compact a typed SIM number for storage. Empty stays empty. Invalid input is rejected. */
+export function gpsSimPhone(value: string): string | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  let compact = trimmed.replace(/[\s().-]/g, "");
+  if (compact.startsWith("00")) compact = `+${compact.slice(2)}`;
+  if (/^0[0-9]{10}$/.test(compact)) compact = `+90${compact.slice(1)}`;
+  if (!PHONE_PATTERN.test(compact)) return undefined;
+  return compact;
+}
+
+export const GPS_SIM_OPERATORS = ["Turkcell", "Vodafone", "Türk Telekom"] as const;
+export type GpsSimOperator = (typeof GPS_SIM_OPERATORS)[number];
+
+export function gpsSimOperator(value: string): GpsSimOperator | null {
+  const trimmed = value.trim();
+  return (GPS_SIM_OPERATORS as readonly string[]).includes(trimmed) ? trimmed as GpsSimOperator : null;
+}
+
 export function gpsLinkForModel(model: GpsTrackerModel | null): GpsLinkTechnology | null {
   if (model === "fmb920") return "2g";
   if (model === "fmc920") return "4g";
@@ -41,12 +60,13 @@ export function gpsRegistrationProfile(input: {
 }): { ok: true; value: GpsRegistrationProfile } | { ok: false; error: "imei" | "invalid" } {
   const imei = input.imei.trim();
   const serial = optionalText(input.serial);
-  const simPhone = optionalText(input.simPhone);
-  const simOperator = optionalText(input.simOperator);
+  const simPhone = gpsSimPhone(input.simPhone);
+  const simOperator = gpsSimOperator(input.simOperator);
   const simApn = optionalText(input.simApn);
+  if (!simOperator || simPhone === undefined) return { ok: false, error: "invalid" };
   if (input.receiver === "esp32") {
     if (imei && !IMEI_PATTERN.test(imei)) return { ok: false, error: "imei" };
-    if (serial || simPhone || simOperator || simApn) return { ok: false, error: "invalid" };
+    if (serial || simApn) return { ok: false, error: "invalid" };
     return {
       ok: true,
       value: {
@@ -56,8 +76,8 @@ export function gpsRegistrationProfile(input: {
         linkTechnology: null,
         imei: imei || null,
         serialNumber: null,
-        simPhone: null,
-        simOperator: null,
+        simPhone,
+        simOperator,
         simApn: null,
         installationStatus: "installed",
       },
@@ -65,8 +85,6 @@ export function gpsRegistrationProfile(input: {
   }
   if (!input.model || !IMEI_PATTERN.test(imei)) return { ok: false, error: "imei" };
   if (serial && !SERIAL_PATTERN.test(serial)) return { ok: false, error: "invalid" };
-  if (simPhone && !PHONE_PATTERN.test(simPhone)) return { ok: false, error: "invalid" };
-  if (simOperator && (simOperator.length > 40 || /[\r\n]/.test(simOperator))) return { ok: false, error: "invalid" };
   if (simApn && !APN_PATTERN.test(simApn)) return { ok: false, error: "invalid" };
   return {
     ok: true,
@@ -99,7 +117,8 @@ export function gpsLiveSourceAfterAssignment(input: {
   vehicleId: string | null;
   destinationHasOtherLiveSource: boolean;
 }) {
-  if (!input.vehicleId || input.destinationHasOtherLiveSource) return false;
+  if (!input.vehicleId) return input.liveSource;
+  if (input.destinationHasOtherLiveSource) return false;
   return input.liveSource;
 }
 

@@ -7,32 +7,25 @@ import {
   type DriverPortalSendState,
   type DriverPortalVerifyState,
 } from "@/lib/driver-portal/actions";
-import { driverPortalCopy } from "@/lib/driver-portal/copy";
+import { driverPortalCopyFor } from "@/lib/driver-portal/copy";
 import { type Locale } from "@/lib/i18n/config";
 
-const SEND_ERROR: Record<
-  Exclude<DriverPortalSendState["error"], null>,
-  string
-> = {
-  "invalid-email": driverPortalCopy.invalidEmail,
-  "not-found": driverPortalCopy.notFound,
-  throttled: driverPortalCopy.throttled,
-  "mail-failed": driverPortalCopy.mailFailed,
-  failed: driverPortalCopy.sendFailed,
-};
-
-const VERIFY_ERROR: Record<
-  Exclude<DriverPortalVerifyState["error"], null>,
-  string
-> = {
-  invalid: driverPortalCopy.invalidCode,
-  expired: driverPortalCopy.expiredCode,
-  used: driverPortalCopy.usedCode,
-  locked: driverPortalCopy.lockedCode,
-  failed: driverPortalCopy.verifyFailed,
-};
-
 export function DriverPortalLoginForm({ locale }: { locale: Locale }) {
+  const copy = driverPortalCopyFor(locale);
+  const sendError: Record<Exclude<DriverPortalSendState["error"], null>, string> = {
+    "invalid-email": copy.invalidEmail,
+    "not-found": copy.notFound,
+    throttled: copy.throttled,
+    "mail-failed": copy.mailFailed,
+    failed: copy.sendFailed,
+  };
+  const verifyError: Record<Exclude<DriverPortalVerifyState["error"], null>, string> = {
+    invalid: copy.invalidCode,
+    expired: copy.expiredCode,
+    used: copy.usedCode,
+    locked: copy.lockedCode,
+    failed: copy.verifyFailed,
+  };
   const [email, setEmail] = useState("");
   const [sendState, sendAction, sending] = useActionState<DriverPortalSendState, FormData>(
     sendDriverPortalCodeAction,
@@ -58,7 +51,7 @@ export function DriverPortalLoginForm({ locale }: { locale: Locale }) {
       >
         <input type="hidden" name="locale" value={locale} />
         <label className="driver-portal-field">
-          <span>{driverPortalCopy.email}</span>
+          <span>{copy.email}</span>
           <input
             name="email"
             type="email"
@@ -72,12 +65,12 @@ export function DriverPortalLoginForm({ locale }: { locale: Locale }) {
         </label>
         {sendState.error ? (
           <p className="driver-portal-error" role="alert">
-            {SEND_ERROR[sendState.error]}
+            {sendError[sendState.error]}
           </p>
         ) : null}
         {!showCode ? (
           <button type="submit" className="driver-task-action" disabled={sending}>
-            {sending ? driverPortalCopy.sendingCode : driverPortalCopy.sendCode}
+            {sending ? copy.sendingCode : copy.sendCode}
           </button>
         ) : null}
       </form>
@@ -87,7 +80,7 @@ export function DriverPortalLoginForm({ locale }: { locale: Locale }) {
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="email" value={resolvedEmail} />
           <label className="driver-portal-field">
-            <span>{driverPortalCopy.code}</span>
+            <span>{copy.code}</span>
             <input
               name="code"
               inputMode="numeric"
@@ -98,11 +91,11 @@ export function DriverPortalLoginForm({ locale }: { locale: Locale }) {
           </label>
           {verifyState.error ? (
             <p className="driver-portal-error" role="alert">
-              {VERIFY_ERROR[verifyState.error]}
+              {verifyError[verifyState.error]}
             </p>
           ) : null}
           <button type="submit" className="driver-task-action" disabled={verifying}>
-            {verifying ? driverPortalCopy.signingIn : driverPortalCopy.signIn}
+            {verifying ? copy.signingIn : copy.signIn}
           </button>
         </form>
       ) : null}

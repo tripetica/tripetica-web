@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll Tripetica production vehicle maintenance reminders
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+AccuracySec=10s
+Persistent=true
+Unit=tripetica-prod-maintenance.service
+
+[Install]
+WantedBy=timers.target

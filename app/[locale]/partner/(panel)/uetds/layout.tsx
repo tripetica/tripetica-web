@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { UetdsSubnav } from "@/components/ops/uetds-subnav";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +20,9 @@ export default async function PartnerUetdsLayout({
     notFound();
   }
   await requirePartnerPage(locale);
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const pathname = (await headers()).get("x-partner-pathname") ?? "";
-  const pathWithoutLocale = pathname.replace(/^\/(tr|en|ru)/, "") || "/partner/uetds";
+  const pathWithoutLocale = pathname.replace(/^\/(tr|en|ru|ar)/, "") || "/partner/uetds";
 
   return (
     <section className="ops-page">

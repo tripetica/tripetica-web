@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getDriverPortalActor } from "@/lib/driver-portal/session";
 import { lookupGpsAddress, parseGpsAddressQuery } from "@/lib/gps/address";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
 import { partnerHasTab } from "@/lib/partner/access";
@@ -30,6 +31,8 @@ async function canReadAddress() {
   if (partner && !partner.mustChangePassword && partnerHasTab(partner, "gps")) {
     return true;
   }
+  const driver = await getDriverPortalActor();
+  if (driver?.permissions.gpsLive) return true;
   const ops = await getOpsActor();
   return Boolean(ops && actorCan(ops, "gps.view"));
 }

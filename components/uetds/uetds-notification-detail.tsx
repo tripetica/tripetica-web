@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsEditMethodModal } from "@/components/uetds/uetds-edit-method-modal";
 import { uetdsStatusLabel, type UetdsFormCopy } from "@/lib/uetds/copy";
@@ -27,9 +29,11 @@ type UetdsNotificationDetailViewProps = {
   /** Open the edit-method chooser on mount (reservation “Düzenle” deep-link). */
   openEditMethod?: boolean;
   showAiEdit?: boolean;
-  actor: "partner" | "ops";
+  actor: "partner" | "ops" | "driver";
   locale: string;
   ats?: GpsAtsHistory | null;
+  atsVisible?: boolean;
+  atsCloseHref?: string | null;
   atsPrevHref?: string | null;
   atsNextHref?: string | null;
 };
@@ -57,6 +61,8 @@ export function UetdsNotificationDetailView({
   actor,
   locale,
   ats = null,
+  atsVisible = false,
+  atsCloseHref = null,
   atsPrevHref = null,
   atsNextHref = null,
 }: UetdsNotificationDetailViewProps) {
@@ -85,8 +91,9 @@ export function UetdsNotificationDetailView({
   const [verificationState, verifyAction, verifying] = useActionState(retryUetdsFinalVerificationAction, { ok: false, verified: false });
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const router = useRouter();
   const [editMethodOpen, setEditMethodOpen] = useState(Boolean(openEditMethod && editHref));
-  const [atsOpen, setAtsOpen] = useState(false);
+  const [atsOpen, setAtsOpen] = useState(atsVisible);
   const [deleteState, deleteAction, deleting] = useActionState(deleteCancelledUetdsNotificationsAction, { results: [], attempted: false });
   const [state, action, pending] = useActionState<UetdsManageFormState, FormData>(
     cancelUetdsNotificationAction,
@@ -108,6 +115,9 @@ export function UetdsNotificationDetailView({
       setEditMethodOpen(true);
     }
   }, [openEditMethod, editHref, cancelled]);
+  useEffect(() => {
+    setAtsOpen(atsVisible);
+  }, [atsVisible]);
 
   return (
     <section className="uetds-detail">
@@ -146,11 +156,11 @@ export function UetdsNotificationDetailView({
       <dl className="uetds-confirm-dl">
         <div>
           <dt>{copy.firmaSeferNo}</dt>
-          <dd>{displayedFirmaSeferNo || "—"}</dd>
+          <dd className="ltr-isolate" dir="ltr">{displayedFirmaSeferNo || "—"}</dd>
         </div>
         <div>
           <dt>{copy.seferRef}</dt>
-          <dd>{seferRef || "—"}</dd>
+          <dd className="ltr-isolate" dir="ltr">{seferRef || "—"}</dd>
         </div>
         <div>
           <dt>{copy.listStatus}</dt>
@@ -186,7 +196,7 @@ export function UetdsNotificationDetailView({
         </div>
         <div>
           <dt>{copy.listPlate}</dt>
-          <dd>{notification.plate}</dd>
+          <dd className="ltr-isolate" dir="ltr">{notification.plate}</dd>
         </div>
         <div>
           <dt>{copy.driver}</dt>
@@ -221,7 +231,7 @@ export function UetdsNotificationDetailView({
                 return (
                   <tr key={`${text(passenger?.identityNumber)}-${index}`}>
                     <td>{text(passenger?.nationality) || "—"}</td>
-                    <td>{text(passenger?.identityNumber) || "—"}</td>
+                    <td className="ltr-isolate" dir="ltr">{text(passenger?.identityNumber) || "—"}</td>
                     <td>{text(passenger?.firstName) || "—"}</td>
                     <td>{text(passenger?.lastName) || "—"}</td>
                     <td>
@@ -255,6 +265,8 @@ export function UetdsNotificationDetailView({
                       <tr>
                         <th>{copy.atsHistorySentAt}</th>
                         <th>{copy.atsHistoryGnss}</th>
+                        <th>{copy.atsHistoryPlace}</th>
+                        <th>{copy.atsHistoryCoordinates}</th>
                         <th>{copy.atsHistoryResult}</th>
                         <th>{copy.atsHistoryErrorDetail}</th>
                       </tr>
@@ -264,8 +276,10 @@ export function UetdsNotificationDetailView({
                         <tr key={row.id}>
                           <td>{atsHistoryClock(row.sentAt)}</td>
                           <td>{atsHistoryClock(row.gnssTime)}</td>
+                          <td>{row.place ?? copy.atsHistoryUnknown}</td>
+                          <td>{row.coordinates ?? copy.atsHistoryUnknown}</td>
                           <td>{row.status === "succeeded" ? copy.atsHistoryOk : row.status === "pending" ? copy.atsHistoryPending : copy.atsHistoryError}</td>
-                          <td>{row.error ?? "—"}</td>
+                          <td>{row.status === "succeeded" || !row.error ? "—" : row.error}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -274,12 +288,15 @@ export function UetdsNotificationDetailView({
               )}
               {atsPrevHref || atsNextHref ? (
                 <div className="ops-modal-actions">
-                  {atsPrevHref ? <a className="ops-btn-secondary" href={atsPrevHref}>{copy.atsHistoryPrev}</a> : null}
-                  {atsNextHref ? <a className="ops-btn-secondary" href={atsNextHref}>{copy.atsHistoryNext}</a> : null}
+                  {atsPrevHref ? <Link className="ops-btn-secondary" href={atsPrevHref} scroll={false}>{copy.atsHistoryPrev}</Link> : null}
+                  {atsNextHref ? <Link className="ops-btn-secondary" href={atsNextHref} scroll={false}>{copy.atsHistoryNext}</Link> : null}
                 </div>
               ) : null}
               <div className="ops-contact-toggle-wrap gps-disclosure-hide">
-                <button type="button" className="ops-btn-secondary ops-contact-toggle" aria-expanded={true} onClick={() => setAtsOpen(false)}>
+                <button type="button" className="ops-btn-secondary ops-contact-toggle" aria-expanded={true} onClick={() => {
+                  setAtsOpen(false);
+                  if (atsVisible && atsCloseHref) router.replace(atsCloseHref, { scroll: false });
+                }}>
                   {copy.atsHistoryHide}
                 </button>
               </div>

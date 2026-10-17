@@ -8,6 +8,10 @@ import {
   DRIVER_PORTAL_SESSION_COOKIE,
   DRIVER_PORTAL_SESSION_MAX_AGE_SECONDS,
 } from "@/lib/driver-portal/constants";
+import {
+  parseDriverPermissions,
+  type DriverPermissions,
+} from "@/lib/driver-portal/permissions";
 import { cookieSecure } from "@/lib/partner/session";
 
 export { DRIVER_PORTAL_SESSION_COOKIE, DRIVER_PORTAL_SESSION_MAX_AGE_SECONDS };
@@ -18,6 +22,7 @@ export type DriverPortalActor = {
   email: string;
   firstName: string;
   lastName: string;
+  permissions: DriverPermissions;
 };
 
 type SessionRow = {
@@ -27,6 +32,7 @@ type SessionRow = {
   email: string;
   first_name: string;
   last_name: string;
+  portal_permissions: unknown;
 };
 
 export function hashDriverPortalSessionToken(token: string) {
@@ -93,7 +99,8 @@ export const getDriverPortalActor = cache(async (): Promise<DriverPortalActor | 
         d.partner_id,
         d.email,
         d.first_name,
-        d.last_name
+        d.last_name,
+        d.portal_permissions
      FROM driver_portal_sessions s
      JOIN partner_drivers d ON d.id = s.driver_id
      WHERE s.token_hash = $1
@@ -117,5 +124,6 @@ export const getDriverPortalActor = cache(async (): Promise<DriverPortalActor | 
     email: row.email,
     firstName: row.first_name,
     lastName: row.last_name,
+    permissions: parseDriverPermissions(row.portal_permissions),
   };
 });

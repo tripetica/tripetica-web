@@ -20,7 +20,7 @@ export const PROCESS_PUSH_BADGE = "/ops-push-process-badge.png";
 export const RESERVATION_PUSH_BADGE = "/ops-push-reservation-badge.png";
 export const PARTNER_APPLICATION_PUSH_BADGE = "/ops-push-partner-badge.png";
 
-export type OpsPushKind = "process" | "reservation" | "partner";
+export type OpsPushKind = "process" | "reservation" | "partner" | "gps-fault";
 
 export type ProcessPushSource = {
   id: string;

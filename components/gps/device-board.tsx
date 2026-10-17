@@ -42,7 +42,7 @@ export function GpsDeviceBoard({
       if (surface === "ops" && partnerId === "stock" && device.partnerId) return false;
       if (surface === "ops" && partnerId && partnerId !== "stock" && device.partnerId !== partnerId) return false;
       if (needle) {
-        const haystack = [device.plate, device.deviceCode, device.imei, device.label, device.partnerName, device.uetdsCompany, device.manufacturer, device.trackerModel, device.serialNumber]
+        const haystack = [device.plate, device.deviceCode, device.imei, device.simPhone, device.label, device.partnerName, device.uetdsCompany, device.manufacturer, device.trackerModel, device.serialNumber]
           .filter(Boolean)
           .join(" ")
           .toLocaleUpperCase("tr-TR");
@@ -156,12 +156,15 @@ export function GpsDeviceBoard({
                 <th>{copy.trackerModel}</th>
                 <th>{copy.deviceId}</th>
                 <th>{copy.imei}</th>
+                <th>{copy.phone}</th>
                 <th>{copy.partner}</th>
                 <th>{copy.vehicle}</th>
                 <th>{copy.company}</th>
                 <th>{copy.installStatus}</th>
                 <th>{copy.status}</th>
                 <th>{copy.lastConnection}</th>
+                <th>{copy.gnssTime}</th>
+                <th>{copy.coordinates}</th>
                 <th>{copy.detail}</th>
               </tr>
             </thead>
@@ -174,12 +177,15 @@ export function GpsDeviceBoard({
                     <td>{modelText(device.trackerModel, device.linkTechnology)}</td>
                     <td>{device.deviceCode}</td>
                     <td>{device.imei ?? "—"}</td>
+                    <td>{device.simPhone ?? "—"}</td>
                     <td>{device.partnerName || copy.stock}</td>
                     <td>{device.plate ?? copy.unassigned}</td>
                     <td>{device.plate ? (device.uetdsCompany || copy.companyMissing) : "—"}</td>
                     <td>{device.installationStatus === "pending" ? copy.installPending : copy.installInstalled}</td>
                     <td>{device.status === "active" ? copy.active : copy.disabled}</td>
                     <td>{gpsClock(device.lastHeartbeatAt)}</td>
+                    <td>{gpsClock(device.recordedAt)}</td>
+                    <td>{coordinateText(device.latitude, device.longitude)}</td>
                     <td><a className="ops-btn-secondary" href={href}>{copy.detail}</a></td>
                   </tr>
                 );
@@ -216,6 +222,11 @@ export function GpsDeviceBoard({
       )}
     </div>
   );
+}
+
+function coordinateText(latitude: number | null, longitude: number | null) {
+  if (latitude === null || longitude === null || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return "—";
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
 function modelText(model: "fmb920" | "fmc920" | null, link: "2g" | "4g" | null) {

@@ -1,5 +1,4 @@
-import { countries, normalizeIso2 } from "@/lib/geo/countries";
-import { officialUetdsCountries } from "@/lib/uetds/official-locations";
+import { officialUetdsNationalityCode } from "@/lib/uetds/official-locations";
 import {
   createPassengerDraft,
   ensurePassengerCount,
@@ -77,40 +76,7 @@ function fold(value: string) {
 }
 
 export function countryIso2FromName(value: string | null | undefined): string | null {
-  const direct = normalizeIso2(value);
-  if (direct) {
-    return direct;
-  }
-  const needle = fold(value ?? "");
-  if (!needle) {
-    return null;
-  }
-  for (const country of countries()) {
-    const names = [
-      country.iso2,
-      country.names.tr,
-      country.names.en,
-      country.names.ru,
-      country.names.ar,
-      ...(country.aliases?.tr ?? []),
-      ...(country.aliases?.en ?? []),
-      ...(country.aliases?.ru ?? []),
-    ];
-    if (names.some((name) => fold(name) === needle)) {
-      return country.iso2;
-    }
-  }
-  const aliases: Record<string, string> = {
-    england: "GB",
-    britain: "GB",
-    "great britain": "GB",
-  };
-  if (aliases[needle]) {
-    return aliases[needle];
-  }
-  const official = officialUetdsCountries().find((country) => fold(country.name) === needle);
-  const officialCode = normalizeIso2(official?.code);
-  return officialCode;
+  return officialUetdsNationalityCode(value);
 }
 
 function parseDate(value: string) {
@@ -395,6 +361,8 @@ function applyPassengerField(
     } else if (field === "identityNumber") {
       passenger.identityNumber = incoming.trim();
       passenger.identityType = identityTypeFromValue(incoming);
+    } else if (field === "nationality") {
+      passenger.nationality = officialUetdsNationalityCode(incoming) ?? incoming.trim();
     } else {
       passenger[field] = incoming.trim();
     }

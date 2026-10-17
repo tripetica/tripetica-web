@@ -197,8 +197,41 @@ test("ops device inventory on DEV", { skip: devDatabase ? false : "DEV database 
       points: [{ seq: 1, gnss_time: new Date(Date.now() - 60_000).toISOString(), lat: 41.1, lon: 29.1, speed_mps: 4, heading_deg: 10 }],
     }, new Date());
     assert.ok(parsed);
-    const blocked = await ingestTelemetry(created.id, parsed.points, parsed.rejected);
-    assert.equal(blocked.http, 409);
+    const storedStock = await ingestTelemetry(created.id, parsed.points, parsed.rejected);
+    assert.equal(storedStock.http, 200);
+    if (storedStock.http === 200) assert.deepEqual(storedStock.accepted, [1]);
+    const stockPosition = await query<{ partner_id: string | null; vehicle_id: string | null; latitude: string }>(
+      `SELECT position.partner_id, position.vehicle_id, status.latitude::text AS latitude
+         FROM gps_positions position
+         JOIN gps_device_status status ON status.device_id = position.device_id
+        WHERE position.device_id = $1 AND position.seq = 1`,
+      [created.id],
+    );
+    assert.equal(stockPosition.rows[0]?.partner_id, null);
+    assert.equal(stockPosition.rows[0]?.vehicle_id, null);
+    assert.equal(Number(stockPosition.rows[0]?.latitude), 41.1);
+    assert.equal(await getGpsLive(created.id, real.partner_id), null);
+    const stockLive = await getGpsLive(created.id, null);
+    assert.equal(stockLive?.latitude, 41.1);
+    const stockRoute = await listGpsRoute({
+      deviceId: created.id,
+      partnerId: null,
+      vehicleId: null,
+      from: new Date(Date.now() - 3_600_000),
+      to: new Date(Date.now() + 60_000),
+    });
+    assert.equal(stockRoute.points.some((point) => point.seq === 1), true);
+    await query(
+      `UPDATE gps_devices SET installation_status = 'installed', live_source = TRUE WHERE id = $1`,
+      [created.id],
+    );
+    const { loadOpsMapFleet } = await import("@/lib/gps/ops-fleet");
+    const stockFleet = await loadOpsMapFleet(await listGpsDevices(null));
+    const stockPin = stockFleet.find((item) => item.id === created.id);
+    assert.equal(stockPin?.partnerId ?? null, null);
+    assert.equal(stockPin?.plate ?? null, null);
+    assert.equal(stockPin?.latitude, 41.1);
+    assert.equal(stockFleet.some((item) => item.id === liveId && item.partnerId === real.partner_id), true);
 
     await assignGpsDevice({
       deviceId: created.id,
@@ -210,7 +243,7 @@ test("ops device inventory on DEV", { skip: devDatabase ? false : "DEV database 
     assert.equal(await getGpsDevice(created.id, "00000000-0000-4000-8000-000000000000"), null);
     const accepted = await ingestTelemetry(created.id, parsed.points, parsed.rejected);
     assert.equal(accepted.http, 200);
-    if (accepted.http === 200) assert.deepEqual(accepted.accepted, [1]);
+    if (accepted.http === 200) assert.deepEqual(accepted.duplicate, [1]);
     const newer = parseTelemetryBody({
       points: [{ seq: 2, gnss_time: new Date().toISOString(), lat: 41.2, lon: 29.2, speed_mps: 6, heading_deg: 20 }],
     }, new Date());
@@ -246,7 +279,7 @@ test("ops device inventory on DEV", { skip: devDatabase ? false : "DEV database 
        GROUP BY vehicle_id`,
       [created.id],
     );
-    assert.equal(kept.rows[0]?.vehicle_id, real.vehicle_id);
+    assert.equal(kept.rows[0]?.vehicle_id, null);
     assert.equal(kept.rows[0]?.total, 1);
     const currentRoute = nextVehicle
       ? await listGpsRoute({
@@ -265,7 +298,8 @@ test("ops device inventory on DEV", { skip: devDatabase ? false : "DEV database 
       from: new Date(Date.now() - 3_600_000),
       to: new Date(Date.now() + 60_000),
     });
-    assert.equal(oldRoute.points.some((point) => point.seq === 1), true);
+    assert.equal(oldRoute.points.some((point) => point.seq === 1), false);
+    assert.equal(oldRoute.points.some((point) => point.seq === 2), true);
     const heart = await ingestHeartbeat(created.id, {
       firmware: null,
       rssi: -70,

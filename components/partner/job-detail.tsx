@@ -47,7 +47,15 @@ function display(value: string | null | undefined) {
   return present(value) || "—";
 }
 
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
+function Row({
+  label,
+  value,
+  isolate = false,
+}: {
+  label: string;
+  value: string | null | undefined;
+  isolate?: boolean;
+}) {
   const shown = present(value);
   if (!shown) {
     return null;
@@ -55,7 +63,7 @@ function Row({ label, value }: { label: string; value: string | null | undefined
   return (
     <div className="partner-profile-row">
       <p className="partner-billing-label">{label}</p>
-      <p className="partner-billing-value">{shown}</p>
+      <p className={isolate ? "partner-billing-value ltr-isolate" : "partner-billing-value"} dir={isolate ? "ltr" : undefined}>{shown}</p>
     </div>
   );
 }
@@ -116,7 +124,7 @@ export function PartnerJobDetail({
         </p>
       ) : null}
 
-      {job.accepted ? <Row label={copy.jobReservationCode} value={job.reservationCode} /> : null}
+      {job.accepted ? <Row label={copy.jobReservationCode} value={job.reservationCode} isolate /> : null}
       <Row label={copy.jobDateTime} value={formatOpsDateTime(job.pickupAt, locale)} />
       <Row label={copy.jobServiceType} value={serviceType ?? job.serviceLabel} />
       <Row label={copy.jobTourName} value={tourName} />
@@ -136,7 +144,7 @@ export function PartnerJobDetail({
       ) : null}
       {job.isAirportPickup ? (
         <>
-          <Row label={copy.jobFlightCode} value={job.flightCode} />
+          <Row label={copy.jobFlightCode} value={job.flightCode} isolate />
           <Row
             label={copy.jobGreeter}
             value={job.meetAndGreet ? copy.jobGreeterYes : copy.jobGreeterNo}

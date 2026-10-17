@@ -24,6 +24,13 @@ import {
 } from "@/lib/partner/fleet-view";
 import { partnerVehicleClassLabel } from "@/lib/partner/vehicle-class";
 import { vehicleStatusLabel } from "@/lib/partner/vehicle-labels";
+import { PartnerDriverSubscriptionReadOnlyCells } from "@/components/uetds/driver-subscription-list-cells";
+import { serviceSubscriptionNames, emptyDriverServices } from "@/lib/uetds/service-subscriptions";
+import {
+  addSubscriptionMonths,
+  istanbulSubscriptionPeriodKey,
+  subscriptionPeriodLabel,
+} from "@/lib/uetds/driver-subscription";
 
 type PartnerVehicleListProps = {
   locale: Locale;
@@ -44,6 +51,10 @@ export function PartnerVehicleList({
   addHref,
   justAdded = false,
 }: PartnerVehicleListProps) {
+  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
+  const period = istanbulSubscriptionPeriodKey();
+  const periodLabel = subscriptionPeriodLabel(period, panelLocale);
+  const nextPeriodLabel = subscriptionPeriodLabel(addSubscriptionMonths(period, 1), panelLocale);
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState(vehicles);
   const rowSignature = vehicles
@@ -116,6 +127,11 @@ export function PartnerVehicleList({
                 <th>{copy.uetdsCompanyColumn}</th>
                 <th>{copy.defaultDriver}</th>
                 <th>{copy.vehicleStatus}</th>
+                <th>{copy.uetdsSubscriptionTitle}</th>
+                <th className="ops-driver-sub-fee">{copy.uetdsSubscriptionFee}</th>
+                <th className="ops-driver-sub-currency">{copy.uetdsSubscriptionCurrency}</th>
+                <th className="ops-driver-sub-status">{periodLabel} / {copy.uetdsSubscriptionStatusColumn}</th>
+                <th className="ops-driver-sub-status">{nextPeriodLabel} / {copy.uetdsSubscriptionStatusColumn}</th>
                 <th>{copy.vehicleDetail}</th>
               </tr>
             </thead>
@@ -123,7 +139,7 @@ export function PartnerVehicleList({
               {visible.map((vehicle, index) => (
                 <tr key={vehicle.id}>
                   <td>{index + 1}</td>
-                  <td>{vehicle.plate}</td>
+                  <td className="ltr-isolate" dir="ltr">{vehicle.plate}</td>
                   <td>{partnerVehicleBrandModel(vehicle)}</td>
                   <td>{vehicle.modelYear ?? "—"}</td>
                   <td>
@@ -194,6 +210,29 @@ export function PartnerVehicleList({
                       {vehicleStatusLabel(vehicle.status, copy)}
                     </span>
                   </td>
+                  <td>
+                    {serviceSubscriptionNames(vehicle.services ?? emptyDriverServices(), {
+                      standard: copy.serviceStandard,
+                      advanced: copy.serviceAdvanced,
+                      gpsAts: copy.serviceGpsAts,
+                      mobile: copy.serviceMobile,
+                      none: copy.serviceNone,
+                    })}
+                  </td>
+                  <PartnerDriverSubscriptionReadOnlyCells
+                    locale={locale}
+                    summary={vehicle.uetdsSubscription}
+                    labels={{
+                      fee: copy.uetdsSubscriptionFee,
+                      currency: copy.uetdsSubscriptionCurrency,
+                      unpaid: copy.uetdsSubscriptionUnpaid,
+                      paid: copy.uetdsSubscriptionPaid,
+                      free: copy.uetdsSubscriptionFree,
+                      notManaged: copy.uetdsSubscriptionNotManaged,
+                      invalidFee: copy.vehicleSaveFailed,
+                      saveFailed: copy.vehicleSaveFailed,
+                    }}
+                  />
                   <td>
                     <a
                       className="ops-row-detail"

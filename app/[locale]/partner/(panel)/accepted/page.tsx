@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { AcceptedJobFilters } from "@/components/partner/accepted-job-filters";
 import { PartnerJobList } from "@/components/partner/job-list";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import {
   firstSearchParam,
   hasActivePartnerAcceptedJobFilters,
@@ -32,7 +32,7 @@ export default async function PartnerAcceptedJobsPage({
     to: firstSearchParam(query.to),
     operation: firstSearchParam(query.operation),
   });
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const emptyLabel =
     filters.operation === "completed"
       ? copy.jobAcceptedCompletedEmpty

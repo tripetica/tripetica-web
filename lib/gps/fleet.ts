@@ -18,12 +18,16 @@ export type GpsFleetVehicle = {
   satellites?: number | null;
   recent?: GpsRecentFix[];
   source?: "device" | "mobile";
+  vehicleId?: string | null;
   driverName?: string | null;
   accuracyM?: number | null;
   partnerId?: string | null;
   partnerName?: string | null;
   trackerModel?: string | null;
   manufacturer?: "esp32" | "teltonika" | null;
+  din1State?: "on" | "off" | null;
+  brand?: string | null;
+  model?: string | null;
 };
 
 export function gpsFleetItemKey(vehicle: { id: string; source?: string | null }) {
@@ -69,10 +73,61 @@ export function gpsFleetHistoryReady(vehicleCount: number, selectedId: string | 
   return vehicleCount <= 1 || selectedId !== null;
 }
 
+export function partnerGpsFocus(input: {
+  devices: readonly { id: string; vehicleId: string | null }[];
+  mobile: readonly { id: string; vehicleId: string | null }[];
+  requestedId: string | null;
+}): { deviceId: string | null; mobileId: string | null } {
+  const requestedDevice = input.devices.find((device) => device.id === input.requestedId);
+  if (requestedDevice) return { deviceId: requestedDevice.id, mobileId: null };
+  const requestedMobile = input.mobile.find((vehicle) => vehicle.id === input.requestedId);
+  if (requestedMobile) return { deviceId: null, mobileId: requestedMobile.id };
+
+  const vehicleIds = new Set<string>();
+  for (const device of input.devices) {
+    if (device.vehicleId) vehicleIds.add(device.vehicleId);
+  }
+  for (const vehicle of input.mobile) {
+    if (vehicle.vehicleId) vehicleIds.add(vehicle.vehicleId);
+  }
+  const unassigned = [
+    ...input.devices.filter((device) => !device.vehicleId).map((device) => ({ kind: "device" as const, id: device.id })),
+    ...input.mobile.filter((vehicle) => !vehicle.vehicleId).map((vehicle) => ({ kind: "mobile" as const, id: vehicle.id })),
+  ];
+  if (vehicleIds.size + unassigned.length !== 1) return { deviceId: null, mobileId: null };
+  if (vehicleIds.size === 1) {
+    const vehicleId = [...vehicleIds][0];
+    const device = input.devices.find((item) => item.vehicleId === vehicleId);
+    if (device) return { deviceId: device.id, mobileId: null };
+    const mobile = input.mobile.find((item) => item.vehicleId === vehicleId);
+    return { deviceId: null, mobileId: mobile?.id ?? null };
+  }
+  const only = unassigned[0];
+  if (!only) return { deviceId: null, mobileId: null };
+  return only.kind === "device"
+    ? { deviceId: only.id, mobileId: null }
+    : { deviceId: null, mobileId: only.id };
+}
+
 export type GpsFleetPoint = GpsFleetVehicle & {
   latitude: number;
   longitude: number;
 };
+
+export function gpsMarkerIdentity(input: {
+  plate: string | null | undefined;
+  deviceCode?: string | null;
+  source?: string | null;
+  fallback: string;
+}) {
+  const plate = input.plate?.trim();
+  if (plate) return plate;
+  if (input.source !== "mobile") {
+    const code = input.deviceCode?.trim();
+    if (code) return code;
+  }
+  return input.fallback;
+}
 
 export function gpsFleetPoint(
   latitude: number | null,
@@ -172,15 +227,42 @@ export function readGpsFleet(body: unknown): GpsFleetVehicle[] | null {
       satellites: numberOrNull(row.satellites),
       recent: readRecent(row.recent),
       source: row.source === "mobile" ? "mobile" : "device",
+      vehicleId: typeof row.vehicleId === "string" ? row.vehicleId : null,
       driverName: typeof row.driverName === "string" ? row.driverName : null,
       accuracyM: numberOrNull(row.accuracyM),
       partnerId: typeof row.partnerId === "string" ? row.partnerId : null,
       partnerName: typeof row.partnerName === "string" ? row.partnerName : null,
       trackerModel: typeof row.trackerModel === "string" ? row.trackerModel : null,
       manufacturer: row.manufacturer === "esp32" || row.manufacturer === "teltonika" ? row.manufacturer : null,
+      din1State: row.din1State === "on" || row.din1State === "off" ? row.din1State : null,
+      brand: optionalText(row, "brand"),
+      model: optionalText(row, "model"),
     });
   }
   return vehicles;
+}
+
+export function mergeGpsFleetIdentity(
+  previous: readonly GpsFleetVehicle[] | undefined,
+  next: readonly GpsFleetVehicle[],
+): GpsFleetVehicle[] {
+  const prior = new Map((previous ?? []).map((vehicle) => [gpsFleetItemKey(vehicle), vehicle]));
+  return next.map((vehicle) => {
+    const earlier = prior.get(gpsFleetItemKey(vehicle));
+    if (!earlier) return { ...vehicle };
+    return {
+      ...vehicle,
+      vehicleId: vehicle.vehicleId || earlier.vehicleId || null,
+      brand: vehicle.brand !== undefined ? vehicle.brand : (earlier.brand ?? null),
+      model: vehicle.model !== undefined ? vehicle.model : (earlier.model ?? null),
+    };
+  });
+}
+
+function optionalText(row: Record<string, unknown>, key: "brand" | "model") {
+  if (!(key in row)) return undefined;
+  const value = row[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function readRecent(value: unknown): GpsRecentFix[] | undefined {

@@ -40,6 +40,8 @@ export type GpsLiveSnapshot = {
   powerSource: string | null;
   vehicleBatteryVoltage: number | null;
   accState: string | null;
+  din1State: "on" | "off" | null;
+  manufacturer: "esp32" | "teltonika";
   powerMode: string | null;
   batteryPercent: number | null;
   wifiEnabled: boolean | null;
@@ -87,6 +89,8 @@ export function gpsLiveTag(snapshot: GpsLiveSnapshot) {
     snapshot.powerSource ?? "",
     snapshot.vehicleBatteryVoltage ?? "",
     snapshot.accState ?? "",
+    snapshot.din1State ?? "",
+    snapshot.manufacturer,
     snapshot.powerMode ?? "",
     snapshot.batteryPercent ?? "",
     snapshot.lowBatteryState ?? "",
@@ -100,6 +104,39 @@ export function gpsLiveTag(snapshot: GpsLiveSnapshot) {
 
 export function gpsLiveEtag(snapshot: GpsLiveSnapshot) {
   return `W/"${gpsLiveTag(snapshot)}"`;
+}
+
+const PARTNER_OMITTED_LIVE_FIELDS = [
+  "firmware",
+  "rssi",
+  "operatorName",
+  "network",
+  "uptimeSeconds",
+  "simStatus",
+  "lteRegistration",
+  "pppStatus",
+  "naptStatus",
+  "ipAddress",
+  "gnssResponse",
+  "wifiPolicy",
+  "apStatus",
+  "reportedMaxClients",
+  "lastRecoveryReason",
+  "lastModemRecoveryAt",
+  "lastGnssRecoveryAt",
+  "resetReason",
+  "powerSource",
+  "vehicleBatteryVoltage",
+  "accState",
+  "powerMode",
+] as const;
+
+export function gpsPartnerLivePayload(snapshot: GpsLiveSnapshot) {
+  const body: Record<string, unknown> = { ...snapshot };
+  for (const key of PARTNER_OMITTED_LIVE_FIELDS) {
+    delete body[key];
+  }
+  return body;
 }
 
 export function readGpsLiveSnapshot(value: unknown): GpsLiveSnapshot | null {
@@ -196,6 +233,8 @@ export function readGpsLiveSnapshot(value: unknown): GpsLiveSnapshot | null {
     powerSource: powerSource ?? null,
     vehicleBatteryVoltage: vehicleBatteryVoltage ?? null,
     accState: accState ?? null,
+    din1State: body.din1State === "on" || body.din1State === "off" ? body.din1State : null,
+    manufacturer: body.manufacturer === "teltonika" ? "teltonika" : "esp32",
     powerMode: powerMode ?? null,
     batteryPercent,
     wifiEnabled,

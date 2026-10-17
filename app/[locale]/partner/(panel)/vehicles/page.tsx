@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { PartnerVehicleList } from "@/components/partner/vehicle-list";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { listPartnerVehicles } from "@/lib/partner/fleet";
 import { listFleetChoicesForPartners } from "@/lib/partner/fleet-pairing";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
@@ -22,7 +22,7 @@ export default async function PartnerVehiclesPage({
   const query = await searchParams;
   const added = query.added;
   const justAdded = (Array.isArray(added) ? added[0] : added) === "1";
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const [vehicles, companies, fleetChoices] = await Promise.all([
     listPartnerVehicles(actor.partnerId),
     listActiveUetdsCompanyOptions(),

@@ -28,7 +28,16 @@ describe("uetds driver subscription", () => {
     assert.equal(isUetdsSubscriptionCurrency("GBP"), false);
     assert.equal(isUetdsSubscriptionCurrency("RUB"), false);
     assert.equal(parseUetdsSubscriptionFee("9.00"), 9);
+    assert.equal(parseUetdsSubscriptionFee("5"), 5);
+    assert.equal(parseUetdsSubscriptionFee("5,00"), 5);
+    assert.equal(parseUetdsSubscriptionFee("4,99"), 4.99);
+    assert.equal(parseUetdsSubscriptionFee("12,50"), 12.5);
+    assert.equal(parseUetdsSubscriptionFee("4.99"), 4.99);
+    assert.equal(parseUetdsSubscriptionFee("5,"), null);
+    assert.equal(Number.isNaN(parseUetdsSubscriptionFee("5,00")), false);
     assert.equal(formatUetdsSubscriptionFee(9), "9.00");
+    assert.equal(formatUetdsSubscriptionFee(5, "tr"), "5,00");
+    assert.equal(formatUetdsSubscriptionFee(4.99, "tr"), "4,99");
   });
 
   it("B+C: UI window is current + 11 months and advances with month", () => {
@@ -374,7 +383,7 @@ describe("uetds driver subscription partner mutation surface", () => {
   it("J+K: Ops form keeps subscription draft client-side until save action", async () => {
     const fs = await import("node:fs/promises");
     const form = await fs.readFile(
-      new URL("../../components/ops/partner-driver-form.tsx", import.meta.url),
+      new URL("../../components/ops/partner-vehicle-form.tsx", import.meta.url),
       "utf8",
     );
     assert.match(form, /driverSubscriptionDraftEquals/);
@@ -388,7 +397,7 @@ describe("uetds driver subscription partner mutation surface", () => {
       new URL("../ops/partner-fleet-actions.ts", import.meta.url),
       "utf8",
     );
-    assert.match(actions, /saveDriverUetdsSubscription/);
+    assert.match(actions, /saveVehicleUetdsSubscription/);
     assert.match(actions, /uetdsSubscriptionEnrolled/);
   });
 

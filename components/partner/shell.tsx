@@ -8,7 +8,7 @@ import { PartnerNav } from "@/components/partner/nav";
 import { PartnerMobileShareRuntime, type MobileShareView } from "@/components/gps/mobile-share";
 import { PartnerPushControl } from "@/components/partner/push-control";
 import { PartnerShareButton } from "@/components/partner/share-button";
-import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { type Locale } from "@/lib/i18n/config";
 import { type ReactNode } from "react";
 
@@ -47,9 +47,10 @@ export function PartnerShell({
         </div>
         <p className="partner-topbar-title">{copy.panelName}</p>
         <div className="partner-topbar-end">
-          {share?.vehicleId ? <PartnerShareButton initial={share} /> : null}
+          {share?.vehicleId ? <PartnerShareButton locale={locale} /> : null}
           <PartnerPushControl locale={locale} copy={copy} />
-          <OpsLanguageSwitcher
+          <LanguageSwitcher
+            appearance="panel"
             locale={locale}
             pathWithoutLocale={pathWithoutLocale}
             label={copy.language}
@@ -64,7 +65,7 @@ export function PartnerShell({
       </header>
       <div className="ops-body">
         <main className="ops-main">
-          {actor.isOwner ? <PartnerMobileShareRuntime /> : null}
+          {actor.isOwner ? <PartnerMobileShareRuntime initial={share} /> : null}
           {actor.isPrimaryPartner ? <PartnerLowBatteryWarning locale={locale} /> : null}
           {children}
         </main>

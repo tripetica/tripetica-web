@@ -3,9 +3,13 @@ import "server-only";
 import { getPool } from "@/lib/db/postgres";
 import { dispatchMobileAts } from "@/lib/gps/ats-mobile-dispatch";
 import { listAtsTripClocks } from "@/lib/gps/ats-trips";
-import { planAtsCycle } from "@/lib/gps/ats-window";
+import { planAtsCycle, type AtsTripClock } from "@/lib/gps/ats-window";
+import { chooseAtsFixForTrips } from "@/lib/gps/ats-fix";
+import { withAtsSlot } from "@/lib/gps/ats-slot";
+import { MOBILE_ATS_MAX_FIX_AGE_MS } from "@/lib/gps/mobile-ats";
 import { atsPlate, nextAtsAttempt } from "@/lib/gps/ats-policy";
 import { resolveAtsDistrict } from "@/lib/gps/ats-district";
+import { uetdsTripTimestamp } from "@/lib/uetds/list-policy";
 import { formatAtsKonumZamani } from "@/lib/uetds/ats-soap";
 import { atsLiveDispatchAllowed, atsMinistryDispatchAllowed, postAtsKonumBildir } from "@/lib/uetds/ats-post";
 import { loadUetdsMinistryCredentials } from "@/lib/uetds/ministry-credentials";
@@ -70,6 +74,8 @@ export async function runAtsDispatch(now = new Date()) {
      WHERE device.status = 'active'
        AND device.live_source = TRUE
        AND vehicle.deleted_at IS NULL
+       AND vehicle.service_gps_ats_enabled
+       AND vehicle.ats_ministry_source = 'physical'
        AND NOT EXISTS (
          SELECT 1
            FROM gps_ats_settings settings
@@ -118,7 +124,10 @@ async function dispatchVehicle(
   );
   const point = position.rows[0] ?? null;
   const slot = await pool.query<{ id: string }>(
-    `SELECT id FROM gps_ats_submissions WHERE vehicle_id = $1 AND period_slot = $2 LIMIT 1`,
+    `SELECT id FROM gps_ats_submissions WHERE vehicle_id = $1 AND period_slot = $2
+     UNION ALL
+     SELECT id FROM gps_mobile_ats_submissions WHERE vehicle_id = $1 AND period_slot = $2
+     LIMIT 1`,
     [vehicle.vehicle_id, Math.floor(now.getTime() / 120_000)],
   );
   const plate = atsPlate(vehicle.plate, runtime);
@@ -141,26 +150,40 @@ async function dispatchVehicle(
   if (!plan.ok || !point) {
     return "skipped";
   }
-  const latitude = Number(point.latitude);
-  const longitude = Number(point.longitude);
-  const district = resolveAtsDistrict(latitude, longitude);
-  if (!district.ok) {
+  const activeTrips = tripStarts(trips, plan.notificationIds);
+  const choice = await choosePhysicalFix(vehicle, point, activeTrips, now);
+  if (!choice.ok) {
+    const missed = choice.unresolved[0];
+    console.info(
+      `ATS physical plate=${vehicle.plate} decision=skip reason=${choice.reason}${missed ? ` gnss=${new Date(missed.measuredAtMs).toISOString()} lat=${missed.latitude.toFixed(5)} lon=${missed.longitude.toFixed(5)}` : ""}`,
+    );
     return "skipped";
   }
-  const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO gps_ats_submissions (
-       position_id, company_id, vehicle_id, device_id, gnss_time,
-       ministry_env, status, attempt_count, period_slot, position_note
-     ) VALUES ($1, $2, $3, $4, $5, $6, 'pending', 0, $7, $8)
-     ON CONFLICT (vehicle_id, period_slot) WHERE period_slot IS NOT NULL DO NOTHING
-     RETURNING id`,
-    [point.id, vehicle.company_id, vehicle.vehicle_id, vehicle.source_device_id, point.recorded_at, runtime, plan.slot, plan.positionNote],
-  );
-  const submissionId = inserted.rows[0]?.id;
-  if (!submissionId) {
+  if (choice.unresolved[0]) {
+    const missed = choice.unresolved[0];
+    console.info(
+      `ATS physical plate=${vehicle.plate} decision=skip reason=district_unresolved gnss=${new Date(missed.measuredAtMs).toISOString()} lat=${missed.latitude.toFixed(5)} lon=${missed.longitude.toFixed(5)}`,
+    );
+  }
+  const chosen = choice.point;
+  const positionNote = chosen.id === point.id ? plan.positionNote : (plan.positionNote ?? "stale_position");
+  const reserved = await withAtsSlot(vehicle.vehicle_id, plan.slot, "physical", async (client) => {
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO gps_ats_submissions (
+         position_id, company_id, vehicle_id, device_id, gnss_time,
+         ministry_env, status, attempt_count, period_slot, position_note
+       ) VALUES ($1, $2, $3, $4, $5, $6, 'pending', 0, $7, $8)
+       ON CONFLICT (vehicle_id, period_slot) WHERE period_slot IS NOT NULL DO NOTHING
+       RETURNING id`,
+      [chosen.id, vehicle.company_id, vehicle.vehicle_id, vehicle.source_device_id, chosen.recorded_at, runtime, plan.slot, positionNote],
+    );
+    return inserted.rows[0]?.id ?? null;
+  });
+  if (!reserved.ok) {
     return "skipped";
   }
-  for (const notificationId of plan.notificationIds) {
+  const submissionId = reserved.value;
+  for (const notificationId of choice.tripIds) {
     await pool.query(
       `INSERT INTO gps_ats_submission_notifications (submission_id, notification_id)
        VALUES ($1, $2)
@@ -185,13 +208,84 @@ async function dispatchVehicle(
     submissionId,
     companyId: vehicle.company_id,
     plate,
-    latitude,
-    longitude,
-    ilKodu: district.ilKodu,
-    ilceMernisKodu: district.ilceMernisKodu,
-    gnssTime: point.recorded_at,
+    latitude: chosen.latitude,
+    longitude: chosen.longitude,
+    ilKodu: choice.district.ilKodu,
+    ilceMernisKodu: choice.district.ilceMernisKodu,
+    gnssTime: chosen.recorded_at,
     attemptCount: 0,
     enabled: true,
+  });
+}
+
+function tripStarts(trips: readonly AtsTripClock[], ids: readonly string[]) {
+  const active: Array<{ id: string; startMs: number }> = [];
+  for (const trip of trips) {
+    if (!ids.includes(trip.id)) continue;
+    const startMs = uetdsTripTimestamp(trip.startDate, trip.startTime);
+    if (startMs == null) continue;
+    active.push({ id: trip.id, startMs });
+  }
+  return active;
+}
+
+function storedFix(point: PositionRow) {
+  return {
+    ...point,
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+    measuredAtMs: point.recorded_at.getTime(),
+  };
+}
+
+async function choosePhysicalFix(
+  vehicle: VehicleRow,
+  latest: PositionRow,
+  trips: Array<{ id: string; startMs: number }>,
+  now: Date,
+) {
+  const nowMs = now.getTime();
+  const first = chooseAtsFixForTrips({
+    pointsNewestFirst: [storedFix(latest)],
+    trips,
+    nowMs,
+    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
+    resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
+  });
+  if (first.ok || first.reason !== "district_unresolved") return first;
+  const floor = new Date(Math.min(...trips.map((trip) => trip.startMs)) - MOBILE_ATS_MAX_FIX_AGE_MS);
+  const points = [storedFix(latest)];
+  let before = latest.recorded_at;
+  for (let page = 0; page < 8; page += 1) {
+    const rows = await getPool().query<PositionRow>(
+      `SELECT id, device_id, vehicle_id, recorded_at, latitude, longitude
+         FROM gps_positions
+        WHERE device_id = $1
+          AND vehicle_id = $2
+          AND recorded_at >= $3
+          AND recorded_at < $4
+        ORDER BY recorded_at DESC
+        LIMIT 200`,
+      [vehicle.source_device_id, vehicle.vehicle_id, floor, before],
+    );
+    for (const row of rows.rows) points.push(storedFix(row));
+    const choice = chooseAtsFixForTrips({
+      pointsNewestFirst: points,
+      trips,
+      nowMs,
+      maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
+      resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
+    });
+    const oldest = rows.rows.at(-1);
+    if (choice.ok || !oldest || rows.rows.length < 200) return choice;
+    before = oldest.recorded_at;
+  }
+  return chooseAtsFixForTrips({
+    pointsNewestFirst: points,
+    trips,
+    nowMs,
+    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
+    resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
   });
 }
 
@@ -336,13 +430,19 @@ async function sendSubmission(input: {
   } catch (error) {
     sonucMesaji = error instanceof Error ? error.message : "ats_dispatch_failed";
   }
-  await finish({ ...input, attemptCount: input.attemptCount }, { sonucKodu, sonucMesaji });
+  await finish({ ...input, attemptCount: input.attemptCount }, { sonucKodu, sonucMesaji }, {
+    latitude: input.latitude,
+    longitude: input.longitude,
+    ilKodu: input.ilKodu,
+    ilceMernisKodu: input.ilceMernisKodu,
+  });
   return sonucKodu === 0 ? "sent" : "failed";
 }
 
 async function finish(
   input: { submissionId: string; attemptCount: number; enabled: boolean },
   result: { sonucKodu: number | null; sonucMesaji: string },
+  sent: { latitude: number; longitude: number; ilKodu: number; ilceMernisKodu: number } | null = null,
 ) {
   const attemptCount = input.attemptCount + 1;
   const retry = nextAtsAttempt({
@@ -352,6 +452,13 @@ async function finish(
     now: new Date(),
   });
   const status = result.sonucKodu === 0 ? "succeeded" : "failed";
+  const sentPoint = sent
+    && Number.isFinite(sent.latitude)
+    && Number.isFinite(sent.longitude)
+    && Number.isInteger(sent.ilKodu)
+    && Number.isInteger(sent.ilceMernisKodu)
+    ? sent
+    : null;
   await getPool().query(
     `UPDATE gps_ats_submissions
      SET status = $2,
@@ -360,7 +467,11 @@ async function finish(
          sonuc_mesaji = $5,
          last_error = $6,
          submitted_at = CASE WHEN $2 = 'succeeded' THEN NOW() ELSE submitted_at END,
-         next_attempt_at = $7
+         next_attempt_at = $7,
+         sent_latitude = $8,
+         sent_longitude = $9,
+         sent_il_kodu = $10,
+         sent_ilce_mernis_kodu = $11
      WHERE id = $1`,
     [
       input.submissionId,
@@ -370,6 +481,10 @@ async function finish(
       result.sonucMesaji.slice(0, 500),
       result.sonucKodu === 0 ? null : result.sonucMesaji.slice(0, 500),
       retry.retry ? retry.nextAttemptAt : null,
+      sentPoint ? String(sentPoint.latitude) : null,
+      sentPoint ? String(sentPoint.longitude) : null,
+      sentPoint ? sentPoint.ilKodu : null,
+      sentPoint ? sentPoint.ilceMernisKodu : null,
     ],
   );
 }

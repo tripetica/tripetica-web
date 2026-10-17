@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { PartnerForgotPasswordForm } from "@/components/partner/forgot-password-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { partnerHomePath } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { normalizePartnerEmail } from "@/lib/partner/email";
 import { getPartnerActor } from "@/lib/partner/session";
 
@@ -18,7 +18,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: partnerCopy[asPanelLocale(locale)].forgotPasswordTitle,
+    title: partnerCopyFor(locale).forgotPasswordTitle,
     robots: { index: false, follow: false },
   };
 }
@@ -38,7 +38,7 @@ export default async function PartnerForgotPasswordPage({
   const query = await searchParams;
   const emailRaw = Array.isArray(query.email) ? query.email[0] : query.email;
   const initialEmail = emailRaw ? normalizePartnerEmail(String(emailRaw)) : "";
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
 
   return (
     <div className="ops-login">
@@ -48,7 +48,8 @@ export default async function PartnerForgotPasswordPage({
           copy={copy}
           initialEmail={initialEmail}
         />
-        <OpsLanguageSwitcher
+        <LanguageSwitcher
+          appearance="panel"
           locale={locale}
           pathWithoutLocale="/partner/forgot-password"
           label={copy.language}

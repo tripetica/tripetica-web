@@ -25,6 +25,7 @@ function errorStatus(error: unknown): number | undefined {
 export async function sendPartnerPushToSubscriptions(
   subscriptions: PartnerPushSubscriptionRecord[],
   payloadFor: (subscription: PartnerPushSubscriptionRecord) => PartnerWebPushPayload,
+  options?: { TTL?: number; urgency?: "very-low" | "low" | "normal" | "high" },
 ): Promise<{ sent: number; failed: number; skipped: boolean }> {
   const vapid = readOpsPushVapidConfig();
   if (!vapid) {
@@ -44,6 +45,7 @@ export async function sendPartnerPushToSubscriptions(
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         JSON.stringify(payloadFor(subscription)),
+        options,
       );
       sent += 1;
     } catch (error) {

@@ -501,3 +501,116 @@ test("an image clock with no date is the start, including a clock the model put 
   assert.equal(bare.startDate, "2026-10-08");
   assert.equal(bare.startTime, "23:00");
 });
+
+const HPH002306 = `Booking reference ID: HPH002306
+Lead participant: ()Sujin Yang
+Vehicle Information: 이코노미 차량 7 인승
+Passengers: 2
+Type: Airport drop-off
+From: null(No:12 Hotel Sultanahmet)
+To: Istanbul Airport(IST)
+Pick-up date & time:: 2026-10-17 14:30
+Special Requirements: WhatsApp: Jin.nnn
+TEL +821022107368
+KLK`;
+
+const NIGHT = istanbulLocalToUtcMs("2026-10-17T00:52");
+
+test("HPH002306 keeps the written pickup and does not become now + 65 minutes", () => {
+  const parsed = parseDescribedTripDates(HPH002306, NIGHT);
+  assert.equal(parsed.start?.status, "resolved");
+  if (parsed.start?.status === "resolved") {
+    assert.equal(parsed.start.date, "2026-10-17");
+    assert.equal(parsed.start.time, "14:30");
+    assert.equal(parsed.start.yearExplicit, true);
+  }
+  const draft = mergedStart(HPH002306, NIGHT);
+  assert.equal(draft.startDate, "2026-10-17");
+  assert.equal(draft.startTime, "14:30");
+  assert.notEqual(draft.startTime, "01:57");
+  assert.equal(draft.endDate, "2026-10-17");
+  assert.equal(draft.endTime, "16:30");
+  const modelGuess = mapAiUetdsExtraction(
+    { ...empty, startDate: "2026-10-17", startTime: "01:57", endDate: "2026-10-17", endTime: "03:57" },
+    HPH002306,
+    NIGHT,
+  );
+  assert.equal(modelGuess.startDate, "2026-10-17");
+  assert.equal(modelGuess.startTime, "14:30");
+  assert.notEqual(modelGuess.startTime, "01:57");
+});
+
+test("reservation date and time formats keep the pickup clock", () => {
+  const now = NIGHT;
+  const cases: Array<[string, string, string]> = [
+    ["Pick-up date & time: 2026-10-17 14:30", "2026-10-17", "14:30"],
+    ["Pick-up date & time:: 2026-10-17 14:30", "2026-10-17", "14:30"],
+    ["Pickup: 17/10/2026 14:30", "2026-10-17", "14:30"],
+    ["Pick up: 17.10.2026 14:30", "2026-10-17", "14:30"],
+    ["Pickup time: 2:30 PM, October 17, 2026", "2026-10-17", "14:30"],
+    ["Departure: 17 Oct 2026 at 14:30", "2026-10-17", "14:30"],
+    ["Departure date/time: 2026/10/17 14:30", "2026-10-17", "14:30"],
+    ["Alış tarihi ve saati: 17.10.2026 14:30", "2026-10-17", "14:30"],
+    ["Alınış: 17 Ekim 2026 saat 14:30", "2026-10-17", "14:30"],
+    ["Дата подачи: 17.10.2026 14:30", "2026-10-17", "14:30"],
+    ["Abholung: 17.10.2026 um 14:30", "2026-10-17", "14:30"],
+    ["Recogida: 17/10/2026 a las 14:30", "2026-10-17", "14:30"],
+    ["탑승: 2026년 10월 17일 14시 30분", "2026-10-17", "14:30"],
+  ];
+  for (const [text, date, time] of cases) {
+    const draft = mergedStart(text, now);
+    assert.equal(draft.startDate, date, text);
+    assert.equal(draft.startTime, time, text);
+    assert.equal(draft.endTime, "16:30", text);
+  }
+  const split = mergedStart("Transfer tarihi: 17/10/2026\nTransfer saati: 14:30", now);
+  assert.equal(split.startDate, "2026-10-17");
+  assert.equal(split.startTime, "14:30");
+  const russianSplit = mergedStart("Дата трансфера: 17 октября 2026\nВремя подачи: 14:30", now);
+  assert.equal(russianSplit.startDate, "2026-10-17");
+  assert.equal(russianSplit.startTime, "14:30");
+});
+
+test("pickup wins over booking, flight, and hotel times", () => {
+  const text = [
+    "Booking created: 2026-10-15 09:00",
+    "Flight departure: 2026-10-17 18:00",
+    "Hotel check-in: 2026-10-17 15:00",
+    "Pickup date & time: 2026-10-17 14:30",
+  ].join("\n");
+  const draft = mergedStart(text, NIGHT);
+  assert.equal(draft.startDate, "2026-10-17");
+  assert.equal(draft.startTime, "14:30");
+  assert.notEqual(draft.startTime, "18:00");
+  assert.notEqual(draft.startTime, "09:00");
+});
+
+test("an ambiguous numeric date is not guessed and a Turkish date is day-first", () => {
+  const ambiguous = parseDescribedTripDates("Pickup: 03/04/2026 14:30", NIGHT);
+  assert.equal(ambiguous.start?.status, "rejected");
+  const fallback = mergedStart("Pickup: 03/04/2026 14:30", NIGHT);
+  assert.equal(fallback.startDate, "2026-10-17");
+  assert.equal(fallback.startTime, "01:57");
+  const turkish = parseDescribedTripDates("Alış tarihi: 03/11/2026 14:30", NIGHT);
+  assert.equal(turkish.start?.status, "resolved");
+  if (turkish.start?.status === "resolved") {
+    assert.equal(turkish.start.date, "2026-11-03");
+    assert.equal(turkish.start.time, "14:30");
+  }
+  const turkishDraft = mergedStart("Alış tarihi: 03/11/2026 14:30", NIGHT);
+  assert.equal(turkishDraft.startDate, "2026-11-03");
+  assert.equal(turkishDraft.startTime, "14:30");
+});
+
+test("a written pickup before the 65 minute minimum is still raised", () => {
+  const now = istanbulLocalToUtcMs("2026-10-17T14:00");
+  const draft = mergedStart("Pick-up date & time: 2026-10-17 14:30", now);
+  assert.equal(draft.startDate, "2026-10-17");
+  assert.equal(draft.startTime, "15:05");
+});
+
+test("a missing pickup still falls back to now + 65 minutes", () => {
+  const draft = mergedStart("From: Hotel Sultanahmet\nTo: Istanbul Airport\nPassengers: 2", NIGHT);
+  assert.equal(draft.startDate, "2026-10-17");
+  assert.equal(draft.startTime, "01:57");
+});

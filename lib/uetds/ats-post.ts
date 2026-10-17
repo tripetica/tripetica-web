@@ -1,7 +1,7 @@
 import "server-only";
 
 import { atsPlate } from "@/lib/gps/ats-policy";
-import { atsKonumBildirInnerXml, type AtsKonumInput } from "@/lib/uetds/ats-soap";
+import { atsArizaBildirInnerXml, atsKonumBildirInnerXml, type AtsArizaInput, type AtsKonumInput } from "@/lib/uetds/ats-soap";
 import {
   resolveUetdsMinistryEndpoint,
   resolveUetdsMinistryRuntime,
@@ -52,5 +52,35 @@ export async function postAtsKonumBildir(input: AtsKonumInput) {
     innerXml: atsKonumBildirInnerXml({ ...input, plate }),
     username: input.username,
     password: input.password,
+  });
+}
+
+/**
+ * Posts atsArizaBildir. DEV can reach only the test service.
+ * Production can reach only the live service, and only with the live dispatch flag.
+ * A missing ministry result is returned as sonucKodu null and must not be stored as success.
+ */
+export async function postAtsArizaBildir(input: AtsArizaInput) {
+  const runtime = resolveUetdsMinistryRuntime();
+  const plate = atsPlate(input.plate, runtime);
+  const testAllowed = runtime === "test" && atsMinistryDispatchAllowed();
+  const liveAllowed = runtime === "live" && atsLiveDispatchAllowed();
+  if (!plate || (!testAllowed && !liveAllowed)) {
+    throw new Error("ats_fault_withheld");
+  }
+  const endpoint = resolveUetdsMinistryEndpoint();
+  if (testAllowed && endpoint !== UETDS_TEST_ENDPOINT) {
+    throw new Error("ats_fault_withheld");
+  }
+  if (liveAllowed && endpoint !== UETDS_LIVE_ENDPOINT) {
+    throw new Error("ats_fault_withheld");
+  }
+  return callUetdsTestSoap({
+    operation: "atsArizaBildir",
+    soapAction: UETDS_ATS_SOAP_ACTIONS.atsArizaBildir,
+    innerXml: atsArizaBildirInnerXml({ ...input, plate }),
+    username: input.username,
+    password: input.password,
+    timeoutMs: 20_000,
   });
 }

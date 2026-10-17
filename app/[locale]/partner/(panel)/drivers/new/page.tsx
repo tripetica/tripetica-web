@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { PartnerDriverCreateForm } from "@/components/partner/driver-create-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import {
   listAssignableEdevletAuthorities,
   listPartnerVehicleChoices,
@@ -19,7 +19,7 @@ export default async function PartnerDriverNewPage({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const [activeUetdsCompanies, vehicles, authorities] = await Promise.all([
     listActiveUetdsCompanyOptions(),
     listPartnerVehicleChoices(actor.partnerId),

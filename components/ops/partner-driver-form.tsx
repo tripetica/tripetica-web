@@ -7,14 +7,7 @@ import { PhoneField } from "@/components/booking/phone-field";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
-import {
-  DriverUetdsSubscriptionSection,
-  driverSubscriptionDraftEquals,
-  driverSubscriptionDraftFromState,
-  type DriverSubscriptionDraft,
-} from "@/components/uetds/driver-uetds-subscription-section";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
-import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
 import { useOpsStickyOffset } from "@/components/ops/use-ops-sticky-offset";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { type Locale } from "@/lib/i18n/config";
@@ -37,7 +30,6 @@ type PartnerDriverFormProps = {
   copy: OpsCopy;
   driver: PartnerDriverRecord;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
-  subscription: UetdsDriverSubscriptionState;
   membership?: DriverMembershipStatus;
   canManage: boolean;
   linkedPartner?: { id: string; name: string; code: string };
@@ -85,7 +77,7 @@ function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: 
   return fallback;
 }
 
-function driverStamp(driver: PartnerDriverRecord, subscription: UetdsDriverSubscriptionState) {
+function driverStamp(driver: PartnerDriverRecord) {
   return [
     driver.id,
     driver.updatedAt,
@@ -96,18 +88,13 @@ function driverStamp(driver: PartnerDriverRecord, subscription: UetdsDriverSubsc
     driver.email,
     driver.languageCodes.join(","),
     driver.uetdsCompanyId ?? "",
-    subscription.enrolled ? "1" : "0",
-    subscription.enrolledAt ?? "",
-    subscription.monthlyFee ?? "",
-    subscription.currency ?? "",
-    subscription.periods.map((p) => `${p.year}-${p.month}:${p.status}`).join(","),
   ].join(":");
 }
 
 export function PartnerDriverForm(props: PartnerDriverFormProps) {
   return (
     <PartnerDriverFormEditor
-      key={`${driverStamp(props.driver, props.subscription)}:${props.membership ?? "standard"}`}
+      key={`${driverStamp(props.driver)}:${props.membership ?? "standard"}`}
       {...props}
     />
   );
@@ -118,7 +105,6 @@ function PartnerDriverFormEditor({
   copy,
   driver,
   activeUetdsCompanies,
-  subscription,
   membership = "standard",
   canManage,
   linkedPartner,
@@ -136,13 +122,8 @@ function PartnerDriverFormEditor({
     uetdsCompanyId: driver.uetdsCompanyId ?? "",
   };
   const [membershipDraft, setMembershipDraft] = useState<DriverMembershipStatus>(membership);
-  const initialSubscription = driverSubscriptionDraftFromState(subscription);
   const [values, setValues] = useState(initial);
   const [baseline] = useState(initial);
-  const [subscriptionDraft, setSubscriptionDraft] = useState<DriverSubscriptionDraft>(
-    initialSubscription,
-  );
-  const [subscriptionBaseline] = useState(initialSubscription);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const scrolled = useOpsStickyOffset();
   const [saveState, saveAction, savePending] = useActionState<OpsFleetFormState, FormData>(
@@ -171,8 +152,7 @@ function PartnerDriverFormEditor({
       baseline.phoneNational.replace(/[\s-]+/g, "") ||
     values.languages.join(",") !== baseline.languages.join(",") ||
     values.uetdsCompanyId !== baseline.uetdsCompanyId ||
-    !driverSubscriptionDraftEquals(subscriptionDraft, subscriptionBaseline) || membershipDraft !== membership;
-  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
+    membershipDraft !== membership;
   const resolvedBackHref =
     backHref ?? `${localizedPath(locale, `/ops/partners/${driver.partnerId}`)}?tab=drivers`;
 
@@ -355,29 +335,6 @@ function PartnerDriverFormEditor({
             onChange={(uetdsCompanyId) =>
               setValues((current) => ({ ...current, uetdsCompanyId }))
             }
-          />
-          <DriverUetdsSubscriptionSection
-            serviceLabels={{
-              standard: copy.serviceStandard,
-              advanced: copy.serviceAdvanced,
-              mobile: copy.serviceMobile,
-              total: copy.serviceTotal,
-            }}
-            locale={panelLocale}
-            value={subscriptionDraft}
-            disabled={!canManage}
-            sectionTitle={copy.uetdsSubscriptionTitle}
-            enrollLabel={copy.uetdsSubscriptionEnroll}
-            enrollHint={copy.uetdsSubscriptionEnrollHint}
-            feeLabel={copy.uetdsSubscriptionFee}
-            currencyLabel={copy.uetdsSubscriptionCurrency}
-            monthsLabel={copy.uetdsSubscriptionMonths}
-            statusLabels={{
-              unpaid: copy.uetdsSubscriptionUnpaid,
-              paid: copy.uetdsSubscriptionPaid,
-              free: copy.uetdsSubscriptionFree,
-            }}
-            onChange={setSubscriptionDraft}
           />
         </div>
       </form>

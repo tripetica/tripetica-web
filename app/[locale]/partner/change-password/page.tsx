@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PartnerPasswordForm } from "@/components/partner/password-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPasswordChangePage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: partnerCopy[asPanelLocale(locale)].setNewPassword,
+    title: partnerCopyFor(locale).setNewPassword,
     robots: { index: false, follow: false },
   };
 }
@@ -28,7 +28,7 @@ export default async function PartnerForcedPasswordPage({
     notFound();
   }
   await requirePartnerPasswordChangePage(locale);
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
 
   return (
     <div className="ops-login">

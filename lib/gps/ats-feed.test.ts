@@ -9,7 +9,8 @@ const end = Date.parse("2026-10-10T11:28:00.000Z");
 const measuredAt = "2026-10-10T07:31:58.000Z";
 
 const open = {
-  physicalDeviceOnVehicle: false,
+  source: "mobile" as const,
+  gpsAtsEnabled: true,
   mobileEnabled: true,
   subscriptionOpen: true,
   measuredAt,
@@ -21,8 +22,12 @@ const open = {
   companyMatches: true,
 };
 
-test("a vehicle with its own device stays on the physical feed", () => {
-  assert.equal(selectAtsFeed({ ...open, physicalDeviceOnVehicle: true, nowMs: start + 20 * 60 * 1000 }), "physical");
+test("the selected ministry source is the only feed, with no device fallback", () => {
+  assert.equal(selectAtsFeed({ ...open, source: "physical", nowMs: start + 20 * 60 * 1000 }), "physical");
+  assert.equal(selectAtsFeed({ ...open, source: "mobile", gpsAtsEnabled: true }), "mobile");
+  assert.equal(selectAtsFeed({ ...open, source: "none" }), "none");
+  assert.equal(selectAtsFeed({ ...open, source: "physical", gpsAtsEnabled: false }), "none");
+  assert.equal(selectAtsFeed({ ...open, source: "mobile", mobileEnabled: false }), "none");
 });
 
 test("mobile GPS uses the phone fix from inside the start window without a device switch", () => {
@@ -30,10 +35,11 @@ test("mobile GPS uses the phone fix from inside the start window without a devic
   assert.equal(mobileAtsBlockReason(open), null);
 });
 
-test("a fix older than two hours before the start is not sent", () => {
-  const input = { ...open, measuredAt: "2026-10-10T06:00:00.000Z" };
+test("a fix sixty-one minutes before the start is not sent", () => {
+  const input = { ...open, measuredAt: "2026-10-10T07:26:59.000Z" };
   assert.equal(selectAtsFeed(input), "none");
   assert.equal(mobileAtsBlockReason(input), "fix_before_window");
+  assert.equal(selectAtsFeed({ ...open, measuredAt: "2026-10-10T07:28:00.000Z" }), "mobile");
 });
 
 test("Mobil GPS service off is a recorded block, not a device-switch block", () => {
@@ -44,7 +50,7 @@ test("a phone fix an hour before the start stays eligible during the trip", () =
   const tripStart = Date.parse("2026-10-10T08:56:00.000Z");
   const input = {
     ...open,
-    measuredAt: "2026-10-10T07:51:53.000Z",
+    measuredAt: "2026-10-10T07:56:00.000Z",
     nowMs: Date.parse("2026-10-10T09:10:00.000Z"),
     tripStartMs: tripStart,
     tripEndMs: Date.parse("2026-10-10T10:55:00.000Z"),
@@ -92,12 +98,23 @@ test("mobile ATS is not limited to one plate and a failed slot does not block th
   const source = readFileSync(new URL("./ats-mobile-dispatch.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /34EGP847|34BGN938|34BZC564|gps_ats_settings/);
   assert.match(source, /ON CONFLICT \(vehicle_id, period_slot\)/);
+  assert.match(source, /gps_mobile_ats_submission_notifications/);
+  assert.equal(source.split("postAtsKonumBildir(").length - 1, 1);
   assert.doesNotMatch(source, /WHERE status = 'failed'/);
+  const history = readFileSync(new URL("./ats-history.ts", import.meta.url), "utf8");
+  assert.match(history, /gps_mobile_ats_submission_notifications/);
+  assert.match(history, /NOT EXISTS/);
+  const migration = readFileSync(new URL("../../db/migrations/093_mobile_ats_submission_notifications.sql", import.meta.url), "utf8");
+  assert.match(migration, /PRIMARY KEY \(submission_id, notification_id\)/);
+  assert.doesNotMatch(migration, /DELETE FROM gps_mobile_ats_submissions|UPDATE gps_mobile_ats_submissions/);
 });
 
-test("physical ATS follows the live device rather than a required switch", () => {
+test("physical ATS reads the live device only when that source is selected", () => {
   const source = readFileSync(new URL("./ats-run.ts", import.meta.url), "utf8");
   assert.match(source, /device\.live_source = TRUE/);
+  assert.match(source, /ats_ministry_source = 'physical'/);
+  assert.match(source, /chooseAtsFixForTrips/);
+  assert.match(source, /gps_ats_submission_notifications/);
   assert.doesNotMatch(source, /settings\.enabled = TRUE/);
-  assert.doesNotMatch(source, /gps_mobile|source_mobile|Mobil GPS/);
+  assert.doesNotMatch(source, /gps_mobile_positions|source_mobile|Mobil GPS/);
 });

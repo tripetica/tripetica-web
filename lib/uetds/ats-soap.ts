@@ -91,7 +91,7 @@ ${soapField("arizaBaslangicTarihi", input.arizaBaslangicTarihi)}
 ${soapField("aciklama", input.aciklama)}`;
 }
 
-/** V15 does not define which GPS conditions are an ATS fault, or the fault-date format. */
+/** V15 does not define which GPS conditions are an ATS fault. The fault date string is unconstrained; callers send the konum timestamp so the circular's clock is included. */
 export function atsAutomaticFaultReportEnabled() {
   return false;
 }

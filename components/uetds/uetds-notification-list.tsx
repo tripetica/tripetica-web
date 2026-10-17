@@ -9,7 +9,7 @@ import { type UetdsNotificationListItem } from "@/lib/uetds/notification-view";
 type Props = {
   items: UetdsNotificationListItem[]; emptyLabel: string; copy: UetdsFormCopy;
   detailBaseHref: string; search: string; searchAction: string;
-  actor: "ops" | "partner"; locale: string; filters: UetdsListFilters;
+  actor: "ops" | "partner" | "driver"; locale: string; filters: UetdsListFilters;
   notificationDeleted?: boolean;
 };
 export function UetdsNotificationList({ items, emptyLabel, copy, detailBaseHref, search, searchAction, actor, locale, filters, notificationDeleted }: Props) {
@@ -53,7 +53,7 @@ export function UetdsNotificationList({ items, emptyLabel, copy, detailBaseHref,
         <th>{copy.listEnd}</th><th className="uetds-route-col">{copy.confirmRoute}</th><th>{copy.listPlate}</th><th>{copy.driver}</th><th>{copy.listStatus}</th><th>{copy.listDetail}</th>
       </tr></thead><tbody>{visible.map((item,index) => <tr key={item.id}>
         {canSelect ? <td><input type="checkbox" name="ids" value={item.id} aria-label={`${copy.listNo} ${index+1}`} checked={selected.includes(item.id)} disabled={pending} onChange={e => setSelected(prev => e.target.checked ? [...prev,item.id] : prev.filter(id => id !== item.id))} /></td> : null}
-        <td>{index+1}</td><td>{item.startLabel}</td><td>{item.endLabel}</td><td className="uetds-route-col">{item.routeLabel}</td><td>{item.plate}</td><td>{item.driverName}</td>
+        <td>{index+1}</td><td className="ltr-isolate" dir="ltr">{item.startLabel}</td><td className="ltr-isolate" dir="ltr">{item.endLabel}</td><td className="uetds-route-col">{item.routeLabel}</td><td className="ltr-isolate" dir="ltr">{item.plate}</td><td>{item.driverName}</td>
         <td><span className={`uetds-status-badge is-${item.listClassification ?? 'other'}`}>{item.listClassification === "completed" ? copy.listCompleted : item.finalVerificationResult === "verified" ? copy.verifiedByMinistry : item.finalVerificationResult === "final-verification-failed" ? copy.verificationPending : uetdsStatusLabel(item.status, copy)}</span></td>
         <td><a className="ops-btn-secondary" href={`${detailBaseHref}/${item.id}`}>{copy.listDetail}</a></td>
       </tr>)}</tbody></table></div>}

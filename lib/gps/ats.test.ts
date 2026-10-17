@@ -53,6 +53,8 @@ test("the installed catalog resolves a known district and refuses open water", (
     assert.equal(esenyurt.ilceMernisKodu, 2053);
   }
   assert.equal(resolveAtsDistrict(40.9, 28.2).ok, false);
+  assert.equal(resolveAtsDistrict(40.99359, 29.16812).ok, false);
+  assert.equal(resolveAtsDistrict(41.04460, 29.03522).ok, false);
   const airport = resolveAtsDistrict(41.275, 28.742);
   assert.equal(airport.ok, true);
   if (airport.ok) assert.equal(airport.ilceMernisKodu, 2048);
@@ -69,6 +71,15 @@ test("official district codes accept MERNIS districts and reject airports", () =
   assert.deepEqual(resolveAtsDistrict(41.05, 28.7, [square]), { ok: true, ilKodu: 34, ilceMernisKodu: 2053 });
   assert.equal(resolveAtsDistrict(41.05, 28.7, [square, overlap]).ok, false);
   assert.equal(resolveAtsDistrict(41.05, 28.7, [{ ...square, ilceMernisKodu: 99133 }]).ok, false);
+  const justOutside = resolveAtsDistrict(41.10014, 28.7, [square]);
+  assert.deepEqual(justOutside, { ok: true, ilKodu: 34, ilceMernisKodu: 2053 });
+  assert.equal(resolveAtsDistrict(41.101, 28.7, [square]).ok, false);
+  const north: AtsDistrictBoundary = {
+    ilKodu: 34,
+    ilceMernisKodu: 2052,
+    parts: [[[[28.6, 41.1002], [28.8, 41.1002], [28.8, 41.2], [28.6, 41.2]]]],
+  };
+  assert.equal(resolveAtsDistrict(41.1001, 28.7, [square, north]).ok, false);
 });
 
 test("submission uses the position vehicle, GNSS time, and one explicit device", () => {

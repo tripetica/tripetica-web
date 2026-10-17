@@ -7,7 +7,7 @@ import { listGpsRecentFixes, type GpsDeviceListItem } from "@/lib/gps/queries";
 import { gpsIsLiveMapSource } from "@/lib/gps/registration";
 
 export async function loadOpsMapFleet(devices: readonly GpsDeviceListItem[]): Promise<GpsFleetVehicle[]> {
-  const physical = devices.filter((device) => device.partnerId && gpsIsLiveMapSource(device));
+  const physical = devices.filter((device) => gpsIsLiveMapSource(device));
   const [drivers, recent, mobile] = await Promise.all([
     listDefaultDriverNames(),
     listGpsRecentFixes(physical.map((device) => device.id)),
@@ -36,6 +36,7 @@ export async function loadOpsMapFleet(devices: readonly GpsDeviceListItem[]): Pr
         partnerName: device.partnerName,
         trackerModel: device.trackerModel,
         manufacturer: device.manufacturer,
+        din1State: device.din1State,
       };
     }),
     ...mobile,
@@ -118,7 +119,7 @@ async function listAllMobileFleet(): Promise<GpsFleetVehicle[]> {
        LEFT JOIN partner_vehicles vehicle ON vehicle.id = position.vehicle_id
       WHERE d.deleted_at IS NULL
         AND d.status = 'active'
-        AND d.service_mobile_gps_enabled
+        AND vehicle.service_mobile_gps_enabled
         AND position.latitude BETWEEN -90 AND 90
         AND position.longitude BETWEEN -180 AND 180
       ORDER BY d.id, position.recorded_at DESC`,
@@ -138,7 +139,11 @@ async function listAllMobileFleet(): Promise<GpsFleetVehicle[]> {
            JOIN partner_drivers driver ON driver.id = position.driver_id
           WHERE driver.deleted_at IS NULL
             AND driver.status = 'active'
-            AND driver.service_mobile_gps_enabled
+            AND EXISTS (
+              SELECT 1 FROM partner_vehicles subscribed
+               WHERE subscribed.id = position.vehicle_id
+                 AND subscribed.service_mobile_gps_enabled
+            )
             AND position.recorded_at > NOW() - INTERVAL '20 minutes'
        ) recent
       WHERE n <= 40

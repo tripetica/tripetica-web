@@ -33,8 +33,8 @@ type IngestOk = {
 };
 
 type IngestDenied = {
-  http: 403 | 409;
-  error: "disabled" | "unassigned";
+  http: 403;
+  error: "disabled";
 };
 
 export async function ingestTelemetry(
@@ -48,7 +48,7 @@ export async function ingestTelemetry(
     await client.query("BEGIN");
     const locked = await client.query<{
       id: string;
-      partner_id: string;
+      partner_id: string | null;
       vehicle_id: string | null;
       status: string;
     }>(
@@ -63,15 +63,11 @@ export async function ingestTelemetry(
       await client.query("ROLLBACK");
       return { http: 403, error: "disabled" };
     }
-    if (!device.vehicle_id && points.length > 0) {
-      await client.query("ROLLBACK");
-      return { http: 409, error: "unassigned" };
-    }
     const accepted: number[] = [];
     const acceptedPoints: GpsPoint[] = [];
     const duplicate: number[] = [];
     const known = new Set<number>();
-    if (points.length > 0 && device.vehicle_id) {
+    if (points.length > 0) {
       const existing = await client.query<{ seq: string }>(
         `SELECT seq::text AS seq
          FROM gps_positions
@@ -91,11 +87,11 @@ export async function ingestTelemetry(
           `INSERT INTO gps_positions (
              device_id, partner_id, vehicle_id, seq, recorded_at,
              latitude, longitude, altitude_m, speed_mps, heading_deg,
-             satellites, hdop, pdop, vdop, fix_mode
+             satellites, hdop, pdop, vdop, fix_mode, ignition
            ) VALUES (
              $1, $2, $3, $4, $5,
              $6, $7, $8, $9, $10,
-             $11, $12, $13, $14, $15
+             $11, $12, $13, $14, $15, $16
            )
            ON CONFLICT (device_id, seq) DO NOTHING`,
           [
@@ -114,6 +110,7 @@ export async function ingestTelemetry(
             point.pdop,
             point.vdop,
             point.fixMode,
+            point.ignition === "on" || point.ignition === "off" ? point.ignition : null,
           ],
         );
         if ((inserted.rowCount ?? 0) === 0) {

@@ -31,6 +31,12 @@ import {
 } from "@/lib/partner/vehicle-labels";
 import { partnerVehicleErrorField } from "@/lib/partner/vehicle-policy";
 import { type FleetChoice } from "@/lib/partner/fleet-pairing-rules";
+import {
+  DriverUetdsSubscriptionSection,
+  driverSubscriptionDraftFromState,
+} from "@/components/uetds/driver-uetds-subscription-section";
+import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
+import { type AtsMinistrySource } from "@/lib/gps/ats-source";
 
 type PartnerVehicleDetailProps = {
   locale: Locale;
@@ -39,6 +45,8 @@ type PartnerVehicleDetailProps = {
   activeUetdsCompanies: readonly UetdsCompanyRef[];
   drivers: readonly FleetChoice[];
   defaultDriverId: string;
+  subscription: UetdsDriverSubscriptionState;
+  atsSource: AtsMinistrySource;
 };
 
 const ERROR_COPY: Record<
@@ -136,6 +144,8 @@ export function PartnerVehicleDetail({
   activeUetdsCompanies,
   drivers,
   defaultDriverId: linkedDriverId,
+  subscription,
+  atsSource,
 }: PartnerVehicleDetailProps) {
   const baseline = useMemo(() => draftFromVehicle(vehicle), [vehicle]);
   const [draft, setDraft] = useState(baseline);
@@ -145,6 +155,7 @@ export function PartnerVehicleDetail({
   const baselineDriverId = linkedDriverId;
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [statusConfirm, setStatusConfirm] = useState<"activate" | "deactivate" | null>(null);
   const [saveState, saveAction, saving] = useActionState<PartnerVehicleFormState, FormData>(
     async (prev, formData) => {
       const result = await partnerUpdateVehicleAction(prev, formData);
@@ -190,7 +201,7 @@ export function PartnerVehicleDetail({
     <section className="partner-billing-card partner-profile-card" aria-labelledby="partner-vehicle-title">
       <div className="partner-driver-detail-head">
         <h1 id="partner-vehicle-title" className="partner-driver-title">
-          {vehicle.plate}
+          <span className="ltr-isolate" dir="ltr">{vehicle.plate}</span>
         </h1>
         <span className={`ops-status-badge ${vehicleStatusBadgeClass(vehicle.status)}`}>
           {vehicleStatusLabel(vehicle.status, copy)}
@@ -253,7 +264,7 @@ export function PartnerVehicleDetail({
               editing={false}
               onEdit={() => setEditing(true)}
             >
-              <p className="partner-billing-value">{draft.plate}</p>
+              <p className="partner-billing-value ltr-isolate" dir="ltr">{draft.plate}</p>
             </DetailRow>
             <DetailRow
               label={copy.vehicleBrandModel}
@@ -323,6 +334,43 @@ export function PartnerVehicleDetail({
                 {vehicle.uetdsCompany?.shortName ?? copy.uetdsNotifyNone}
               </p>
             </DetailRow>
+            <DriverUetdsSubscriptionSection
+              serviceLabels={{
+                standard: copy.serviceStandard,
+                advanced: copy.serviceAdvanced,
+                gpsAts: copy.serviceGpsAts,
+                mobile: copy.serviceMobile,
+                total: copy.serviceTotal,
+              }}
+              locale={locale === "en" || locale === "ru" ? locale : "tr"}
+              value={driverSubscriptionDraftFromState(subscription)}
+              readOnly
+              disabled
+              sectionTitle={copy.uetdsSubscriptionTitle}
+              enrollLabel=""
+              enrollHint={copy.uetdsSubscriptionNotManaged}
+              feeLabel={copy.uetdsSubscriptionFee}
+              currencyLabel=""
+              monthsLabel={copy.uetdsSubscriptionMonths}
+              statusLabels={{
+                unpaid: copy.uetdsSubscriptionUnpaid,
+                paid: copy.uetdsSubscriptionPaid,
+                free: copy.uetdsSubscriptionFree,
+              }}
+              onChange={() => undefined}
+            />
+            <section className="uetds-driver-subscription ats-ministry-source is-readonly">
+              <p className="ats-ministry-source-status">
+                {atsSource === "physical"
+                  ? copy.atsSourceStatusPhysical
+                  : atsSource === "mobile"
+                    ? copy.atsSourceStatusMobile
+                    : copy.atsSourceStatusNone}
+              </p>
+              {atsSource === "mobile" ? (
+                <p className="ats-ministry-source-note">{copy.atsSourceMobileNotice}</p>
+              ) : null}
+            </section>
             <input type="hidden" name="defaultDriverId" value={defaultDriverId} />
             <DetailRow
               label={copy.defaultDriver}
@@ -364,31 +412,6 @@ export function PartnerVehicleDetail({
       </form>
 
       <div className="partner-profile-actions partner-driver-status-actions">
-        {vehicle.status === "active" ? (
-          <form action={deactivateAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="id" value={vehicle.id} />
-            <button
-              type="submit"
-              className="ops-btn-cancel-soft"
-              disabled={mode !== "view" || deactivating}
-            >
-              {copy.deactivateVehicle}
-            </button>
-          </form>
-        ) : vehicle.status === "inactive" ? (
-          <form action={activateAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="id" value={vehicle.id} />
-            <button
-              type="submit"
-              className="ops-btn-activate"
-              disabled={mode !== "view" || activating}
-            >
-              {copy.activateVehicle}
-            </button>
-          </form>
-        ) : null}
         <button
           type="button"
           className="ops-btn-danger"
@@ -397,6 +420,25 @@ export function PartnerVehicleDetail({
         >
           {copy.deleteVehicle}
         </button>
+        {vehicle.status === "active" ? (
+          <button
+            type="button"
+            className="ops-btn-cancel-soft"
+            disabled={mode !== "view" || deactivating}
+            onClick={() => setStatusConfirm("deactivate")}
+          >
+            {copy.deactivateVehicle}
+          </button>
+        ) : vehicle.status === "inactive" ? (
+          <button
+            type="button"
+            className="ops-btn-activate"
+            disabled={mode !== "view" || activating}
+            onClick={() => setStatusConfirm("activate")}
+          >
+            {copy.activateVehicle}
+          </button>
+        ) : null}
         {mode === "view" ? (
           <a className="ops-btn-secondary" href={listHref}>
             {copy.closeVehicle}
@@ -407,6 +449,41 @@ export function PartnerVehicleDetail({
           </button>
         )}
       </div>
+
+      <form action={deactivateAction} id="partner-vehicle-deactivate-form" hidden>
+        <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="id" value={vehicle.id} />
+        <input type="hidden" name="intent" value="deactivate" />
+      </form>
+      <form action={activateAction} id="partner-vehicle-activate-form" hidden>
+        <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="id" value={vehicle.id} />
+        <input type="hidden" name="intent" value="activate" />
+      </form>
+      {statusConfirm ? (
+        <OpsConfirmDialog
+          title={statusConfirm === "deactivate" ? copy.deactivateVehicleConfirm : copy.activateVehicleConfirm}
+          error={
+            statusConfirm === "deactivate"
+              ? deactivateState.error
+                ? copy.vehicleSaveFailed
+                : null
+              : activateState.error
+                ? activateState.error === "needs-approval"
+                  ? copy.vehicleNeedsApproval
+                  : copy.vehicleSaveFailed
+                : null
+          }
+          pending={statusConfirm === "deactivate" ? deactivating : activating}
+          cancelLabel={copy.cancelEdit}
+          confirmLabel={statusConfirm === "deactivate" ? copy.deactivateVehicle : copy.activateVehicle}
+          confirmTone={statusConfirm === "deactivate" ? "danger" : "positive"}
+          confirmFormId={
+            statusConfirm === "deactivate" ? "partner-vehicle-deactivate-form" : "partner-vehicle-activate-form"
+          }
+          onClose={() => setStatusConfirm(null)}
+        />
+      ) : null}
 
       <form action={deleteAction} id="partner-vehicle-delete-form" hidden>
         <input type="hidden" name="locale" value={locale} />

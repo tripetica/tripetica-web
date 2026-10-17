@@ -2,10 +2,10 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { PartnerShell } from "@/components/partner/shell";
 import { loadMobileShare } from "@/lib/gps/mobile-store";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { partnerHasTab, partnerTabForPath } from "@/lib/partner/access";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,10 @@ export default async function PartnerPanelLayout({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const headerList = await headers();
   const pathname = headerList.get("x-partner-pathname") ?? "";
-  const pathWithoutLocale = pathname.replace(/^\/(tr|en|ru)/, "") || "/partner";
+  const pathWithoutLocale = pathname.replace(/^\/(tr|en|ru|ar)/, "") || "/partner";
   const tab = partnerTabForPath(pathWithoutLocale);
   const allowed = !tab || partnerHasTab(actor, tab);
   const share = actor.isOwner
@@ -47,6 +47,7 @@ export default async function PartnerPanelLayout({
         sharing: share.sharing,
         tokenMatches: share.tokenMatches,
         lastFixAt: share.lastFixAt,
+        lastStreamAt: share.lastStreamAt,
         accuracyM: share.accuracyM,
         fresh: share.fresh,
       } : null}

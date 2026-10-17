@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { PartnerDriverList } from "@/components/partner/driver-list";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
+import { listPartnerDriverPermissions } from "@/lib/partner/driver-permission-store";
 import { listPartnerDrivers } from "@/lib/partner/fleet";
 import { listFleetChoicesForPartners } from "@/lib/partner/fleet-pairing";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
@@ -22,11 +23,12 @@ export default async function PartnerDriversPage({
   const query = await searchParams;
   const added = query.added;
   const justAdded = (Array.isArray(added) ? added[0] : added) === "1";
-  const copy = partnerCopy[asPanelLocale(locale)];
-  const [drivers, companies, fleetChoices] = await Promise.all([
+  const copy = partnerCopyFor(locale);
+  const [drivers, companies, fleetChoices, permissions] = await Promise.all([
     listPartnerDrivers(actor.partnerId),
     listActiveUetdsCompanyOptions(),
     listFleetChoicesForPartners([actor.partnerId]),
+    listPartnerDriverPermissions(actor.partnerId),
   ]);
   const addHref = localizedPath(locale, "/partner/drivers/new");
 
@@ -38,6 +40,7 @@ export default async function PartnerDriversPage({
         drivers={drivers}
         companies={companies}
         fleetChoices={fleetChoices}
+        permissions={permissions}
         addHref={addHref}
         justAdded={justAdded}
       />

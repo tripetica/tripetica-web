@@ -2,6 +2,7 @@
 # Fail-safe retention helper for immutable production releases.
 # Keep only CURRENT + ROLLBACK under a releases root. Never switches current,
 # never restarts services, never touches backups/repo/env.
+# Never delete Playwright browser runtimes under /var/lib/tripetica-*/pw-browsers.
 #
 # Usage:
 #   deploy/cleanup-old-production-releases.sh \
@@ -99,7 +100,7 @@ fi
 protected_prefix_ok() {
   local path="$1"
   case "$path" in
-    /var/backups|/var/backups/*|/root/tripetica-web|/root/tripetica-web/*|/etc|/etc/*)
+    /var/backups|/var/backups/*|/root/tripetica-web|/root/tripetica-web/*|/etc|/etc/*|/var/lib/tripetica-prod/pw-browsers|/var/lib/tripetica-prod/pw-browsers/*|/var/lib/tripetica-dev/pw-browsers|/var/lib/tripetica-dev/pw-browsers/*|/tmp/pw-browsers|/tmp/pw-browsers/*)
       return 1
       ;;
   esac

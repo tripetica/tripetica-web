@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { listPartnerVehicleIdentity } from "@/lib/gps/drive-store";
 import { gpsFleetPoint, type GpsFleetVehicle } from "@/lib/gps/fleet";
 import { listMobileFleet } from "@/lib/gps/mobile-store";
 import { gpsIsLiveMapSource } from "@/lib/gps/registration";
@@ -17,9 +18,10 @@ export async function GET() {
     return NextResponse.json({ ok: false }, { status: 401, headers: noStore });
   }
   const devices = (await listGpsDevices(partner.partnerId)).filter(gpsIsLiveMapSource);
-  const [recent, drivers] = await Promise.all([
+  const [recent, drivers, identities] = await Promise.all([
     listGpsRecentFixes(devices.map((device) => device.id)),
     listFleetDefaultDrivers(partner.partnerId),
+    listPartnerVehicleIdentity(partner.partnerId),
   ]);
   const vehicles: GpsFleetVehicle[] = devices.map((device) => {
     const point = gpsFleetPoint(device.latitude, device.longitude);
@@ -38,9 +40,15 @@ export async function GET() {
       satellites: device.satellites,
       recent: recent.get(device.id) ?? [],
       source: "device",
+      vehicleId: device.vehicleId,
       driverName: device.vehicleId ? drivers.get(device.vehicleId) ?? null : null,
+      brand: device.vehicleId ? identities.get(device.vehicleId)?.brand ?? null : null,
+      model: device.vehicleId ? identities.get(device.vehicleId)?.model ?? null : null,
     };
   });
-  vehicles.push(...await listMobileFleet(partner.partnerId));
+  vehicles.push(...(await listMobileFleet(partner.partnerId)).map((vehicle) => {
+    const identity = vehicle.vehicleId ? identities.get(vehicle.vehicleId) : undefined;
+    return { ...vehicle, brand: identity?.brand ?? null, model: identity?.model ?? null };
+  }));
   return NextResponse.json({ ok: true, vehicles }, { headers: noStore });
 }

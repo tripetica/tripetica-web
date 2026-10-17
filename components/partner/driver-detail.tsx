@@ -4,10 +4,7 @@ import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
-import {
-  DriverUetdsSubscriptionSection,
-  driverSubscriptionDraftFromState,
-} from "@/components/uetds/driver-uetds-subscription-section";
+import { DriverPermissionsEditor } from "@/components/partner/driver-permissions";
 import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
@@ -23,6 +20,7 @@ import {
 } from "@/lib/partner/driver-actions";
 import { PARTNER_DEFAULT_COUNTRY_CODE } from "@/lib/partner/constants";
 import { type PartnerCopy } from "@/lib/partner/copy";
+import { type DriverPermissions } from "@/lib/driver-portal/permissions";
 import { partnerDriverDetailMode } from "@/lib/partner/driver-detail-view";
 import { formatPartnerDriverLanguagesFull } from "@/lib/partner/driver-languages";
 import {
@@ -30,7 +28,6 @@ import {
   type PartnerDriverRecord,
 } from "@/lib/partner/fleet-view";
 import { joinPartnerContactName } from "@/lib/partner/contact-name";
-import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
 import {
   authoritiesForCompany,
   type AuthorityChoice,
@@ -42,11 +39,11 @@ type PartnerDriverDetailProps = {
   copy: PartnerCopy;
   driver: PartnerDriverRecord;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
-  subscription: UetdsDriverSubscriptionState;
   vehicles: readonly FleetChoice[];
   authorities: readonly AuthorityChoice[];
   defaultVehicleId: string;
   defaultAuthorityId: string;
+  permissions: DriverPermissions;
 };
 
 type DriverDraft = {
@@ -177,11 +174,11 @@ export function PartnerDriverDetail({
   copy,
   driver,
   activeUetdsCompanies,
-  subscription,
   vehicles,
   authorities,
   defaultVehicleId,
   defaultAuthorityId,
+  permissions,
 }: PartnerDriverDetailProps) {
   const baseline = useMemo(
     () => draftFromDriver(driver, { defaultVehicleId, defaultAuthorityId }),
@@ -190,8 +187,8 @@ export function PartnerDriverDetail({
   const [draft, setDraft] = useState(baseline);
   const [editing, setEditing] = useState<Partial<Record<EditableField, boolean>>>({});
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
-  const subscriptionDraft = driverSubscriptionDraftFromState(subscription);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [statusConfirm, setStatusConfirm] = useState<"activate" | "deactivate" | null>(null);
   const [saveState, saveAction, saving] = useActionState<PartnerDriverFormState, FormData>(
     async (prev, formData) => {
       const result = await partnerUpdateDriverAction(prev, formData);
@@ -312,7 +309,7 @@ export function PartnerDriverDetail({
               />
             </div>
           ) : (
-            <p className="partner-billing-value">{draft.email || "—"}</p>
+            <p className="partner-billing-value ltr-isolate" dir="ltr">{draft.email || "—"}</p>
           )}
         </DetailRow>
 
@@ -336,7 +333,7 @@ export function PartnerDriverDetail({
               }
             />
           ) : (
-            <p className="partner-billing-value">{formatPartnerFleetPhone(driver.phone)}</p>
+            <p className="partner-billing-value ltr-isolate" dir="ltr">{formatPartnerFleetPhone(driver.phone)}</p>
           )}
         </DetailRow>
 
@@ -468,33 +465,6 @@ export function PartnerDriverDetail({
           )}
         </DetailRow>
 
-        <DriverUetdsSubscriptionSection
-          serviceLabels={{
-            standard: copy.serviceStandard,
-            advanced: copy.serviceAdvanced,
-            mobile: copy.serviceMobile,
-            total: copy.serviceTotal,
-          }}
-          locale={panelLocale}
-          value={subscriptionDraft}
-          readOnly
-          disabled
-          sectionTitle={copy.uetdsSubscriptionTitle}
-          enrollLabel=""
-          enrollHint={copy.uetdsSubscriptionNotManaged}
-          feeLabel={copy.uetdsSubscriptionFee}
-          currencyLabel=""
-          monthsLabel={copy.uetdsSubscriptionMonths}
-          statusLabels={{
-            unpaid: copy.uetdsSubscriptionUnpaid,
-            paid: copy.uetdsSubscriptionPaid,
-            free: copy.uetdsSubscriptionFree,
-          }}
-          onChange={() => {
-            /* Partner read-only */
-          }}
-        />
-
         {saveState.ok && mode === "view" ? (
           <p className="ops-form-ok" role="status">
             {copy.driverSaved}
@@ -519,32 +489,26 @@ export function PartnerDriverDetail({
         ) : null}
       </form>
 
+      <div className="partner-driver-permissions">
+        <button
+          type="button"
+          className="ops-btn-secondary"
+          aria-expanded={permissionsOpen}
+          onClick={() => setPermissionsOpen((open) => !open)}
+        >
+          {permissionsOpen ? copy.driverPermissionsHide : copy.driverPermissionsShow}
+        </button>
+        {permissionsOpen ? (
+          <>
+            <DriverPermissionsEditor driverId={driver.id} initial={permissions} copy={copy} />
+            <button type="button" className="ops-btn-ghost driver-permissions-toggle" onClick={() => setPermissionsOpen(false)}>
+              {copy.driverPermissionsHide}
+            </button>
+          </>
+        ) : null}
+      </div>
+
       <div className="partner-profile-actions partner-driver-status-actions">
-        {driver.status === "active" ? (
-          <form action={deactivateAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="id" value={driver.id} />
-            <button
-              type="submit"
-              className="ops-btn-cancel-soft"
-              disabled={mode !== "view" || deactivating}
-            >
-              {copy.deactivateDriver}
-            </button>
-          </form>
-        ) : (
-          <form action={activateAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="id" value={driver.id} />
-            <button
-              type="submit"
-              className="ops-btn-activate"
-              disabled={mode !== "view" || activating}
-            >
-              {copy.activateDriver}
-            </button>
-          </form>
-        )}
         <button
           type="button"
           className="ops-btn-danger"
@@ -553,6 +517,25 @@ export function PartnerDriverDetail({
         >
           {copy.deleteDriver}
         </button>
+        {driver.status === "active" ? (
+          <button
+            type="button"
+            className="ops-btn-cancel-soft"
+            disabled={mode !== "view" || deactivating}
+            onClick={() => setStatusConfirm("deactivate")}
+          >
+            {copy.deactivateDriver}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="ops-btn-activate"
+            disabled={mode !== "view" || activating}
+            onClick={() => setStatusConfirm("activate")}
+          >
+            {copy.activateDriver}
+          </button>
+        )}
         {mode === "view" ? (
           <a className="ops-btn-secondary" href={listHref}>
             {copy.closeDriver}
@@ -563,11 +546,44 @@ export function PartnerDriverDetail({
           </button>
         )}
       </div>
+      <form action={deactivateAction} id="partner-driver-deactivate-form" hidden>
+        <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="id" value={driver.id} />
+        <input type="hidden" name="intent" value="deactivate" />
+      </form>
+      <form action={activateAction} id="partner-driver-activate-form" hidden>
+        <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="id" value={driver.id} />
+        <input type="hidden" name="intent" value="activate" />
+      </form>
 
       <form action={deleteAction} id="partner-driver-delete-form" hidden>
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="id" value={driver.id} />
       </form>
+
+      {statusConfirm ? (
+        <OpsConfirmDialog
+          title={statusConfirm === "deactivate" ? copy.deactivateDriverConfirm : copy.activateDriverConfirm}
+          error={
+            statusConfirm === "deactivate"
+              ? deactivateState.error
+                ? copy.driverSaveFailed
+                : null
+              : activateState.error
+                ? copy.driverSaveFailed
+                : null
+          }
+          pending={statusConfirm === "deactivate" ? deactivating : activating}
+          cancelLabel={copy.cancelEdit}
+          confirmLabel={statusConfirm === "deactivate" ? copy.deactivateDriver : copy.activateDriver}
+          confirmTone={statusConfirm === "deactivate" ? "danger" : "positive"}
+          confirmFormId={
+            statusConfirm === "deactivate" ? "partner-driver-deactivate-form" : "partner-driver-activate-form"
+          }
+          onClose={() => setStatusConfirm(null)}
+        />
+      ) : null}
 
       {deleteOpen ? (
         <OpsConfirmDialog

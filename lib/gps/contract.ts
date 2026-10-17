@@ -59,6 +59,7 @@ export type GpsPoint = {
   hdop: number | null;
   pdop: number | null;
   vdop: number | null;
+  ignition?: "on" | "off" | null;
 };
 
 export type GpsHeartbeat = {

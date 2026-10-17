@@ -92,6 +92,18 @@ export function resolveDevUetdsTestEndpoint(
   return UETDS_TEST_ENDPOINT;
 }
 
+/** Ministry gateway faults carry faultstring instead of sonucMesaji. */
+export function uetdsSoapResultMessage(values: Record<string, string>) {
+  return values.sonucmesaji || values.faultstring || "";
+}
+
+/** A sefer that was not created can be sent again after a gateway or system failure. */
+export function shouldRetryUetdsSefer(input: { sonucKodu: number | null; sonucMesaji: string; reference: string }) {
+  if (input.reference.trim() || input.sonucKodu === 0) return false;
+  if (input.sonucKodu === 99 || input.sonucKodu == null) return true;
+  return /bağlanılamadı/i.test(input.sonucMesaji);
+}
+
 export const UETDS_SOAP_ACTIONS = {
   seferEkle: `${UETDS_NS}uetdsytsarizi/seferEkle`,
   personelEkle: `${UETDS_NS}uetdsytsarizi/personelEkle`,

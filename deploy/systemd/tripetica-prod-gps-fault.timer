@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Tripetica GPS/ATS fault alerts
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=1min
+AccuracySec=10s
+Persistent=true
+Unit=tripetica-prod-gps-fault.service
+
+[Install]
+WantedBy=timers.target

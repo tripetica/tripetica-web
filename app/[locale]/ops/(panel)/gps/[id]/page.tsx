@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { GpsDeviceWorkspace } from "@/components/gps/device-workspace";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { atsFaultCopy } from "@/lib/gps/ats-fault-copy";
+import { asPanelLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { actorCan } from "@/lib/ops/session";
 import { gpsCopy } from "@/lib/gps/copy";
@@ -27,7 +28,7 @@ export default async function OpsGpsDevicePage({
   const range = readGpsRange(one(query.from), one(query.to));
   const copy = gpsCopy[asPanelLocale(locale)];
   const error = range && "error" in range ? range.error : one(query.error);
-  const route = "error" in range || !device.partnerId || !device.vehicleId
+  const route = "error" in range
     ? { total: 0, step: 1, points: [] }
     : await listGpsRoute({
         deviceId: device.id,
@@ -61,6 +62,7 @@ export default async function OpsGpsDevicePage({
       error={error}
       canManage={actorCan(actor, "gps.manage")}
       canDelete={canDeleteGpsDevice(actor.id)}
+      faultNotice={faultNotice(locale, one(query.fault), one(query.need), one(query.rank))}
       showDeviceList
       viewerId={actor.id}
     />
@@ -69,4 +71,15 @@ export default async function OpsGpsDevicePage({
 
 function one(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function faultNotice(locale: Locale, fault?: string, need?: string, rank?: string) {
+  const copy = atsFaultCopy(locale === "en" || locale === "ru" ? locale : "tr");
+  if (need === "second") return copy.secondBody;
+  if (need === "unknown") return copy.unknownRetry;
+  if (fault === "limited") return copy.blockedBody;
+  if (fault === "resolved") return copy.resolve;
+  if (rank === "second") return copy.secondBody;
+  if (fault === "saved" || fault === "sent") return null;
+  return null;
 }

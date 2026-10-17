@@ -3,6 +3,7 @@ import "server-only";
 import { query } from "@/lib/db/postgres";
 import { isValidEmail, phoneValidity, toE164 } from "@/lib/booking/phone";
 import { normalizePartnerEmail } from "@/lib/partner/email";
+import { recordFleetStatusAudit } from "@/lib/partner/fleet-status-audit";
 import { normalizeIso2 } from "@/lib/geo/countries";
 import { joinPartnerContactName, splitPartnerContactName } from "@/lib/partner/contact-name";
 import { PARTNER_CONTACT_NAME_MAX_LENGTH } from "@/lib/partner/constants";
@@ -72,6 +73,8 @@ type DriverRow = {
   service_standard_fee?: string | null;
   service_advanced_enabled?: boolean | null;
   service_advanced_fee?: string | null;
+  service_gps_ats_enabled?: boolean | null;
+  service_gps_ats_fee?: string | null;
   service_mobile_gps_enabled?: boolean | null;
   service_mobile_gps_fee?: string | null;
   default_vehicle_id?: string | null;
@@ -104,6 +107,19 @@ type VehicleRow = {
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
   default_driver_id?: string | null;
+  service_standard_enabled?: boolean | null;
+  service_standard_fee?: string | null;
+  service_advanced_enabled?: boolean | null;
+  service_advanced_fee?: string | null;
+  service_gps_ats_enabled?: boolean | null;
+  service_gps_ats_fee?: string | null;
+  service_mobile_gps_enabled?: boolean | null;
+  service_mobile_gps_fee?: string | null;
+  uetds_subscription_enrolled_at?: Date | null;
+  uetds_subscription_monthly_fee?: string | null;
+  uetds_subscription_currency?: string | null;
+  current_period_status?: string | null;
+  next_period_status?: string | null;
 };
 
 function mapDriver(row: DriverRow): PartnerDriverRecord {
@@ -133,6 +149,8 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
             standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
             advancedEnabled: Boolean(row.service_advanced_enabled),
             advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+            gpsAtsEnabled: Boolean(row.service_gps_ats_enabled),
+            gpsAtsFee: row.service_gps_ats_fee == null ? null : Number(row.service_gps_ats_fee),
             mobileEnabled: Boolean(row.service_mobile_gps_enabled),
             mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
           },
@@ -166,6 +184,8 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
             standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
             advancedEnabled: Boolean(row.service_advanced_enabled),
             advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+            gpsAtsEnabled: Boolean(row.service_gps_ats_enabled),
+            gpsAtsFee: row.service_gps_ats_fee == null ? null : Number(row.service_gps_ats_fee),
             mobileEnabled: Boolean(row.service_mobile_gps_enabled),
             mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
           }),
@@ -202,6 +222,36 @@ function mapVehicle(row: VehicleRow): PartnerVehicleRecord {
     updatedAt: row.updated_at.toISOString(),
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
     ...(row.default_driver_id !== undefined ? { defaultDriverId: row.default_driver_id } : {}),
+    ...(row.service_standard_enabled !== undefined
+      ? {
+          services: {
+            standardEnabled: Boolean(row.service_standard_enabled),
+            standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+            advancedEnabled: Boolean(row.service_advanced_enabled),
+            advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+            gpsAtsEnabled: Boolean(row.service_gps_ats_enabled),
+            gpsAtsFee: row.service_gps_ats_fee == null ? null : Number(row.service_gps_ats_fee),
+            mobileEnabled: Boolean(row.service_mobile_gps_enabled),
+            mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+          },
+          uetdsSubscription: mapUetdsSubscriptionListSummary({
+            enrolledAt: row.uetds_subscription_enrolled_at ?? null,
+            monthlyFee: selectedServiceTotal({
+              standardEnabled: Boolean(row.service_standard_enabled),
+              standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+              advancedEnabled: Boolean(row.service_advanced_enabled),
+              advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+              gpsAtsEnabled: Boolean(row.service_gps_ats_enabled),
+              gpsAtsFee: row.service_gps_ats_fee == null ? null : Number(row.service_gps_ats_fee),
+              mobileEnabled: Boolean(row.service_mobile_gps_enabled),
+              mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+            }),
+            currency: row.uetds_subscription_currency ?? null,
+            currentPeriodStatus: row.current_period_status ?? null,
+            nextPeriodStatus: row.next_period_status ?? null,
+          }),
+        }
+      : {}),
   };
 }
 
@@ -286,18 +336,37 @@ export async function listPartnerDrivers(
 export async function listPartnerVehicles(
   partnerId: string,
 ): Promise<PartnerVehicleRecord[]> {
+  const period = istanbulSubscriptionPeriodKey();
+  const nextPeriod = addSubscriptionMonths(period, 1);
   const result = await query<VehicleRow>(
     `SELECT ${VEHICLE_SELECT},
-            dd.id AS default_driver_id
+            dd.id AS default_driver_id,
+            v.service_standard_enabled,
+            v.service_standard_fee,
+            v.service_advanced_enabled,
+            v.service_advanced_fee,
+            v.service_gps_ats_enabled,
+            v.service_gps_ats_fee,
+            v.service_mobile_gps_enabled,
+            v.service_mobile_gps_fee,
+            v.uetds_subscription_enrolled_at,
+            v.uetds_subscription_monthly_fee,
+            v.uetds_subscription_currency,
+            per.status AS current_period_status,
+            next_per.status AS next_period_status
      ${VEHICLE_FROM}
      LEFT JOIN partner_fleet_defaults fd
        ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
      LEFT JOIN partner_drivers dd
        ON dd.id = fd.driver_id AND dd.partner_id = v.partner_id AND dd.deleted_at IS NULL
+     LEFT JOIN partner_vehicle_uetds_subscription_periods per
+       ON per.vehicle_id = v.id AND per.period_year = $2 AND per.period_month = $3
+     LEFT JOIN partner_vehicle_uetds_subscription_periods next_per
+       ON next_per.vehicle_id = v.id AND next_per.period_year = $4 AND next_per.period_month = $5
      WHERE v.partner_id = $1
        AND v.deleted_at IS NULL
      ORDER BY v.created_at DESC, v.id DESC`,
-    [partnerId],
+    [partnerId, period.year, period.month, nextPeriod.year, nextPeriod.month],
   );
   return result.rows.map(mapVehicle);
 }
@@ -807,6 +876,14 @@ async function setDriverStatus(input: {
   if (!updated.rows[0]) {
     return { ok: false as const, error: "not-found" as const };
   }
+  await recordFleetStatusAudit({
+    kind: "driver",
+    recordId: input.driverId,
+    partnerId: input.partnerId,
+    oldStatus: input.fromStatus,
+    newStatus: input.toStatus,
+    editor: input.editor,
+  });
   if (input.toStatus === "inactive") {
     await stopMobileShareAccess(input.partnerId, input.driverId);
   }
@@ -896,6 +973,14 @@ async function setVehicleStatus(input: {
   if (!updated.rows[0]) {
     return { ok: false as const, error: "not-found" as const };
   }
+  await recordFleetStatusAudit({
+    kind: "vehicle",
+    recordId: input.vehicleId,
+    partnerId: input.partnerId,
+    oldStatus: current.status,
+    newStatus: input.toStatus,
+    editor: input.editor,
+  });
   return { ok: true as const };
 }
 

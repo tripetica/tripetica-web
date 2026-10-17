@@ -35,6 +35,41 @@ export function mobileFixFresh(recordedAt: string | null, now = Date.now()) {
   return Number.isFinite(at) && now - at <= MOBILE_GPS_FRESH_MS && at <= now + 5 * 60_000;
 }
 
+export type MobileShareStartDecision = "resume" | "bind-token" | "blocked" | "replace" | "create";
+
+/** A different browser still owns the session when the server has accepted it recently. */
+export function mobileShareForeignLive(input: {
+  lastStreamAt: number | null;
+  startedAt: number | null;
+  now: number;
+}) {
+  const heard = input.lastStreamAt;
+  if (heard != null && Number.isFinite(heard) && input.now - heard <= MOBILE_GPS_FRESH_MS && heard <= input.now + 5 * 60_000) {
+    return true;
+  }
+  if (heard == null && input.startedAt != null && Number.isFinite(input.startedAt)) {
+    const age = input.now - input.startedAt;
+    return age >= 0 && age <= MOBILE_GPS_FRESH_MS;
+  }
+  return false;
+}
+
+export function mobileShareStartDecision(input: {
+  hasSession: boolean;
+  sharing: boolean;
+  tokenMatches: boolean;
+  tokenBound: boolean;
+  lastStreamAt: number | null;
+  startedAt: number | null;
+  now: number;
+}): MobileShareStartDecision {
+  if (!input.hasSession) return "create";
+  if (input.sharing && input.tokenMatches) return "resume";
+  if (input.sharing && !input.tokenBound) return "bind-token";
+  if (input.sharing && mobileShareForeignLive(input)) return "blocked";
+  return "replace";
+}
+
 export function acceptMobilePoint(input: {
   latitude: number;
   longitude: number;

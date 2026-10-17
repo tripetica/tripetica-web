@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
+import { AtsFaultLists } from "@/components/gps/ats-fault-lists";
 import { GpsDeviceBoard } from "@/components/gps/device-board";
+import { OpsDeviceTabs } from "@/components/gps/ops-device-tabs";
 import { GpsLiveSection } from "@/components/gps/live-section";
 import { OpsGpsTabs } from "@/components/gps/ops-gps-tabs";
 import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
+import { atsFaultCopy } from "@/lib/gps/ats-fault-copy";
 import { gpsCopy, gpsErrorText } from "@/lib/gps/copy";
 import { type GpsFleetVehicle } from "@/lib/gps/fleet";
 import { type GpsLiveSnapshot } from "@/lib/gps/live";
@@ -32,8 +35,10 @@ export default async function OpsGpsPage({
   const fleet = await loadOpsMapFleet(devices);
   const query = await searchParams;
   const copy = gpsCopy[asPanelLocale(locale)];
+  const faultCopy = atsFaultCopy(locale);
+  const deviceTab = one(query.devices) === "faults" || one(query.devices) === "history" ? one(query.devices) : "devices";
   const requested = one(query.vehicle);
-  const device = devices.find((item) => item.id === requested && item.partnerId && gpsIsLiveMapSource(item)) ?? null;
+  const device = devices.find((item) => item.id === requested && gpsIsLiveMapSource(item)) ?? null;
   const mobile = device ? null : fleet.find((item) => item.id === requested && item.source === "mobile") ?? null;
   const range = readGpsRange(one(query.from), one(query.to));
   const eventsPreset = sharePreset(one(query.events));
@@ -49,7 +54,7 @@ export default async function OpsGpsPage({
       events: "error" in shareWindow ? null : { from: shareWindow.from, to: shareWindow.to },
     })
     : { route: [], events: [] };
-  const route = device?.partnerId && device.vehicleId && !("error" in range)
+  const route = device && !("error" in range)
     ? await listGpsRoute({
       deviceId: device.id,
       partnerId: device.partnerId,
@@ -86,6 +91,7 @@ export default async function OpsGpsPage({
           surface="ops"
           initial={initial}
           imei={device?.imei ?? null}
+          simOperator={device?.simOperator ?? null}
           status={device?.status ?? "active"}
           company={device?.uetdsCompany ?? null}
           partnerLabel={device ? (device.partnerCode ? `${device.partnerCode} · ${device.partnerName}` : null) : (mobile?.partnerName ?? null)}
@@ -137,14 +143,24 @@ export default async function OpsGpsPage({
         />
       )}
       devices={(
-        <GpsDeviceBoard
-          locale={locale}
-          copy={copy}
-          surface="ops"
-          devices={devices}
-          canManage={actorCan(actor, "gps.manage")}
-          partners={partners}
-          vehicles={vehicles}
+        <OpsDeviceTabs
+          initial={deviceTab === "faults" || deviceTab === "history" ? deviceTab : "devices"}
+          devicesLabel={faultCopy.devices}
+          faultsLabel={faultCopy.faults}
+          historyLabel={faultCopy.history}
+          devices={(
+            <GpsDeviceBoard
+              locale={locale}
+              copy={copy}
+              surface="ops"
+              devices={devices}
+              canManage={actorCan(actor, "gps.manage")}
+              partners={partners}
+              vehicles={vehicles}
+            />
+          )}
+          faults={<AtsFaultLists locale={locale} mode="faults" />}
+          history={<AtsFaultLists locale={locale} mode="history" />}
         />
       )}
     />
@@ -241,6 +257,8 @@ function emptySnapshot(): GpsLiveSnapshot {
     powerSource: null,
     vehicleBatteryVoltage: null,
     accState: null,
+    din1State: null,
+    manufacturer: "esp32",
     powerMode: null,
     batteryPercent: null,
     wifiEnabled: null,

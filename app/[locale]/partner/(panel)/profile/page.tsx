@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { PartnerProfileForm } from "@/components/partner/profile-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { getPartnerSelfProfile } from "@/lib/partner/profile";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function PartnerProfilePage({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const profile = await getPartnerSelfProfile(actor.partnerId);
 
   return (

@@ -84,21 +84,32 @@ function isDevChromiumPath(path: string) {
   return path.startsWith("/var/lib/tripetica-dev/") || path.startsWith("/tmp/pw-browsers/");
 }
 
+function isSystemBrowserPath(path: string) {
+  return path === "/usr/bin/chromium-browser" || path === "/usr/bin/chromium" || path.startsWith("/snap/");
+}
+
+export function expectedChromiumPath(env: Record<string, string | undefined> = process.env) {
+  if (env.NODE_ENV === "production") return PROD_CHROMIUM;
+  const configured = env.TRIPETICA_CHROMIUM?.trim() ?? "";
+  if (configured && !isSystemBrowserPath(configured)) return configured;
+  return DEV_CHROMIUMS[0];
+}
+
 export function chromiumExecutable(
   env: Record<string, string | undefined> = process.env,
   exists: (path: string) => boolean = existsSync,
 ) {
   const configured = env.TRIPETICA_CHROMIUM?.trim() ?? "";
   if (env.NODE_ENV === "production") {
-    if (configured && !isDevChromiumPath(configured) && exists(configured)) return configured;
+    if (configured && !isDevChromiumPath(configured) && !isSystemBrowserPath(configured) && exists(configured)) return configured;
     if (exists(PROD_CHROMIUM)) return PROD_CHROMIUM;
-    return "/usr/bin/chromium-browser";
+    return "";
   }
-  if (configured && exists(configured)) return configured;
+  if (configured && !isSystemBrowserPath(configured) && exists(configured)) return configured;
   for (const candidate of DEV_CHROMIUMS) {
     if (exists(candidate)) return candidate;
   }
-  return "/usr/bin/chromium-browser";
+  return "";
 }
 
 export async function openChromiumLoginControls(viewport: KamuLoginViewport): Promise<
@@ -121,10 +132,14 @@ export async function openChromiumLoginControls(viewport: KamuLoginViewport): Pr
     close(): Promise<void>;
   }
 > {
+  const executablePath = chromiumExecutable(process.env);
+  if (!executablePath) {
+    throw new Error(`ENOENT playwright chromium executable missing: ${expectedChromiumPath()}`);
+  }
   const { chromium } = await import("playwright-core");
   const browser = await chromium.launch({
     headless: true,
-    executablePath: chromiumExecutable(process.env),
+    executablePath,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const size = viewportSize(viewport);

@@ -158,7 +158,8 @@ export function PartnerJobList({
                   <td className="partner-job-num">{index + 1}</td>
                   {mode === "accepted" ? (
                     <td
-                      className="partner-job-code partner-job-clip"
+                      className="partner-job-code partner-job-clip ltr-isolate"
+                      dir="ltr"
                       data-label={copy.jobReservationCode}
                       title={job.reservationCode || undefined}
                     >

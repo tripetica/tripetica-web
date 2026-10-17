@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { PartnerPasswordForm } from "@/components/partner/password-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
-import { partnerCopy } from "@/lib/partner/copy";
+import { isLocale } from "@/lib/i18n/config";
+import { partnerCopyFor } from "@/lib/partner/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function PartnerPasswordPage({
   if (!isLocale(locale)) {
     notFound();
   }
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   return (
     <div className="ops-page">
       <div className="ops-page-head">

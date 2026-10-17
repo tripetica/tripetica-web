@@ -105,15 +105,15 @@ describe("uetds driver subscription list UX", () => {
   });
 
   it("1+4+L: Ops list wires inline patch actions and shared store", () => {
-    const actions = source("lib/ops/driver-actions.ts");
-    const store = source("lib/uetds/driver-subscription-store.ts");
-    const table = source("components/ops/driver-table.tsx");
+    const actions = source("lib/ops/vehicle-subscription-actions.ts");
+    const store = source("lib/uetds/vehicle-subscription-store.ts");
+    const table = source("components/ops/vehicle-table.tsx");
     const cells = source("components/uetds/driver-subscription-list-cells.tsx");
-    assert.match(actions, /patchOpsDriverSubscriptionFeeAction/);
-    assert.match(actions, /patchOpsDriverSubscriptionCurrencyAction/);
-    assert.match(actions, /patchOpsDriverSubscriptionStatusAction/);
+    assert.match(actions, /patchOpsVehicleSubscriptionFeeAction/);
+    assert.match(actions, /patchOpsVehicleSubscriptionCurrencyAction/);
+    assert.match(actions, /patchOpsVehicleSubscriptionStatusAction/);
     assert.match(actions, /partners\.manage/);
-    assert.match(store, /patchDriverUetdsSubscriptionFromList/);
+    assert.match(store, /patchVehicleUetdsSubscriptionFromList/);
     assert.match(store, /not-enrolled/);
     assert.match(table, /OpsDriverSubscriptionInlineCells/);
     assert.match(cells, /onBlur=\{\(\) => saveFee\(\)\}/);
@@ -121,12 +121,14 @@ describe("uetds driver subscription list UX", () => {
   });
 
   it("7: row onSummaryChange only updates matching driver id", () => {
-    const table = source("components/ops/driver-table.tsx");
-    assert.match(table, /item\.id === driverId \? \{ \.\.\.item, uetdsSubscription: summary \}/);
+    const table = source("components/ops/vehicle-table.tsx");
+    assert.match(table, /item\.id === vehicleId \? \{ \.\.\.item, uetdsSubscription: summary \}/);
   });
 
   it("8+9: Partner list is read-only with no patch actions", () => {
-    const list = source("components/partner/driver-list.tsx");
+    const list = source("components/partner/vehicle-list.tsx");
+    const drivers = source("components/partner/driver-list.tsx");
+    assert.doesNotMatch(drivers, /PartnerDriverSubscriptionReadOnlyCells/);
     const partnerActions = source("lib/partner/driver-actions.ts");
     assert.match(list, /PartnerDriverSubscriptionReadOnlyCells/);
     assert.match(list, /FleetInlineSelect/);
@@ -141,12 +143,14 @@ describe("uetds driver subscription list UX", () => {
   });
 
   it("12+13: detail forms keep dirty-save / read-only architecture", () => {
-    const opsForm = source("components/ops/partner-driver-form.tsx");
-    const partnerDetail = source("components/partner/driver-detail.tsx");
+    const opsForm = source("components/ops/partner-vehicle-form.tsx");
+    const partnerDetail = source("components/partner/vehicle-detail.tsx");
+    const driverDetail = source("components/partner/driver-detail.tsx");
     assert.match(opsForm, /driverSubscriptionDraftEquals/);
-    assert.match(opsForm, /updateOpsPartnerDriverAction/);
+    assert.match(opsForm, /updateOpsPartnerVehicleAction/);
     assert.match(partnerDetail, /readOnly/);
     assert.match(partnerDetail, /DriverUetdsSubscriptionSection/);
+    assert.doesNotMatch(driverDetail, /DriverUetdsSubscriptionSection/);
   });
 
   it("14: entitlement helpers remain in submit/manage", () => {

@@ -9,6 +9,13 @@ import {
   type PartnerVehicleStatus,
 } from "@/lib/partner/fleet-view";
 import { listFleetChoicesForPartners, type FleetChoicesByPartner } from "@/lib/partner/fleet-pairing";
+import {
+  addSubscriptionMonths,
+  istanbulSubscriptionPeriodKey,
+  mapUetdsSubscriptionListSummary,
+  type UetdsDriverSubscriptionListSummary,
+} from "@/lib/uetds/driver-subscription";
+import { selectedServiceTotal, type DriverServiceSelection } from "@/lib/uetds/service-subscriptions";
 
 export const OPS_VEHICLES_PAGE_SIZE = 25;
 
@@ -28,6 +35,8 @@ export type OpsVehicleListItem = {
   uetdsCompanyId: string | null;
   uetdsCompany: UetdsCompanyRef | null;
   defaultDriverId: string | null;
+  services: DriverServiceSelection;
+  uetdsSubscription: UetdsDriverSubscriptionListSummary;
 };
 
 export type OpsVehicleRecord = PartnerVehicleRecord & {
@@ -51,6 +60,19 @@ type VehicleListRow = {
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
   default_driver_id: string | null;
+  service_standard_enabled: boolean;
+  service_standard_fee: string | null;
+  service_advanced_enabled: boolean;
+  service_advanced_fee: string | null;
+  service_gps_ats_enabled: boolean;
+  service_gps_ats_fee: string | null;
+  service_mobile_gps_enabled: boolean;
+  service_mobile_gps_fee: string | null;
+  uetds_subscription_enrolled_at: Date | null;
+  uetds_subscription_monthly_fee: string | null;
+  uetds_subscription_currency: string | null;
+  current_period_status: string | null;
+  next_period_status: string | null;
 };
 
 type VehicleDetailRow = VehicleListRow & {
@@ -117,6 +139,10 @@ export async function listOpsVehicles(input: {
   const total = Number(count.rows[0]?.count ?? 0);
   const page = Math.max(1, input.page);
   const offset = (page - 1) * pageSize;
+  const period = istanbulSubscriptionPeriodKey();
+  const nextPeriod = addSubscriptionMonths(period, 1);
+  const periodYear = values.length + 1;
+  values.push(period.year, period.month, nextPeriod.year, nextPeriod.month);
   values.push(pageSize, offset);
   const result = await query<VehicleListRow>(
     `SELECT
@@ -133,6 +159,19 @@ export async function listOpsVehicles(input: {
         v.uetds_company_id,
         uc.short_name AS uetds_company_short_name,
         dd.id AS default_driver_id,
+        v.service_standard_enabled,
+        v.service_standard_fee,
+        v.service_advanced_enabled,
+        v.service_advanced_fee,
+        v.service_gps_ats_enabled,
+        v.service_gps_ats_fee,
+        v.service_mobile_gps_enabled,
+        v.service_mobile_gps_fee,
+        v.uetds_subscription_enrolled_at,
+        v.uetds_subscription_monthly_fee,
+        v.uetds_subscription_currency,
+        per.status AS current_period_status,
+        next_per.status AS next_period_status,
         p.name AS partner_name,
         p.partner_code
      FROM partner_vehicles v
@@ -142,6 +181,10 @@ export async function listOpsVehicles(input: {
        ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
      LEFT JOIN partner_drivers dd
        ON dd.id = fd.driver_id AND dd.partner_id = v.partner_id AND dd.deleted_at IS NULL
+     LEFT JOIN partner_vehicle_uetds_subscription_periods per
+       ON per.vehicle_id = v.id AND per.period_year = $${periodYear} AND per.period_month = $${periodYear + 1}
+     LEFT JOIN partner_vehicle_uetds_subscription_periods next_per
+       ON next_per.vehicle_id = v.id AND next_per.period_year = $${periodYear + 2} AND next_per.period_month = $${periodYear + 3}
      WHERE ${where}
      ORDER BY v.created_at DESC, v.id DESC
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -162,6 +205,32 @@ export async function listOpsVehicles(input: {
     partnerCode: row.partner_code,
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
     defaultDriverId: row.default_driver_id,
+    services: {
+      standardEnabled: row.service_standard_enabled,
+      standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+      advancedEnabled: row.service_advanced_enabled,
+      advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+      gpsAtsEnabled: row.service_gps_ats_enabled,
+      gpsAtsFee: row.service_gps_ats_fee == null ? null : Number(row.service_gps_ats_fee),
+      mobileEnabled: row.service_mobile_gps_enabled,
+      mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+    },
+    uetdsSubscription: mapUetdsSubscriptionListSummary({
+      enrolledAt: row.uetds_subscription_enrolled_at,
+      monthlyFee: selectedServiceTotal({
+        standardEnabled: row.service_standard_enabled,
+        standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),
+        advancedEnabled: row.service_advanced_enabled,
+        advancedFee: row.service_advanced_fee == null ? null : Number(row.service_advanced_fee),
+        gpsAtsEnabled: row.service_gps_ats_enabled,
+        gpsAtsFee: row.service_gps_ats_fee == null ? null : Number(row.service_gps_ats_fee),
+        mobileEnabled: row.service_mobile_gps_enabled,
+        mobileFee: row.service_mobile_gps_fee == null ? null : Number(row.service_mobile_gps_fee),
+      }) ?? row.uetds_subscription_monthly_fee,
+      currency: row.uetds_subscription_currency,
+      currentPeriodStatus: row.current_period_status,
+      nextPeriodStatus: row.next_period_status,
+    }),
   }));
   const fleetChoices = await listFleetChoicesForPartners(items.map((item) => item.partnerId));
   return { items, total, page, pageSize, fleetChoices };

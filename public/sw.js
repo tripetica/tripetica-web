@@ -16,12 +16,24 @@ self.addEventListener("push", (event) => {
           ? "partner-job"
           : payload.kind === "partner-low-battery"
             ? "partner-low-battery"
-            : "process";
+            : payload.kind === "mobile-gps-reminder"
+              ? "mobile-gps-reminder"
+              : payload.kind === "vehicle-maintenance"
+                ? "vehicle-maintenance"
+                : payload.kind === "gps-fault"
+                  ? "gps-fault"
+                  : "process";
   const fallbackUrl = kind === "partner-job"
     ? "/tr/partner/jobs"
     : kind === "partner-low-battery"
       ? "/tr/partner"
-      : "/tr/ops";
+      : kind === "mobile-gps-reminder"
+        ? "/tr/driver"
+        : kind === "vehicle-maintenance"
+          ? "/tr/partner/gps"
+          : kind === "gps-fault"
+            ? "/tr/ops/gps?tab=devices&devices=faults"
+            : "/tr/ops";
   const title = typeof payload.title === "string" ? payload.title : "Tripetica";
   const options = {
     body: typeof payload.body === "string" ? payload.body : "",
@@ -43,7 +55,9 @@ self.addEventListener("push", (event) => {
       });
       for (const client of windows) {
         client.postMessage({
-          type: kind === "partner-job" || kind === "partner-low-battery" ? "partner-push" : "ops-push",
+          type: kind === "partner-job" || kind === "partner-low-battery" || kind === "mobile-gps-reminder" || kind === "vehicle-maintenance"
+            ? "partner-push"
+            : "ops-push",
           kind,
         });
       }
@@ -59,7 +73,13 @@ self.addEventListener("notificationclick", (event) => {
     ? "/tr/partner/jobs"
     : kind === "partner-low-battery"
       ? "/tr/partner"
-      : "/tr/ops";
+      : kind === "mobile-gps-reminder"
+      ? "/tr/driver"
+      : kind === "vehicle-maintenance"
+        ? "/tr/partner/gps"
+        : kind === "gps-fault"
+          ? "/tr/ops/gps?tab=devices&devices=faults"
+          : "/tr/ops";
   const targetUrl =
     event.notification.data && typeof event.notification.data.url === "string"
       ? event.notification.data.url
@@ -83,9 +103,12 @@ self.addEventListener("notificationclick", (event) => {
           // Ignore malformed client URLs.
         }
       }
-      const section = absolute.pathname.includes("/partner") ? "/partner" : "/ops";
-      const navigateType =
-        section === "/partner" ? "partner-push-navigate" : "ops-push-navigate";
+      const section = absolute.pathname.includes("/driver")
+        ? "/driver"
+        : absolute.pathname.includes("/partner")
+          ? "/partner"
+          : "/ops";
+      const navigateType = section === "/ops" ? "ops-push-navigate" : "partner-push-navigate";
       for (const client of windows) {
         try {
           const clientUrl = new URL(client.url);

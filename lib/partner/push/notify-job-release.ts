@@ -2,8 +2,7 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import { parseOpsAmount, selectedStoredAmount } from "@/lib/ops/money";
-import { asPanelLocale } from "@/lib/i18n/config";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { formatPartnerMoney, partnerPayoutAmount } from "@/lib/partner/job-payout";
 import {
   effectiveVisibleMaxRank,
@@ -99,7 +98,7 @@ async function releaseRank(row: JobPushRow, rank: PartnerJobRank) {
     return;
   }
   await sendPartnerPushToSubscriptions(subscriptions, (subscription) => {
-    const copy = partnerCopy[asPanelLocale(subscription.locale)];
+    const copy = partnerCopyFor(subscription.locale);
     return buildPartnerJobPushPayload({
       reservationId: fresh.id,
       locale: subscription.locale,

@@ -62,6 +62,7 @@ export type GpsDeviceListItem = {
   powerSource: string | null;
   vehicleBatteryVoltage: number | null;
   accState: string | null;
+  din1State: "on" | "off" | null;
   powerMode: string | null;
   cameraAvailable: boolean | null;
   cameraReady: boolean | null;
@@ -164,6 +165,7 @@ type DeviceSqlRow = {
   power_source: string | null;
   vehicle_battery_voltage: string | null;
   acc_state: string | null;
+  din1_state: string | null;
   power_mode: string | null;
   camera_available: boolean | null;
   camera_ready: boolean | null;
@@ -236,6 +238,7 @@ const DEVICE_SELECT = `
     status.power_source,
     status.vehicle_battery_voltage::text AS vehicle_battery_voltage,
     status.acc_state,
+    status.din1_state,
     status.power_mode,
     status.camera_available,
     status.camera_ready,
@@ -323,6 +326,7 @@ function mapDevice(row: DeviceSqlRow): GpsDeviceListItem {
     powerSource: row.power_source,
     vehicleBatteryVoltage: numberOrNull(row.vehicle_battery_voltage),
     accState: row.acc_state,
+    din1State: row.din1_state === "on" || row.din1_state === "off" ? row.din1_state : null,
     powerMode: row.power_mode,
     cameraAvailable: row.camera_available,
     cameraReady: row.camera_ready,
@@ -400,11 +404,13 @@ export async function getGpsLive(deviceId: string, partnerId: string | null): Pr
     power_source: string | null;
     vehicle_battery_voltage: string | null;
     acc_state: string | null;
+    din1_state: string | null;
     power_mode: string | null;
     battery_percent: number | null;
     wifi_enabled: boolean | null;
     low_battery_state: "normal" | "grace" | "keep_on" | "saving" | null;
     low_battery_grace_remaining_seconds: number | null;
+    manufacturer: string | null;
   }>(
     `SELECT status.last_contiguous_seq::text AS seq,
             status.recorded_at,
@@ -437,11 +443,13 @@ export async function getGpsLive(deviceId: string, partnerId: string | null): Pr
             status.power_source,
             status.vehicle_battery_voltage::text AS vehicle_battery_voltage,
             status.acc_state,
+            status.din1_state,
             status.power_mode,
             status.battery_percent,
             status.wifi_enabled,
             status.low_battery_state,
-            status.low_battery_grace_remaining_seconds
+            status.low_battery_grace_remaining_seconds,
+            device.manufacturer
      FROM gps_devices device
      LEFT JOIN gps_device_status status ON status.device_id = device.id
      WHERE device.id = $1
@@ -485,6 +493,8 @@ export async function getGpsLive(deviceId: string, partnerId: string | null): Pr
     powerSource: row.power_source,
     vehicleBatteryVoltage: numberOrNull(row.vehicle_battery_voltage),
     accState: row.acc_state,
+    din1State: row.din1_state === "on" || row.din1_state === "off" ? row.din1_state : null,
+    manufacturer: row.manufacturer === "teltonika" ? "teltonika" : "esp32",
     powerMode: row.power_mode,
     batteryPercent: row.battery_percent,
     wifiEnabled: row.wifi_enabled,
@@ -579,20 +589,30 @@ export async function getGpsDevice(deviceId: string, partnerId: string | null) {
 
 export async function listGpsRoute(input: {
   deviceId: string;
-  partnerId: string;
-  vehicleId: string;
+  partnerId: string | null;
+  vehicleId: string | null;
   from: Date;
   to: Date;
 }) {
+  const assigned = Boolean(input.partnerId && input.vehicleId);
   const count = await query<{ total: number }>(
-    `SELECT COUNT(*)::int AS total
-     FROM gps_positions
-     WHERE device_id = $1
-       AND partner_id = $2
-       AND vehicle_id = $5
-       AND recorded_at >= $3
-       AND recorded_at < $4`,
-    [input.deviceId, input.partnerId, input.from.toISOString(), input.to.toISOString(), input.vehicleId],
+    assigned
+      ? `SELECT COUNT(*)::int AS total
+         FROM gps_positions
+         WHERE device_id = $1
+           AND partner_id = $2
+           AND vehicle_id = $5
+           AND recorded_at >= $3
+           AND recorded_at < $4`
+      : `SELECT COUNT(*)::int AS total
+         FROM gps_positions
+         WHERE device_id = $1
+           AND vehicle_id IS NULL
+           AND recorded_at >= $2
+           AND recorded_at < $3`,
+    assigned
+      ? [input.deviceId, input.partnerId, input.from.toISOString(), input.to.toISOString(), input.vehicleId]
+      : [input.deviceId, input.from.toISOString(), input.to.toISOString()],
   );
   const total = count.rows[0]?.total ?? 0;
   if (total === 0) {
@@ -629,10 +649,9 @@ export async function listGpsRoute(input: {
        FROM gps_positions position
        LEFT JOIN partner_vehicles vehicle ON vehicle.id = position.vehicle_id
        WHERE position.device_id = $1
-         AND position.partner_id = $2
-         AND position.vehicle_id = $6
-         AND position.recorded_at >= $3
-         AND position.recorded_at < $4
+         AND ${assigned ? "position.partner_id = $2 AND position.vehicle_id = $6" : "position.vehicle_id IS NULL"}
+         AND position.recorded_at >= ${assigned ? "$3" : "$2"}
+         AND position.recorded_at < ${assigned ? "$4" : "$3"}
      )
      SELECT
        seq::text AS seq,
@@ -647,9 +666,11 @@ export async function listGpsRoute(input: {
        fix_mode,
        plate
      FROM windowed
-     WHERE ((n - 1) % $5) = 0
+     WHERE ((n - 1) % ${assigned ? "$5" : "$4"}) = 0
      ORDER BY n`,
-    [input.deviceId, input.partnerId, input.from.toISOString(), input.to.toISOString(), step, input.vehicleId],
+    assigned
+      ? [input.deviceId, input.partnerId, input.from.toISOString(), input.to.toISOString(), step, input.vehicleId]
+      : [input.deviceId, input.from.toISOString(), input.to.toISOString(), step],
   );
   return {
     total,
@@ -912,6 +933,20 @@ export async function updateGpsImei(deviceId: string, imei: string | null) {
   await query(
     `UPDATE gps_devices SET imei = $2, updated_at = NOW() WHERE id = $1`,
     [deviceId, imei],
+  );
+}
+
+export async function updateGpsSimOperator(deviceId: string, simOperator: string) {
+  await query(
+    `UPDATE gps_devices SET sim_operator = $2, updated_at = NOW() WHERE id = $1`,
+    [deviceId, simOperator],
+  );
+}
+
+export async function updateGpsSimPhone(deviceId: string, simPhone: string | null) {
+  await query(
+    `UPDATE gps_devices SET sim_phone = $2, updated_at = NOW() WHERE id = $1`,
+    [deviceId, simPhone],
   );
 }
 

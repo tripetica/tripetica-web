@@ -74,6 +74,14 @@ export async function disablePartnerPushSubscription(endpoint: string) {
        AND disabled_at IS NULL`,
     [endpoint],
   );
+  await query(
+    `UPDATE driver_push_subscriptions
+     SET disabled_at = NOW(),
+         updated_at = NOW()
+     WHERE endpoint = $1
+       AND disabled_at IS NULL`,
+    [endpoint],
+  );
 }
 
 export async function deletePartnerPushSubscription(

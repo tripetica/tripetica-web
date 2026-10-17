@@ -4,13 +4,18 @@ import { missingMandatoryFields, type UetdsDraft } from "@/lib/uetds/draft";
 import { isUetdsEndAfterStart } from "@/lib/uetds/trip-time";
 import { uetdsMissingFieldMessage, type UetdsFormCopy } from "@/lib/uetds/copy";
 
-/** Shared create/edit validation, including custom select and gender controls. */
-export function useUetdsValidation(draft: UetdsDraft, copy: UetdsFormCopy, fleetInvalid: boolean) {
-  const rootRef = useRef<HTMLElement>(null);
-  const [attempted, setAttempted] = useState(false);
+/** Missing-field keys. A company or identity problem is not an empty driver or vehicle selection. */
+export function uetdsValidationErrorKeys(draft: UetdsDraft) {
   const errors = missingMandatoryFields(draft);
   if (!isUetdsEndAfterStart(draft.startDate, draft.startTime, draft.endDate, draft.endTime)) errors.push("endTime");
-  if (fleetInvalid) errors.push("driverId", "vehicleId");
+  return errors;
+}
+
+/** Shared create/edit validation, including custom select and gender controls. */
+export function useUetdsValidation(draft: UetdsDraft, copy: UetdsFormCopy) {
+  const rootRef = useRef<HTMLElement>(null);
+  const [attempted, setAttempted] = useState(false);
+  const errors = uetdsValidationErrorKeys(draft);
   function paint(keys: string[]) {
     const root = rootRef.current;
     if (!root) return;

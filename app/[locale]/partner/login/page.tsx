@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { OpsLanguageSwitcher } from "@/components/ops/language-switcher";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { PartnerLoginForm } from "@/components/partner/login-form";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { partnerHomePath } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { safePartnerReturnPath } from "@/lib/partner/push/return-path";
 import { getPartnerActor } from "@/lib/partner/session";
 
@@ -18,7 +18,7 @@ export async function generateMetadata({
     return {};
   }
   return {
-    title: partnerCopy[asPanelLocale(locale)].panelName,
+    title: partnerCopyFor(locale).panelName,
     robots: { index: false, follow: false },
   };
 }
@@ -42,7 +42,7 @@ export default async function PartnerLoginPage({
   if (actor) {
     redirect(actor.mustChangePassword ? partnerHomePath(locale, actor) : (nextPath ?? partnerHomePath(locale, actor)));
   }
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
 
   return (
     <div className="ops-login">
@@ -59,7 +59,8 @@ export default async function PartnerLoginPage({
           initialEmail={initialEmail}
           resetSuccess={resetSuccess}
         />
-        <OpsLanguageSwitcher
+        <LanguageSwitcher
+          appearance="panel"
           locale={locale}
           pathWithoutLocale="/partner/login"
           label={copy.language}

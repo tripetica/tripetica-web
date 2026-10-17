@@ -9,7 +9,7 @@ import { normalizeUetdsPurposeText } from "@/lib/uetds/form-language";
 import { normalizeUetdsPersonName } from "@/lib/uetds/passenger-name";
 import { officialUetdsCountryByCode } from "@/lib/uetds/official-locations";
 import { isOfficialUetdsLocationReady, uetdsMinistryYerText, type UetdsLocation } from "@/lib/uetds/location";
-import { resolveUetdsMinistryRuntime, UETDS_SOAP_ACTIONS } from "@/lib/uetds/ministry-env";
+import { resolveUetdsMinistryRuntime, shouldRetryUetdsSefer, UETDS_SOAP_ACTIONS } from "@/lib/uetds/ministry-env";
 import { callUetdsTestSoap, soapField, soapUserXml } from "@/lib/uetds/ministry-soap";
 
 export type UetdsMinistryStageResult = {
@@ -94,12 +94,7 @@ export async function submitUetdsTestNotification(input: {
   const stages: UetdsMinistryStageResult[] = [];
   const userXml = soapUserXml(input.username, input.password);
   const firmaSeferNo = input.draft.reservationId?.trim() || `TRP-${Date.now()}`;
-  const sefer = await callUetdsTestSoap({
-    operation: "seferEkle",
-    soapAction: UETDS_SOAP_ACTIONS.seferEkle,
-    username: input.username,
-    password: input.password,
-    innerXml: `${userXml}<ariziSeferBilgileriInput>
+  const seferXml = `${userXml}<ariziSeferBilgileriInput>
       ${soapField("aracPlaka", canonicalMinistryPlate(input.plate))}
       ${soapField("seferAciklama", normalizeUetdsPurposeText(input.draft.purpose.trim() || purposeForTripKind(input.draft.tripKind)))}
       ${soapField("hareketTarihi", dateTime(input.draft.startDate))}
@@ -107,8 +102,30 @@ export async function submitUetdsTestNotification(input: {
       ${soapField("firmaSeferNo", firmaSeferNo)}
       ${soapField("seferBitisTarihi", dateTime(input.draft.endDate))}
       ${soapField("seferBitisSaati", input.draft.endTime)}
-    </ariziSeferBilgileriInput>`,
+    </ariziSeferBilgileriInput>`;
+  let sefer = await callUetdsTestSoap({
+    operation: "seferEkle",
+    soapAction: UETDS_SOAP_ACTIONS.seferEkle,
+    username: input.username,
+    password: input.password,
+    innerXml: seferXml,
+    timeoutMs: 20_000,
   });
+  for (let attempt = 0; attempt < 2 && shouldRetryUetdsSefer({
+    sonucKodu: sefer.sonucKodu,
+    sonucMesaji: sefer.sonucMesaji,
+    reference: sefer.values.uetdsseferreferansno ?? "",
+  }); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    sefer = await callUetdsTestSoap({
+      operation: "seferEkle",
+      soapAction: UETDS_SOAP_ACTIONS.seferEkle,
+      username: input.username,
+      password: input.password,
+      innerXml: seferXml,
+      timeoutMs: 20_000,
+    });
+  }
   const seferRef = sefer.values.uetdsseferreferansno ?? "";
   stages.push({
     stage: "sefer",

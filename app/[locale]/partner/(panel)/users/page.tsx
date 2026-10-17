@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { PartnerUserAdmin } from "@/components/partner/user-admin";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { listPartnerExtraUsers } from "@/lib/partner/user-store";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export default async function PartnerUsersPage({
   return (
     <PartnerUserAdmin
       locale={locale}
-      copy={partnerCopy[asPanelLocale(locale)]}
+      copy={partnerCopyFor(locale)}
       users={users}
     />
   );

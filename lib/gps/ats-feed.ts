@@ -1,4 +1,5 @@
 import { planMobileAtsReplay } from "@/lib/gps/mobile-ats";
+import { ministryAtsFeed, type AtsMinistrySource } from "@/lib/gps/ats-source";
 
 export type AtsFeed = "physical" | "mobile" | "none";
 
@@ -17,7 +18,6 @@ export function physicalAtsEligible(input: {
 }
 
 export type MobileAtsBlock =
-  | "physical_device"
   | "mobile_service_off"
   | "subscription_closed"
   | "fix_missing"
@@ -26,13 +26,12 @@ export type MobileAtsBlock =
   | "trip_inactive";
 
 /**
- * A live device on the vehicle stays on that device.
- * A vehicle without one uses the driver's stored phone fix when Mobil GPS
- * service and the current-month entitlement are open. The physical ATS
- * switch is not a gate here: that switch can only point at a device.
+ * The vehicle's ministry source picks one feed. A live device does not
+ * override Mobil GPS, and a missing physical fix does not fall back to it.
  */
 export function selectAtsFeed(input: {
-  physicalDeviceOnVehicle: boolean;
+  source: AtsMinistrySource;
+  gpsAtsEnabled: boolean;
   mobileEnabled: boolean;
   subscriptionOpen: boolean;
   measuredAt: string | null;
@@ -43,13 +42,15 @@ export function selectAtsFeed(input: {
   driverMatches: boolean;
   companyMatches: boolean;
 }): AtsFeed {
-  if (input.physicalDeviceOnVehicle) return "physical";
+  const feed = ministryAtsFeed(input);
+  if (feed !== "mobile") return feed;
   if (mobileAtsBlockReason(input) === null) return "mobile";
   return "none";
 }
 
 export function mobileAtsBlockReason(input: {
-  physicalDeviceOnVehicle: boolean;
+  source?: AtsMinistrySource;
+  gpsAtsEnabled?: boolean;
   mobileEnabled: boolean;
   subscriptionOpen: boolean;
   measuredAt: string | null;
@@ -60,7 +61,6 @@ export function mobileAtsBlockReason(input: {
   driverMatches: boolean;
   companyMatches: boolean;
 }): MobileAtsBlock | null {
-  if (input.physicalDeviceOnVehicle) return "physical_device";
   if (!input.mobileEnabled) return "mobile_service_off";
   if (!input.subscriptionOpen) return "subscription_closed";
   const replay = planMobileAtsReplay({

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { gpsLiveEtag, GPS_LIVE_POLL_MS, readGpsLiveSnapshot } from "@/lib/gps/live";
+import { gpsLiveEtag, gpsPartnerLivePayload, GPS_LIVE_POLL_MS, readGpsLiveSnapshot, type GpsLiveSnapshot } from "@/lib/gps/live";
 import { gpsPresence } from "@/lib/gps/presence";
 
-const snapshot = {
+const snapshot: GpsLiveSnapshot = {
   seq: 12,
   recordedAt: "2026-10-06T07:00:00.000Z",
   latitude: 41.01,
@@ -36,6 +36,8 @@ const snapshot = {
   powerSource: null,
   vehicleBatteryVoltage: null,
   accState: null,
+  din1State: null,
+  manufacturer: "esp32",
   powerMode: null,
   batteryPercent: null,
   wifiEnabled: null,
@@ -58,6 +60,41 @@ test("live snapshot etag changes only when the device state changes", () => {
   assert.equal(readGpsLiveSnapshot({ ...snapshot, latitude: 0, longitude: 0 })?.latitude, 0);
   assert.equal(readGpsLiveSnapshot({ ...snapshot, seq: 1.5 }), null);
   assert.equal(GPS_LIVE_POLL_MS, 5000);
+});
+
+test("partner live payload keeps the map and drops device telemetry", () => {
+  const payload = gpsPartnerLivePayload(snapshot);
+  assert.equal("firmware" in payload, false);
+  assert.equal("operatorName" in payload, false);
+  assert.equal("rssi" in payload, false);
+  assert.equal(payload.latitude, 41.01);
+  assert.equal(payload.manufacturer, "esp32");
+  assert.equal(payload.satellites, 11);
+  const parsed = readGpsLiveSnapshot(payload);
+  assert.equal(parsed?.firmware, null);
+  assert.equal(parsed?.operatorName, null);
+  assert.equal(parsed?.latitude, 41.01);
+  assert.equal(parsed?.din1State, null);
+  assert.equal(parsed?.manufacturer, "esp32");
+});
+
+test("partner device card stays on the same five fields while data loads", () => {
+  const section = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
+  const start = section.indexOf("gps-partner-device-facts");
+  const end = section.indexOf("deviceLoading ? <p", start);
+  const card = section.slice(start, end);
+  assert.match(card, /partnerDeviceId/);
+  assert.match(card, /partnerSimOperator/);
+  assert.match(card, /partnerMinistryCompany/);
+  assert.match(card, /partnerDeviceStatus/);
+  assert.match(card, /partnerLastConnection/);
+  assert.equal(card.split("deviceLoading").length - 1, 5);
+  assert.doesNotMatch(card, /imei|firmware|manufacturer|rssi|gnssFix|operatorName/);
+  const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /readGpsLiveSnapshot\(gpsPartnerLivePayload\(initialLive\)\)/);
+  assert.match(workspace, /initial=\{partnerLive \?\? initialLive\}/);
+  const route = readFileSync(new URL("../../app/api/gps/live/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(route, /surface === "partner" \? gpsPartnerLivePayload\(snapshot\)/);
 });
 
 test("parked telemetry gap does not change heartbeat presence", () => {

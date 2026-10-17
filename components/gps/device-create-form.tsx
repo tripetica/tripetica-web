@@ -8,6 +8,7 @@ import { GpsCompanyLock } from "@/components/gps/company-lock";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { createGpsDeviceAction, type GpsActionState } from "@/lib/gps/actions";
+import { GPS_SIM_OPERATORS } from "@/lib/gps/registration";
 import { gpsErrorText, type GpsCopy } from "@/lib/gps/copy";
 import { type GpsVehicleChoice } from "@/lib/gps/queries";
 
@@ -113,6 +114,18 @@ export function GpsDeviceCreateForm({
           <option value="teltonika">{copy.receiverTeltonika}</option>
         </select>
       </label>
+      <label className="ops-field">
+        <span>{copy.simOperator}</span>
+        <select name="simOperator" required defaultValue="">
+          <option value="" disabled>{copy.simOperatorChoose}</option>
+          {GPS_SIM_OPERATORS.map((operator) => <option key={operator} value={operator}>{operator}</option>)}
+        </select>
+      </label>
+      <label className="ops-field">
+        <span>{copy.simPhone}</span>
+        <input name="simPhone" inputMode="tel" autoComplete="tel" placeholder={copy.simPhoneExample} />
+        <small>{copy.simPhoneHint}</small>
+      </label>
       {receiver === "teltonika" ? (
         <>
           <label className="ops-field">
@@ -127,14 +140,6 @@ export function GpsDeviceCreateForm({
             <span>{copy.serial}</span>
             <input name="serialNumber" autoComplete="off" />
             <small>{copy.serialHint}</small>
-          </label>
-          <label className="ops-field">
-            <span>{copy.simPhone}</span>
-            <input name="simPhone" inputMode="tel" autoComplete="off" />
-          </label>
-          <label className="ops-field">
-            <span>{copy.simOperator}</span>
-            <input name="simOperator" autoComplete="off" />
           </label>
           <label className="ops-field">
             <span>{copy.simApn}</span>

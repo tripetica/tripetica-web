@@ -649,7 +649,14 @@ test("login session code stays off production and out of the client bundle", () 
     chromiumExecutable({ NODE_ENV: "development" }, (path) => path.includes("tripetica-dev")),
     "/var/lib/tripetica-dev/pw-browsers/chromium-1243/chrome-linux64/chrome",
   );
+  assert.equal(chromiumExecutable({ NODE_ENV: "production" }, () => false), "");
+  assert.equal(chromiumExecutable({ NODE_ENV: "development" }, () => false), "");
+  assert.equal(
+    chromiumExecutable({ NODE_ENV: "production", TRIPETICA_CHROMIUM: "/usr/bin/chromium-browser" }, (path) => path === "/usr/bin/chromium-browser"),
+    "",
+  );
   const browser = readFileSync("lib/uetds/kamu-login-browser.ts", "utf8");
+  assert.doesNotMatch(browser, /return "\/usr\/bin\/chromium-browser"/);
   const workspace = readFileSync("components/uetds/ai-edit-luna-workspace.tsx", "utf8");
   const actions = readFileSync("lib/uetds/kamu-login-actions.ts", "utf8");
   assert.match(browser, /locator\("#tridField"\)/);

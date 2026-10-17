@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { PartnerJobList } from "@/components/partner/job-list";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { requirePartnerPage } from "@/lib/partner/auth";
-import { partnerCopy } from "@/lib/partner/copy";
+import { partnerCopyFor } from "@/lib/partner/copy";
 import { listOpenPartnerJobs } from "@/lib/partner/jobs";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function PartnerJobsPage({
     notFound();
   }
   const actor = await requirePartnerPage(locale);
-  const copy = partnerCopy[asPanelLocale(locale)];
+  const copy = partnerCopyFor(locale);
   const jobs = await listOpenPartnerJobs({
     partnerId: actor.partnerId,
     userId: actor.userId,

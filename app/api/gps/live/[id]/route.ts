@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { gpsLiveEtag } from "@/lib/gps/live";
+import { gpsLiveEtag, gpsPartnerLivePayload } from "@/lib/gps/live";
 import { getGpsLive } from "@/lib/gps/queries";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
 import { partnerHasTab } from "@/lib/partner/access";
@@ -35,7 +35,7 @@ export async function GET(
   if (request.headers.get("if-none-match") === etag) {
     return new NextResponse(null, { status: 304, headers });
   }
-  return NextResponse.json(snapshot, { headers });
+  return NextResponse.json(surface === "partner" ? gpsPartnerLivePayload(snapshot) : snapshot, { headers });
 }
 
 async function livePartnerScope(surface: string | null) {

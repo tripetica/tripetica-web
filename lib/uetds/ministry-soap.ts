@@ -3,6 +3,7 @@ import "server-only";
 import {
   resolveUetdsMinistryEndpoint,
   resolveUetdsMinistryRuntime,
+  uetdsSoapResultMessage,
   UETDS_ATS_SOAP_ACTIONS,
   UETDS_NS,
   type UETDS_SOAP_ACTIONS,
@@ -54,7 +55,7 @@ export function parseUetdsSoapResult(xml: string): UetdsSoapResult {
   const sonucKodu = sonucKoduRaw != null && /^-?\d+$/.test(sonucKoduRaw) ? Number(sonucKoduRaw) : null;
   return {
     sonucKodu,
-    sonucMesaji: values.sonucmesaji ?? "",
+    sonucMesaji: uetdsSoapResultMessage(values),
     values,
     rawSafe: redactSecrets(xml).slice(0, 4000),
   };

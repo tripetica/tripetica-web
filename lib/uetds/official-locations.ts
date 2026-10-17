@@ -1,6 +1,7 @@
 // Official UAB U-ETDS ilce_listesi / ulke_listesi published at
 // https://uetds.uab.gov.tr/teknik-dokuman — airport codes are 99xxx, not IATA.
 import { airportPresets } from "@/lib/booking/catalog";
+import { countries, countryByIso2, normalizeIso2 } from "@/lib/geo/countries";
 import officialCountries from "@/lib/uetds/data/official-countries.json";
 import officialPlaces from "@/lib/uetds/data/official-places.json";
 import {
@@ -228,6 +229,63 @@ export function officialUetdsPlacesInProvince(
 export function officialUetdsCountryByCode(code: string) {
   const folded = code.trim().toUpperCase();
   return COUNTRIES.find((country) => country.code.toUpperCase() === folded) ?? null;
+}
+
+function foldCountryName(value: string) {
+  return value.trim().toLocaleLowerCase("tr-TR");
+}
+
+/** U-ETDS nationality stored on a draft: an official ministry country code. */
+export function officialUetdsNationalityCode(value: string | null | undefined): string | null {
+  const raw = value?.trim() ?? "";
+  if (!raw) {
+    return null;
+  }
+  const needle = foldCountryName(raw);
+  const byOfficialName = COUNTRIES.find((country) => foldCountryName(country.name) === needle);
+  if (byOfficialName) {
+    return byOfficialName.code;
+  }
+  const direct = normalizeIso2(raw);
+  if (direct) {
+    const official = officialUetdsCountryByCode(direct);
+    if (official) {
+      return official.code;
+    }
+    const geo = countryByIso2(direct);
+    if (geo) {
+      const matched = COUNTRIES.find(
+        (country) =>
+          foldCountryName(country.name) === foldCountryName(geo.names.tr) ||
+          foldCountryName(country.name) === foldCountryName(geo.names.en),
+      );
+      if (matched) {
+        return matched.code;
+      }
+    }
+    return direct;
+  }
+  for (const country of countries()) {
+    const names = [
+      country.iso2,
+      country.names.tr,
+      country.names.en,
+      country.names.ru,
+      country.names.ar,
+      ...(country.aliases?.tr ?? []),
+      ...(country.aliases?.en ?? []),
+      ...(country.aliases?.ru ?? []),
+    ];
+    if (names.some((name) => foldCountryName(name) === needle)) {
+      return officialUetdsNationalityCode(country.iso2);
+    }
+  }
+  const aliases: Record<string, string> = {
+    england: "GB",
+    britain: "GB",
+    "great britain": "GB",
+  };
+  return aliases[needle] ?? null;
 }
 
 export function matchOfficialProvince(name: string | null | undefined) {

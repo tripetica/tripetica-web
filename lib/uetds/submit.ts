@@ -11,7 +11,7 @@ import { deleteUetdsFormDraft } from "@/lib/uetds/form-drafts";
 import { shouldDeleteUetdsFormDraftAfterMinistry } from "@/lib/uetds/form-draft-policy";
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
 import { isUetdsDriverSubscriptionEntitled } from "@/lib/uetds/driver-subscription";
-import { loadDriverUetdsSubscriptionEntitlement } from "@/lib/uetds/driver-subscription-store";
+import { loadVehicleUetdsSubscriptionEntitlement } from "@/lib/uetds/vehicle-subscription-store";
 import { adjustUetdsTripTimesForSubmit, isUetdsAirportPickup, type UetdsTripTimeAdjustment } from "@/lib/uetds/trip-time";
 import { selectedFleetCompany, type UetdsFleetScope } from "@/lib/uetds/fleet-options";
 import { getUetdsDriverOption, getUetdsVehicleOption } from "@/lib/uetds/fleet-scope";
@@ -134,7 +134,7 @@ export async function submitUetdsNotification(input: {
   if (!eligibility.ok || !company) {
     return { ok: false, error: "ineligible" };
   }
-  const subscription = await loadDriverUetdsSubscriptionEntitlement(driver.id);
+  const subscription = await loadVehicleUetdsSubscriptionEntitlement(vehicle.id);
   if (
     !subscription.standardEnabled ||
     !isUetdsDriverSubscriptionEntitled({

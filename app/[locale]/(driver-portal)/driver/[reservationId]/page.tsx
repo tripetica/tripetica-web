@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { DriverTaskScreen } from "@/components/driver-task/driver-task-screen";
 import { DriverPortalHeader } from "@/components/driver-portal/driver-portal-header";
 import { DRIVER_PORTAL_PATH } from "@/lib/driver-portal/constants";
+import { driverPortalCopyFor } from "@/lib/driver-portal/copy";
 import { loadAuthorizedDriverPortalTask } from "@/lib/driver-portal/jobs";
 import { getDriverPortalActor } from "@/lib/driver-portal/session";
 import { isLocale } from "@/lib/i18n/config";
@@ -35,7 +36,7 @@ export default async function DriverPortalTaskPage({
   }
   return (
     <main className="driver-task-page">
-      <DriverPortalHeader locale={locale} title="ŞOFÖR GÖREVİ" action="back" />
+      <DriverPortalHeader locale={locale} title={driverPortalCopyFor(locale).taskTitle} action="back" />
       <DriverTaskScreen token={result.token} initial={result} embedded />
     </main>
   );

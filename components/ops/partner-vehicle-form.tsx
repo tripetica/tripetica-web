@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
@@ -21,6 +21,15 @@ import {
 import { type PartnerVehicleRecord } from "@/lib/partner/fleet-view";
 import { vehicleStatusBadgeClass } from "@/lib/partner/fleet-view";
 import { vehicleStatusLabel } from "@/lib/partner/vehicle-labels";
+import {
+  DriverUetdsSubscriptionSection,
+  driverSubscriptionDraftEquals,
+  driverSubscriptionDraftFromState,
+  type DriverSubscriptionDraft,
+} from "@/components/uetds/driver-uetds-subscription-section";
+import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
+import { AtsMinistrySourceField } from "@/components/ops/ats-ministry-source-field";
+import { planAtsSourceSave, type AtsMinistrySource, type AtsSourceAudit } from "@/lib/gps/ats-source";
 
 type PartnerVehicleFormProps = {
   locale: Locale;
@@ -31,6 +40,11 @@ type PartnerVehicleFormProps = {
   linkedPartner?: { id: string; name: string; code: string };
   backHref?: string;
   returnTo?: "ops-vehicles" | "partner";
+  subscription: UetdsDriverSubscriptionState;
+  atsSource: AtsMinistrySource;
+  atsAudits: readonly AtsSourceAudit[];
+  hasActiveAtsTrip: boolean;
+  gpsAtsSelectable: boolean;
 };
 
 function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: string) {
@@ -49,6 +63,12 @@ function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: 
   if (error === "invalid-uetds-company") {
     return copy.invalidUetdsCompany;
   }
+  if (error === "invalid-subscription-fee") return copy.invalidSubscriptionFee;
+  if (error === "invalid-subscription-currency") return copy.invalidSubscriptionCurrency;
+  if (error === "ats-source-invalid") return copy.atsSourcePhysicalBlocked;
+  if (error === "ats-source-invalid-mobile") return copy.atsSourceMobileBlocked;
+  if (error === "ats-source-close") return copy.atsSourceCloseTitle;
+  if (error === "gps-ats-needs-device") return copy.gpsAtsNeedsDevice;
   return fallback;
 }
 
@@ -92,6 +112,11 @@ function PartnerVehicleFormEditor({
   linkedPartner,
   backHref,
   returnTo,
+  subscription,
+  atsSource,
+  atsAudits,
+  hasActiveAtsTrip,
+  gpsAtsSelectable,
 }: PartnerVehicleFormProps) {
   const initial = draftFromVehicle(vehicle);
   const [values, setValues] = useState(initial);
@@ -125,15 +150,60 @@ function PartnerVehicleFormEditor({
     { error: null, ok: false },
   );
 
+  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
+  const [subscriptionDraft, setSubscriptionDraft] = useState<DriverSubscriptionDraft>(
+    driverSubscriptionDraftFromState(subscription),
+  );
+  const [subscriptionBaseline] = useState(subscriptionDraft);
+  const [source, setSource] = useState<AtsMinistrySource>(atsSource);
+  const [sourceBaseline] = useState(atsSource);
+  const [closeConfirm, setCloseConfirm] = useState<"" | "switch" | "stop">("");
+  const [closeOpen, setCloseOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitClose = useRef(false);
   const dirty =
     JSON.stringify(values) !== JSON.stringify(baseline) ||
-    uetdsCompanyId !== baselineUetdsCompanyId;
+    uetdsCompanyId !== baselineUetdsCompanyId ||
+    source !== sourceBaseline ||
+    !driverSubscriptionDraftEquals(subscriptionDraft, subscriptionBaseline);
+  const sourceLabels = {
+    physical: copy.atsSourcePhysical,
+    mobile: copy.atsSourceMobile,
+    none: copy.atsSourceNone,
+  } as const;
+  const closingOther: AtsMinistrySource = atsSource === "physical" ? "mobile" : "physical";
+  const otherEnabled = closingOther === "mobile"
+    ? subscriptionDraft.services.mobileEnabled
+    : subscriptionDraft.services.gpsAtsEnabled;
+  const closePlan = planAtsSourceSave({
+    currentSource: atsSource,
+    nextSource: source,
+    gpsAtsEnabled: subscriptionDraft.services.gpsAtsEnabled,
+    mobileEnabled: subscriptionDraft.services.mobileEnabled,
+    confirm: closeConfirm,
+  });
   const resolvedBack =
     backHref ?? `${localizedPath(locale, `/ops/partners/${vehicle.partnerId}`)}?tab=vehicles`;
+  useEffect(() => {
+    if (!submitClose.current) return;
+    submitClose.current = false;
+    formRef.current?.requestSubmit();
+  }, [closeConfirm, source]);
 
   return (
     <section className="ops-page ops-partner-detail ops-partner-entity">
-      <form action={saveAction} className="ops-partner-editor" noValidate>
+      <form
+        ref={formRef}
+        action={saveAction}
+        className="ops-partner-editor"
+        noValidate
+        onSubmit={(event) => {
+          if (closePlan.ok || closeConfirm) return;
+          if (closePlan.error !== "ats-source-close") return;
+          event.preventDefault();
+          setCloseOpen(true);
+        }}
+      >
         <div className={scrolled ? "ops-partner-sticky is-scrolled" : "ops-partner-sticky"}>
           <div className="ops-partner-sticky-identity">
             <p className="ops-partner-code">{vehicle.plate}</p>
@@ -270,6 +340,70 @@ function PartnerVehicleFormEditor({
             disabled={!canManage}
             onChange={setUetdsCompanyId}
           />
+          <DriverUetdsSubscriptionSection
+            serviceLabels={{
+              standard: copy.serviceStandard,
+              advanced: copy.serviceAdvanced,
+              gpsAts: copy.serviceGpsAts,
+              mobile: copy.serviceMobile,
+              total: copy.serviceTotal,
+            }}
+            locale={panelLocale}
+            value={subscriptionDraft}
+            disabled={!canManage}
+            sectionTitle={copy.uetdsSubscriptionTitle}
+            enrollLabel={copy.uetdsSubscriptionEnroll}
+            enrollHint={copy.uetdsSubscriptionEnrollHint}
+            feeLabel={copy.uetdsSubscriptionFee}
+            currencyLabel={copy.uetdsSubscriptionCurrency}
+            monthsLabel={copy.uetdsSubscriptionMonths}
+            statusLabels={{
+              unpaid: copy.uetdsSubscriptionUnpaid,
+              paid: copy.uetdsSubscriptionPaid,
+              free: copy.uetdsSubscriptionFree,
+            }}
+            gpsAtsSelectable={gpsAtsSelectable}
+            gpsAtsLockedText={copy.gpsAtsNeedsDevice}
+            onChange={setSubscriptionDraft}
+          />
+          <AtsMinistrySourceField
+            source={source}
+            gpsAtsEnabled={subscriptionDraft.services.gpsAtsEnabled}
+            mobileEnabled={subscriptionDraft.services.mobileEnabled}
+            disabled={!canManage}
+            labels={{
+              title: copy.atsSourceTitle,
+              description: copy.atsSourceDescription,
+              physical: copy.atsSourcePhysical,
+              mobile: copy.atsSourceMobile,
+              none: copy.atsSourceNone,
+              statusPhysical: copy.atsSourceStatusPhysical,
+              statusMobile: copy.atsSourceStatusMobile,
+              statusNone: copy.atsSourceStatusNone,
+              physicalBlocked: copy.atsSourcePhysicalBlocked,
+              mobileBlocked: copy.atsSourceMobileBlocked,
+            }}
+            onChange={setSource}
+          />
+          <input type="hidden" name="atsMinistrySource" value={source} />
+          <input type="hidden" name="atsSourceClose" value={closeConfirm} />
+          {atsAudits.length > 0 ? (
+            <div className="ats-ministry-source-audit">
+              <p className="partner-billing-label">{copy.atsSourceAudit}</p>
+              <ul>
+                {atsAudits.map((audit) => (
+                  <li key={`${audit.changedAt}:${audit.newSource}`}>
+                    {new Intl.DateTimeFormat(panelLocale, { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(audit.changedAt))}
+                    {" · "}
+                    {sourceLabels[audit.oldSource]}
+                    {" → "}
+                    {sourceLabels[audit.newSource]}
+                    {audit.actorName ? ` · ${audit.actorName}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </form>
 
@@ -279,6 +413,47 @@ function PartnerVehicleFormEditor({
         <input type="hidden" name="id" value={vehicle.id} />
         {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       </form>
+
+      {closeOpen ? (
+        <OpsConfirmDialog
+          title={copy.atsSourceCloseTitle}
+          pending={savePending}
+          cancelLabel={copy.deletePartnerNo}
+          confirmLabel={otherEnabled ? copy.atsSourceCloseSwitch : copy.atsSourceCloseStop}
+          onClose={() => setCloseOpen(false)}
+          onConfirm={() => {
+            submitClose.current = true;
+            if (otherEnabled) {
+              setSource(closingOther);
+              setCloseConfirm("switch");
+            } else {
+              setSource("none");
+              setCloseConfirm("stop");
+            }
+            setCloseOpen(false);
+          }}
+        >
+          <p>
+            {hasActiveAtsTrip
+              ? (otherEnabled ? copy.atsSourceCloseActiveSwitch : copy.atsSourceCloseActiveStop)
+              : copy.atsSourceCloseIdleStop}
+          </p>
+          {otherEnabled ? (
+            <button
+              type="button"
+              className="ops-btn-secondary"
+              onClick={() => {
+                submitClose.current = true;
+                setSource("none");
+                setCloseConfirm("stop");
+                setCloseOpen(false);
+              }}
+            >
+              {copy.atsSourceCloseStop}
+            </button>
+          ) : null}
+        </OpsConfirmDialog>
+      ) : null}
 
       {deleteOpen ? (
         <OpsConfirmDialog

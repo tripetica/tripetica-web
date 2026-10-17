@@ -6,7 +6,6 @@ import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { SearchableSelect } from "@/components/partner/searchable-select";
 import { UetdsLocationField } from "@/components/uetds/uetds-location-field";
 import { UetdsPassengerRemoveButton } from "@/components/uetds/uetds-passenger-remove-button";
-import { countries } from "@/lib/geo/countries";
 import { type Locale } from "@/lib/i18n/config";
 import {
   replaceCompany,
@@ -21,6 +20,7 @@ import {
   createPassengerDraft,
   markUserEdited,
   missingMandatoryFields,
+  nationalityErrorsAfterSelection,
   canonicalGroupPurpose,
   purposeForTripKind,
   syncDraftLocations,
@@ -30,6 +30,7 @@ import {
   type UetdsPassengerDraft,
   type UetdsTripKind,
 } from "@/lib/uetds/draft";
+import { officialUetdsCountries, officialUetdsNationalityCode } from "@/lib/uetds/official-locations";
 import { applyUetdsStartToEnd, ensureUetdsMinimumEnd, isUetdsAirportPickup, isUetdsEndAfterStart } from "@/lib/uetds/trip-time";
 import { evaluateUetdsEligibility } from "@/lib/uetds/eligibility";
 import { extractionHasStructuredFields } from "@/lib/uetds/extract";
@@ -68,7 +69,8 @@ import {
 type UetdsNotificationFormProps = {
   locale: Locale;
   copy: UetdsFormCopy;
-  actor: UetdsFleetScope;
+  actor: UetdsFleetScope | "driver";
+  lockDriver?: boolean;
   ministryEnv: "test" | "live" | null;
   initialDraft: UetdsDraft;
   drivers: UetdsFleetOption[];
@@ -130,6 +132,7 @@ export function UetdsNotificationForm({
   authorities = [],
   listHref,
   aiEdit,
+  lockDriver = false,
 }: UetdsNotificationFormProps) {
   const originalDraftRef = useRef(aiEdit ? cloneUetdsDraft(aiEdit.originalDraft) : null);
   const oldSnapshotRef = useRef<AiEditSnapshot | null>(aiEdit ? captureAiEditSnapshot(aiEdit.originalDraft, aiEdit.meta) : null);
@@ -327,10 +330,10 @@ export function UetdsNotificationForm({
 
   const countryOptions = useMemo(
     () =>
-      countries()
+      officialUetdsCountries()
         .map((country) => ({
-          value: country.iso2,
-          label: country.names[locale] || country.names.en,
+          value: country.code,
+          label: country.name,
         }))
         .sort((a, b) => a.label.localeCompare(b.label, locale)),
     [locale],
@@ -483,7 +486,7 @@ export function UetdsNotificationForm({
   }
 
   const visibleFieldErrors = fieldErrors.filter((message) => message !== copy.endBeforeStart);
-  const validation = useUetdsValidation(draft, copy, !eligibility.ok || driver?.hasNationalId === false);
+  const validation = useUetdsValidation(draft, copy);
   useEffect(() => {
     if (extractionValidationPending.current) {
       extractionValidationPending.current = false;
@@ -609,28 +612,37 @@ export function UetdsNotificationForm({
   }
 
   function updatePassenger(index: number, patch: Partial<UetdsPassengerDraft>) {
-    setDraft((current) => ({
-      ...current,
-      passengers: current.passengers.map((passenger, itemIndex) => {
+    const nextPatch = { ...patch };
+    if (typeof nextPatch.nationality === "string") {
+      nextPatch.nationality = officialUetdsNationalityCode(nextPatch.nationality) ?? nextPatch.nationality.trim();
+    }
+    setDraft((current) => {
+      const passengers = current.passengers.map((passenger, itemIndex) => {
         if (itemIndex !== index) {
           return passenger;
         }
-        const next = { ...passenger, ...patch };
+        const next = { ...passenger, ...nextPatch };
         const provenance = { ...passenger.provenance };
         (["firstName", "lastName", "nationality", "identityNumber", "gender"] as const).forEach(
           (field) => {
-            if (patch[field] != null && patch[field] !== passenger[field]) {
+            if (nextPatch[field] != null && nextPatch[field] !== passenger[field]) {
               provenance[field] = markUserEdited(
                 passenger.provenance[field],
-                String(patch[field] ?? ""),
+                String(nextPatch[field] ?? ""),
                 String(passenger[field] ?? ""),
               );
             }
           },
         );
         return { ...next, provenance };
-      }),
-    }));
+      });
+      queueMicrotask(() => {
+        setFieldErrors((errors) =>
+          nationalityErrorsAfterSelection(errors, copy.missingPassengerNationality, passengers),
+        );
+      });
+      return { ...current, passengers };
+    });
   }
 
   async function runExtract(input: { files: File[]; text: string }) {
@@ -1154,6 +1166,7 @@ export function UetdsNotificationForm({
               options={driverOptions}
               placeholder={copy.selectDriver}
               emptyLabel={copy.noDrivers}
+              disabled={lockDriver}
               onChange={(value) => {
                 const nextDriver = drivers.find((item) => item.id === value);
                 const previousDriverId = draft.driverId;
@@ -1204,8 +1217,12 @@ export function UetdsNotificationForm({
               options={vehicleOptions}
               placeholder={copy.selectVehicle}
               emptyLabel={copy.noVehicles}
+              disabled={lockDriver && vehicles.length <= 1}
               onChange={(value) => updateTrip("vehicleId", value)}
             />
+            {lockDriver && vehicles.length === 0 ? (
+              <p className="uetds-field-hint" role="status">{copy.noVehicles}</p>
+            ) : null}
           </label>
           <label data-uetds-field="edevletAuthorityId">
             {copy.edevletAuthority}
@@ -1273,7 +1290,7 @@ export function UetdsNotificationForm({
                   : state.error === "driver-identity"
                     ? copy.missingDriverIdentity
                     : state.error === "subscription"
-                      ? actor === "partner"
+                      ? actor !== "ops"
                         ? copy.reasonSubscriptionPartner
                         : copy.reasonSubscription
                     : state.error === "location" || state.error === "missing"

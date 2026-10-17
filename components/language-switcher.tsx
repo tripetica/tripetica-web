@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   localeCatalog,
   locales,
@@ -13,6 +14,7 @@ type LanguageSwitcherProps = {
   locale: Locale;
   pathWithoutLocale?: string;
   label: string;
+  appearance?: "site" | "panel";
 };
 
 function bindPressFeedback(element: HTMLElement, pressed: boolean) {
@@ -27,7 +29,9 @@ export function LanguageSwitcher({
   locale,
   pathWithoutLocale = "/",
   label,
+  appearance = "site",
 }: LanguageSwitcherProps) {
+  const panel = appearance === "panel";
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -68,7 +72,9 @@ export function LanguageSwitcher({
     <div ref={rootRef} className="relative z-30">
       <button
         type="button"
-        className={`${headerControlClassName} liquid-lens inline-flex min-h-11 items-center justify-center gap-1.5 px-2.5 text-sm font-medium tracking-wide whitespace-nowrap touch-manipulation`}
+        className={panel
+          ? "panel-lang-button inline-flex min-h-11 items-center justify-center gap-1.5 px-2.5 text-sm font-medium tracking-wide whitespace-nowrap touch-manipulation"
+          : `${headerControlClassName} liquid-lens inline-flex min-h-11 items-center justify-center gap-1.5 px-2.5 text-sm font-medium tracking-wide whitespace-nowrap touch-manipulation`}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -86,7 +92,7 @@ export function LanguageSwitcher({
         <svg
           aria-hidden="true"
           viewBox="0 0 16 16"
-          className={`h-3.5 w-3.5 shrink-0 text-white/90 transition-transform duration-200 ease-out ${
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-out ${panel ? "text-[#142e5c]" : "text-white/90"} ${
             open ? "rotate-180" : "rotate-0"
           }`}
           fill="none"
@@ -104,7 +110,9 @@ export function LanguageSwitcher({
           id={menuId}
           role="menu"
           aria-label={label}
-          className="glass-surface absolute inset-inline-end-0 z-30 mt-2 w-max overflow-hidden rounded-2xl py-1"
+          className={panel
+            ? "panel-lang-menu absolute inset-inline-end-0 z-30 mt-2 w-max overflow-hidden rounded-2xl py-1"
+            : "glass-surface absolute inset-inline-end-0 z-30 mt-2 w-max overflow-hidden rounded-2xl py-1"}
         >
           {locales.map((target) => {
             const option = localeCatalog[target];
@@ -118,9 +126,9 @@ export function LanguageSwitcher({
                   hrefLang={target}
                   lang={target}
                   aria-current={isCurrent ? "true" : undefined}
-                  className={`liquid-lens-row flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm text-white ${
-                    isCurrent ? "bg-white/8" : ""
-                  }`}
+                  className={panel
+                    ? `panel-lang-option flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm ${isCurrent ? "is-current" : ""}`
+                    : `liquid-lens-row flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm text-white ${isCurrent ? "bg-white/8" : ""}`}
                   onClick={() => setOpen(false)}
                 >
                   <span aria-hidden="true">{option.flag}</span>
@@ -132,5 +140,26 @@ export function LanguageSwitcher({
         </ul>
       ) : null}
     </div>
+  );
+}
+
+export function PanelLanguageSwitcher({
+  locale,
+  label,
+  fallbackPath,
+}: {
+  locale: Locale;
+  label: string;
+  fallbackPath: string;
+}) {
+  const pathname = usePathname();
+  const pathWithoutLocale = (pathname || fallbackPath).replace(/^\/(ru|en|tr|ar)(?=\/|$)/, "") || fallbackPath;
+  return (
+    <LanguageSwitcher
+      appearance="panel"
+      locale={locale}
+      pathWithoutLocale={pathWithoutLocale}
+      label={label}
+    />
   );
 }

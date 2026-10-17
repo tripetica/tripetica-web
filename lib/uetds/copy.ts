@@ -1,4 +1,5 @@
-import { type Locale, type PanelLocale, asPanelLocale } from "@/lib/i18n/config";
+import { type Locale } from "@/lib/i18n/config";
+import { uetdsFormCopyAr } from "@/lib/uetds/copy-ar";
 import { type UetdsEligibilityReason } from "@/lib/uetds/eligibility";
 
 export const uetdsFormCopy = {
@@ -66,6 +67,9 @@ export const uetdsFormCopy = {
     atsHistoryFailedCount: "Toplam başarısız ATS bildirimi",
     atsHistorySentAt: "Gönderim zamanı",
     atsHistoryGnss: "GNSS zamanı",
+    atsHistoryPlace: "İl / İlçe",
+    atsHistoryCoordinates: "Konum (Enlem, Boylam)",
+    atsHistoryUnknown: "Bilgi yok",
     atsHistoryResult: "Bakanlık sonucu",
     atsHistoryOk: "Başarılı",
     atsHistoryError: "Hatalı",
@@ -374,6 +378,9 @@ export const uetdsFormCopy = {
     atsHistoryFailedCount: "Failed ATS reports",
     atsHistorySentAt: "Sent at",
     atsHistoryGnss: "GNSS time",
+    atsHistoryPlace: "Province / district",
+    atsHistoryCoordinates: "Position (latitude, longitude)",
+    atsHistoryUnknown: "Unknown",
     atsHistoryResult: "Ministry result",
     atsHistoryOk: "Successful",
     atsHistoryError: "Failed",
@@ -682,6 +689,9 @@ export const uetdsFormCopy = {
     atsHistoryFailedCount: "Неуспешные передачи АТС",
     atsHistorySentAt: "Время отправки",
     atsHistoryGnss: "Время GNSS",
+    atsHistoryPlace: "Провинция / район",
+    atsHistoryCoordinates: "Положение (широта, долгота)",
+    atsHistoryUnknown: "Нет данных",
     atsHistoryResult: "Результат министерства",
     atsHistoryOk: "Успешно",
     atsHistoryError: "Ошибка",
@@ -926,12 +936,17 @@ export const uetdsFormCopy = {
     groupPurpose: "Описание группы",
     notifyCompany: "Компания уведомления",
   },
+  ar: uetdsFormCopyAr,
 } as const;
 
-export type UetdsFormCopy = (typeof uetdsFormCopy)[PanelLocale];
+export type UetdsFormCopy = {
+  [K in keyof (typeof uetdsFormCopy)["tr"]]: (typeof uetdsFormCopy)["tr"][K] extends string
+    ? string
+    : (typeof uetdsFormCopy)["tr"][K];
+};
 
 export function uetdsFormCopyFor(locale: Locale): UetdsFormCopy {
-  return uetdsFormCopy[asPanelLocale(locale)];
+  return uetdsFormCopy[locale];
 }
 
 export function uetdsEligibilityMessage(reason: UetdsEligibilityReason, copy: UetdsFormCopy) {

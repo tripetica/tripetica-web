@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
-import { OpsDriverSubscriptionInlineCells } from "@/components/uetds/driver-subscription-list-cells";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { searchOpsDriversAction } from "@/lib/ops/driver-actions";
@@ -13,7 +12,6 @@ import {
 } from "@/lib/ops/fleet-list-actions";
 import { type OpsCopy } from "@/lib/ops/copy";
 import { type OpsDriverListItem } from "@/lib/ops/drivers";
-import { serviceSubscriptionNames } from "@/lib/uetds/service-subscriptions";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { partnerStatusBadgeClass, partnerStatusLabel } from "@/lib/ops/partner-labels";
 import { pageCount } from "@/lib/ops/format";
@@ -30,12 +28,6 @@ import {
   type FleetChoicesByPartner,
 } from "@/lib/partner/fleet-pairing-rules";
 import { formatPartnerFleetPhone, formatUetdsCompanyListLabel } from "@/lib/partner/fleet-view";
-import {
-  addSubscriptionMonths,
-  istanbulSubscriptionPeriodKey,
-  subscriptionPeriodLabel,
-  type UetdsDriverSubscriptionListSummary,
-} from "@/lib/uetds/driver-subscription";
 
 type OpsDriverTableProps = {
   locale: Locale;
@@ -73,20 +65,6 @@ export function OpsDriverTable({
   const pages = pageCount(total, pageSize);
   const startIndex = (page - 1) * pageSize;
   const skipFirstFetch = useRef(true);
-  const panelLocale = locale === "en" || locale === "ru" ? locale : "tr";
-  const period = istanbulSubscriptionPeriodKey();
-  const periodLabel = subscriptionPeriodLabel(period, panelLocale);
-  const nextPeriodLabel = subscriptionPeriodLabel(addSubscriptionMonths(period, 1), panelLocale);
-  const subscriptionLabels = {
-    fee: copy.uetdsSubscriptionFee,
-    currency: copy.uetdsSubscriptionCurrency,
-    unpaid: copy.uetdsSubscriptionUnpaid,
-    paid: copy.uetdsSubscriptionPaid,
-    free: copy.uetdsSubscriptionFree,
-    notManaged: copy.uetdsSubscriptionEnrollHint,
-    invalidFee: copy.invalidSubscriptionFee,
-    saveFailed: copy.driverSaveFailed,
-  };
 
   useEffect(() => {
     if (skipFirstFetch.current) {
@@ -118,14 +96,6 @@ export function OpsDriverTable({
     }, 180);
     return () => window.clearTimeout(handle);
   }, [query, dir, page]);
-
-  function onSummaryChange(driverId: string, summary: UetdsDriverSubscriptionListSummary) {
-    setItems((current) =>
-      current.map((item) =>
-        item.id === driverId ? { ...item, uetdsSubscription: summary } : item,
-      ),
-    );
-  }
 
   return (
     <>
@@ -172,16 +142,7 @@ export function OpsDriverTable({
                 <th>{copy.defaultVehicle}</th>
                 <th>{copy.defaultEdevletAuthority}</th>
                 <th>{copy.status}</th>
-                <th>{copy.membershipStatusColumn}</th>
                 <th>{copy.linkedPartner}</th>
-                <th className="ops-driver-sub-fee">{copy.uetdsSubscriptionFee}</th>
-                <th className="ops-driver-sub-currency">{copy.uetdsSubscriptionCurrency}</th>
-                <th className="ops-driver-sub-status">
-                  {periodLabel} / {copy.uetdsSubscriptionStatusColumn}
-                </th>
-                <th className="ops-driver-sub-status">
-                  {nextPeriodLabel} / {copy.uetdsSubscriptionStatusColumn}
-                </th>
                 <th>{copy.details}</th>
               </tr>
             </thead>
@@ -299,27 +260,11 @@ export function OpsDriverTable({
                       {partnerStatusLabel(driver.status, copy)}
                     </span>
                   </td>
-                  <td className="ops-driver-membership">
-                    {serviceSubscriptionNames(driver.services, {
-                      standard: copy.serviceStandard,
-                      advanced: copy.serviceAdvanced,
-                      mobile: copy.serviceMobile,
-                      none: copy.serviceNone,
-                    })}
-                  </td>
                   <td>
                     <a href={localizedPath(locale, `/ops/partners/${driver.partnerId}`)}>
                       {driver.partnerName}
                     </a>
                   </td>
-                  <OpsDriverSubscriptionInlineCells
-                    locale={locale}
-                    driverId={driver.id}
-                    canManage={canManage}
-                    summary={driver.uetdsSubscription}
-                    labels={subscriptionLabels}
-                    onSummaryChange={onSummaryChange}
-                  />
                   <td>
                     <a
                       className="ops-row-detail"

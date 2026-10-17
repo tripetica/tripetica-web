@@ -8,7 +8,16 @@ import {
   atsKonumBildirInnerXml,
   formatAtsKonumZamani,
 } from "@/lib/uetds/ats-soap";
-import { UETDS_NS, UETDS_SOAP_ACTIONS } from "@/lib/uetds/ministry-env";
+import { shouldRetryUetdsSefer, UETDS_NS, UETDS_SOAP_ACTIONS, uetdsSoapResultMessage } from "@/lib/uetds/ministry-env";
+
+test("a ministry gateway fault is shown and a created sefer is not sent again", () => {
+  assert.equal(uetdsSoapResultMessage({ faultstring: "Policy Falsified" }), "Policy Falsified");
+  assert.equal(uetdsSoapResultMessage({ sonucmesaji: "SISTEM HATASI OLUSTU", faultstring: "Policy Falsified" }), "SISTEM HATASI OLUSTU");
+  assert.equal(shouldRetryUetdsSefer({ sonucKodu: null, sonucMesaji: "Policy Falsified", reference: "" }), true);
+  assert.equal(shouldRetryUetdsSefer({ sonucKodu: 99, sonucMesaji: "SISTEM HATASI OLUSTU", reference: "" }), true);
+  assert.equal(shouldRetryUetdsSefer({ sonucKodu: 0, sonucMesaji: "ok", reference: "2610167315601564" }), false);
+  assert.equal(shouldRetryUetdsSefer({ sonucKodu: 4, sonucMesaji: "Plaka bulunamadı", reference: "" }), false);
+});
 
 test("ATS SOAP actions match the Arızi V15 WSDL and stay off the sefer prefix", () => {
   assert.equal(UETDS_ATS_SOAP_ACTIONS.atsKonumBildir, `${UETDS_NS}uetdsyts/atsKonumBildir`);

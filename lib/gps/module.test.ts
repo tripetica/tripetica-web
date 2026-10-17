@@ -4,7 +4,8 @@ import test from "node:test";
 import { gpsCopy } from "@/lib/gps/copy";
 import { soleGpsDevice } from "@/lib/gps/entry";
 import { gpsPopupClock, gpsPopupSpeed } from "@/lib/gps/format";
-import { GPS_MOTION_HOLD_MS, gpsMarkerState, gpsPlaybackMarkerState, gpsPopupRows, gpsPresenceMarker, gpsResolveMotion, gpsSpeedIsMoving, GPS_POPUP_DEFAULTS, readGpsPopupPrefs } from "@/lib/gps/map-popup";
+import { GPS_MAP_LABEL_DEFAULTS, gpsMapLabelHtml, gpsMapLabelLines, gpsMapLabelOffsets, gpsMapLabelStorageKey, readGpsMapLabelPrefs } from "@/lib/gps/map-labels";
+import { GPS_MOTION_HOLD_MS, gpsMarkerState, gpsPlaybackMarkerState, gpsPopupRows, gpsPopupStorageKey, gpsPresenceMarker, gpsResolveMotion, gpsSpeedIsMoving, GPS_POPUP_DEFAULTS, readGpsPopupPrefs } from "@/lib/gps/map-popup";
 import { GPS_PLAYBACK_RATES, advancePlaybackCursor } from "@/lib/gps/playback";
 import { clearGpsAddressCache, lookupGpsAddress } from "@/lib/gps/address";
 import { formatGpsAddress, gpsAddressCell } from "@/lib/gps/address-format";
@@ -141,6 +142,28 @@ test("popup shows values only and hides empty fields", () => {
     "06.10.2026 17:15:56",
     "41.265434, 28.687899",
   ]);
+  assert.deepEqual(gpsPopupRows({ ...GPS_POPUP_DEFAULTS, driver: true }, {
+    plate: "34 EGP 847",
+    driver: "Ada Yılmaz",
+    speed: "7.6 km/h",
+    clock: "06.10.2026 17:15:56",
+    coordinates: "41.265434, 28.687899",
+    address: null,
+  }), [
+    "34 EGP 847",
+    "Ada Yılmaz",
+    "7.6 km/h",
+    "06.10.2026 17:15:56",
+    "41.265434, 28.687899",
+  ]);
+  assert.deepEqual(gpsPopupRows(GPS_POPUP_DEFAULTS, {
+    plate: "34 EGP 847",
+    driver: "Ada Yılmaz",
+    speed: "7.6 km/h",
+    clock: "06.10.2026 17:15:56",
+    coordinates: "41.265434, 28.687899",
+    address: null,
+  })[1], "7.6 km/h");
   assert.deepEqual(gpsPopupRows({ ...GPS_POPUP_DEFAULTS, address: true }, {
     plate: "34 EGP 847",
     speed: "—",
@@ -152,13 +175,82 @@ test("popup shows values only and hides empty fields", () => {
 
 test("popup prefs keep plate out of storage and address off by default", () => {
   assert.equal(GPS_POPUP_DEFAULTS.address, false);
+  assert.equal(GPS_POPUP_DEFAULTS.driver, false);
   assert.equal(GPS_POPUP_DEFAULTS.speed, true);
-  const parsed = readGpsPopupPrefs(JSON.stringify({ address: true, speed: false, plate: false }));
+  const parsed = readGpsPopupPrefs(JSON.stringify({ address: true, speed: false, plate: false, driver: true }));
   assert.equal(parsed.address, true);
   assert.equal(parsed.speed, false);
+  assert.equal(parsed.driver, true);
   assert.equal(parsed.clock, true);
   assert.equal("plate" in parsed, false);
+  assert.equal(readGpsPopupPrefs(JSON.stringify({ address: true })).driver, false);
   assert.deepEqual(readGpsPopupPrefs("not-json"), GPS_POPUP_DEFAULTS);
+  assert.deepEqual(GPS_MAP_LABEL_DEFAULTS, { plate: false, driver: false });
+  assert.notEqual(gpsMapLabelStorageKey("ops"), gpsPopupStorageKey("ops"));
+  assert.deepEqual(readGpsMapLabelPrefs(null), GPS_MAP_LABEL_DEFAULTS);
+  assert.deepEqual(readGpsMapLabelPrefs("not-json"), GPS_MAP_LABEL_DEFAULTS);
+  assert.deepEqual(readGpsMapLabelPrefs(JSON.stringify({ plate: true, driver: false, speed: false })), { plate: true, driver: false });
+  const vehicles = [
+    { id: "a", plate: "34ABC123", driver: "TRIP ETICA", latitude: 41, longitude: 29 },
+    { id: "b", plate: "34EGP847", driver: "RECEP YILDIRIM", latitude: 41.2, longitude: 29 },
+    { id: "c", plate: "34BGN938", driver: null, latitude: 41.4, longitude: 29 },
+  ];
+  assert.deepEqual(vehicles.map((vehicle) => gpsMapLabelLines(GPS_MAP_LABEL_DEFAULTS, vehicle)), [[], [], []]);
+  assert.deepEqual(vehicles.map((vehicle) => gpsMapLabelLines({ plate: true, driver: false }, vehicle)), [
+    ["34ABC123"],
+    ["34EGP847"],
+    ["34BGN938"],
+  ]);
+  assert.deepEqual(vehicles.map((vehicle) => gpsMapLabelLines({ plate: false, driver: true }, vehicle)), [
+    ["TRIP ETICA"],
+    ["RECEP YILDIRIM"],
+    [],
+  ]);
+  assert.deepEqual(vehicles.map((vehicle) => gpsMapLabelLines({ plate: true, driver: true }, vehicle)), [
+    ["34ABC123", "TRIP ETICA"],
+    ["34EGP847", "RECEP YILDIRIM"],
+    ["34BGN938"],
+  ]);
+  assert.equal(gpsMapLabelHtml(["34ABC123", "TRIP ETICA"]), "34ABC123<br>TRIP ETICA");
+  assert.equal(gpsMapLabelHtml(["A&B <C>"]), "A&amp;B &lt;C&gt;");
+  for (const count of [1, 5, 10]) {
+    const fleet = Array.from({ length: count }, (_, index) => ({
+      id: `v${index}`,
+      plate: `34T${String(index).padStart(4, "0")}`,
+      driver: `Driver ${index}`,
+      latitude: 41 + index * 0.01,
+      longitude: 29,
+    }));
+    const labels = fleet.map((vehicle) => gpsMapLabelLines({ plate: true, driver: true }, vehicle));
+    assert.equal(labels.length, count);
+    assert.equal(labels.every((lines) => lines.length === 2), true);
+    const offsets = gpsMapLabelOffsets(fleet);
+    assert.equal(offsets.size, count);
+    assert.deepEqual(offsets.get("v0"), [0, -16]);
+  }
+  const close = gpsMapLabelOffsets([
+    { id: "near-a", latitude: 41, longitude: 29 },
+    { id: "near-b", latitude: 41.0001, longitude: 29.0001 },
+  ]);
+  assert.notDeepEqual(close.get("near-a"), close.get("near-b"));
+  const liveMap = readFileSync(new URL("../../components/gps/live-map.tsx", import.meta.url), "utf8");
+  const labelSync = liveMap.slice(liveMap.indexOf("function syncMapLabel("), liveMap.indexOf("export function vehicleIcon("));
+  assert.match(labelSync, /interactive: false/);
+  assert.match(labelSync, /permanent: true/);
+  assert.doesNotMatch(labelSync, /setView|fitBounds|openPopup|setZoom|onVehicleSelect/);
+  const section = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
+  assert.match(section, /copy\.mapSettings/);
+  assert.match(section, /copy\.mapOverlay/);
+  assert.equal(gpsCopy.tr.mapSettings, "Seçilen Araç Bilgileri");
+  assert.equal(gpsCopy.tr.mapOverlay, "Harita Üzeri Gösterim");
+  assert.equal(gpsCopy.en.mapSettings, "Selected vehicle details");
+  assert.equal(gpsCopy.en.mapOverlay, "Labels on the map");
+  assert.equal(gpsCopy.ru.mapSettings, "Данные выбранного автомобиля");
+  assert.equal(gpsCopy.ru.mapOverlay, "Подписи на карте");
+  const overlay = section.slice(section.indexOf("copy.mapOverlay"), section.indexOf("<GpsLiveMap"));
+  assert.match(overlay, /labels\.plate/);
+  assert.match(overlay, /labels\.driver/);
+  assert.doesNotMatch(overlay, /checked disabled/);
 });
 
 test("reverse geocode format keeps the short Turkish hierarchy", () => {

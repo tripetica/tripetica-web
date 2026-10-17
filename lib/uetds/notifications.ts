@@ -79,6 +79,8 @@ const LIST_SQL = `SELECT id, created_at, partner_id, reservation_id, source, sta
          OR regexp_replace(COALESCE(snapshot->'vehicle'->>'plate', ''), '[^A-Za-z0-9]', '', 'g') ILIKE '%' || $3 || '%'
          OR regexp_replace(COALESCE(snapshot->'vehicle'->>'ministryPlate', ''), '[^A-Za-z0-9]', '', 'g') ILIKE '%' || $3 || '%'
        )
+       AND ($4::uuid IS NULL OR driver_id = $4)
+       AND ($5::uuid[] IS NULL OR vehicle_id = ANY($5::uuid[]))
      ORDER BY
        NULLIF(snapshot->'trip'->>'startDate', '') DESC NULLS LAST,
        NULLIF(snapshot->'trip'->>'startTime', '') DESC NULLS LAST,
@@ -88,10 +90,18 @@ const LIST_SQL = `SELECT id, created_at, partner_id, reservation_id, source, sta
 
 export async function listUetdsNotifications(input: {
   partnerId?: string | null;
+  driverId?: string | null;
+  vehicleIds?: readonly string[] | null;
   query?: string;
   filters?: UetdsListFilters;
 }): Promise<UetdsNotificationListItem[]> {
   if (input.partnerId && !isUuid(input.partnerId)) {
+    return [];
+  }
+  if (input.driverId && !isUuid(input.driverId)) {
+    return [];
+  }
+  if (input.vehicleIds && input.vehicleIds.some((id) => !isUuid(id))) {
     return [];
   }
   const raw = input.query?.trim() ?? "";
@@ -99,6 +109,8 @@ export async function listUetdsNotifications(input: {
     input.partnerId ?? null,
     raw,
     foldUetdsSearchPlate(raw),
+    input.driverId ?? null,
+    input.vehicleIds ?? null,
   ]);
   const now = Date.now();
   return filterUetdsList(result.rows.map(mapItem), input.filters ?? parseUetdsListFilters(), now).map(item => ({ ...item, listClassification: classifyUetdsListItem(item, now) }));
@@ -107,8 +119,13 @@ export async function listUetdsNotifications(input: {
 export async function getUetdsNotification(input: {
   id: string;
   partnerId?: string | null;
+  driverId?: string | null;
+  vehicleIds?: readonly string[] | null;
 }): Promise<UetdsNotificationDetail | null> {
-  if (!isUuid(input.id) || (input.partnerId && !isUuid(input.partnerId))) {
+  if (!isUuid(input.id) || (input.partnerId && !isUuid(input.partnerId)) || (input.driverId && !isUuid(input.driverId))) {
+    return null;
+  }
+  if (input.vehicleIds && input.vehicleIds.some((id) => !isUuid(id))) {
     return null;
   }
   const result = await query<ListRow>(
@@ -116,8 +133,10 @@ export async function getUetdsNotification(input: {
      FROM uetds_notifications
      WHERE id = $1
        AND ($2::uuid IS NULL OR partner_id = $2)
+       AND ($3::uuid IS NULL OR driver_id = $3)
+       AND ($4::uuid[] IS NULL OR vehicle_id = ANY($4::uuid[]))
      LIMIT 1`,
-    [input.id, input.partnerId ?? null],
+    [input.id, input.partnerId ?? null, input.driverId ?? null, input.vehicleIds ?? null],
   );
   const row = result.rows[0];
   if (!row) {

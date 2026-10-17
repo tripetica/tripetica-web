@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   adoptFleetSelection,
   groupOpsFleet,
+  opsFleetChoices,
   partnerSelection,
   searchOpsFleet,
   togglePartnerSelection,
@@ -85,4 +86,19 @@ test("ops map reads through an ops session and the partner fleet route stays par
   assert.match(opsPage, /OpsGpsTabs/);
   assert.match(opsPage, /GpsDeviceBoard/);
   assert.doesNotMatch(opsPage, /submitUetds|ats-run|openAtsRuntime/);
+});
+
+test("stock devices stay on the ops fleet filter without a partner or plate", () => {
+  const choices = opsFleetChoices([
+    { id: "assigned", partnerId: "p1", partnerName: "Search Travel", plate: "34ABC123", driverName: "Ada", deviceCode: "TPT-A", source: "device" },
+    { id: "stock", partnerId: null, partnerName: null, plate: null, driverName: null, deviceCode: "TPT-20CBB2C1A032", source: "device" },
+    { id: "mobile", partnerId: "p1", partnerName: "Search Travel", plate: "34EGP847", driverName: "Recep", deviceCode: "Recep", source: "mobile" },
+  ], "Stokta");
+  const groups = groupOpsFleet(choices);
+  assert.deepEqual(groups.map((group) => group.partnerName), ["Search Travel", "Stokta"]);
+  const stock = groups.find((group) => group.partnerId === "stock");
+  assert.equal(stock?.vehicles.length, 1);
+  assert.equal(stock?.vehicles[0]?.plate, null);
+  assert.equal(stock?.vehicles[0]?.deviceCode, "TPT-20CBB2C1A032");
+  assert.deepEqual(searchOpsFleet(groups, "20cbb").map((group) => group.partnerId), ["stock"]);
 });

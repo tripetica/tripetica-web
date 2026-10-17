@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { LunaLiveLoginScreen } from "@/components/uetds/luna-live-login-screen";
-import { asPanelLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { readLiveBridgeMeta } from "@/lib/uetds/kamu-login-live-bridge";
@@ -19,7 +19,7 @@ export default async function PartnerLiveLoginPage({
   if (!live || live.partnerId !== actor.partnerId) notFound();
   return (
     <LunaLiveLoginScreen
-      locale={asPanelLocale(locale)}
+      locale={locale}
       notificationId={live.notificationId}
       authorityId={live.authorityId}
       listHref={localizedPath(locale, "/partner/uetds/notifications")}

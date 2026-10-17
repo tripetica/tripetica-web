@@ -14,7 +14,7 @@ import {
 } from "@/lib/uetds/edit-policy";
 import { normalizeUetdsPersonName } from "@/lib/uetds/passenger-name";
 import { isUetdsDriverSubscriptionEntitled } from "@/lib/uetds/driver-subscription";
-import { loadDriverUetdsSubscriptionEntitlement } from "@/lib/uetds/driver-subscription-store";
+import { loadVehicleUetdsSubscriptionEntitlement } from "@/lib/uetds/vehicle-subscription-store";
 import { diffUetdsEdit } from "@/lib/uetds/manage-diff";
 import {
   applyUetdsPassengerCountWindow,
@@ -365,8 +365,8 @@ export async function updateUetdsNotification(input: {
   if (!original || !notification.ministryReference || !notification.companyId) {
     return { ok: false, error: "invalid" };
   }
-  if (original.driverId) {
-    const subscription = await loadDriverUetdsSubscriptionEntitlement(original.driverId);
+  if (original.vehicleId) {
+    const subscription = await loadVehicleUetdsSubscriptionEntitlement(original.vehicleId);
     if (
       !isUetdsDriverSubscriptionEntitled({
         enrolled: subscription.enrolled,
@@ -483,8 +483,8 @@ export async function updateUetdsNotification(input: {
     if (!fleet.ok) {
       return { ok: false, error: fleet.error };
     }
-    if (nextDriver) {
-      const subscription = await loadDriverUetdsSubscriptionEntitlement(nextDriver.id);
+    if (nextVehicle) {
+      const subscription = await loadVehicleUetdsSubscriptionEntitlement(nextVehicle.id);
       if (
         !isUetdsDriverSubscriptionEntitled({
           enrolled: subscription.enrolled,
