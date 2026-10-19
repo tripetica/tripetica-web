@@ -5,8 +5,10 @@ import test from "node:test";
 import { pointError } from "@/lib/gps/contract";
 import {
   gpsReceiver,
+  TELTONIKA_MAX_AGE_MS,
   teltonikaImeiAllowed,
   teltonikaIgnition,
+  teltonikaNewestCoordinate,
   teltonikaPoint,
   teltonikaSequences,
 } from "@/lib/teltonika/accept";
@@ -92,6 +94,27 @@ test("a broken CRC is rejected and a repeated packet keeps the same sequence", (
   assert.notEqual(first[0], first[1]);
   const noFix = teltonikaPoint(record({ latitude: 0, longitude: 0 }), first[0] ?? 1, now);
   assert.deepEqual(noFix, { error: "invalid_coordinate" });
+});
+
+test("Teltonika flash backlog older than the live window is not stored", () => {
+  const seq = teltonikaSequences([record()])[0] ?? 1;
+  const fresh = teltonikaPoint(record({ timestampMs: now.getTime() - 10 * 60 * 1000 }), seq, now);
+  assert.ok("point" in fresh);
+  const backlog = teltonikaPoint(record({ timestampMs: now.getTime() - 3 * 24 * 60 * 60 * 1000 }), seq, now);
+  assert.deepEqual(backlog, { error: "stale_time" });
+  assert.equal(TELTONIKA_MAX_AGE_MS, 30 * 60 * 1000);
+  const edge = teltonikaPoint(record({ timestampMs: now.getTime() - TELTONIKA_MAX_AGE_MS }), seq, now);
+  assert.ok("point" in edge);
+  const seed = teltonikaNewestCoordinate([
+    record({ timestampMs: now.getTime() - 3 * 24 * 60 * 60 * 1000, latitude: 41.01, longitude: 29.01 }),
+    record({ timestampMs: now.getTime() - 2 * 24 * 60 * 60 * 1000, latitude: 41.02, longitude: 29.02 }),
+    record({ timestampMs: now.getTime() - 2 * 24 * 60 * 60 * 1000, latitude: 0, longitude: 0 }),
+  ]);
+  assert.equal(seed?.latitude, 41.02);
+  assert.equal(seed?.longitude, 29.02);
+  const store = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+  assert.match(store, /teltonikaNewestCoordinate/);
+  assert.match(store, /\$10::timestamptz >= recorded_at/);
 });
 
 test("IMEI handshake accepts only an active Teltonika row", () => {

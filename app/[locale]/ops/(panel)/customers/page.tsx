@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { OpsPagination } from "@/components/ops/pagination";
+import { OpsSelectableTable } from "@/components/ops/selectable-table";
 import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { requireOpsPage } from "@/lib/ops/auth";
@@ -72,40 +73,40 @@ export default async function OpsCustomersPage({
       {items.length === 0 ? (
         <p className="ops-empty">{copy.emptyCustomers}</p>
       ) : (
-        <div className="ops-table-wrap">
-          <table className="ops-table">
-            <thead>
-              <tr>
-                <th>{copy.firstName}</th>
-                <th>{copy.lastName}</th>
-                <th>{copy.email}</th>
-                <th>{copy.phone}</th>
-                <th>{copy.status}</th>
-                <th>{copy.verification}</th>
-                <th>{copy.lastLogin}</th>
-                <th>{copy.createdAt}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((customer) => (
-                <tr key={customer.id}>
-                  <td>
-                    <a href={localizedPath(locale, `/ops/customers/${customer.id}`)}>
-                      {customer.firstName}
-                    </a>
-                  </td>
-                  <td>{customer.lastName}</td>
-                  <td>{customer.email}</td>
-                  <td>{customer.phone ?? "—"}</td>
-                  <td>{customer.isActive ? copy.active : copy.inactive}</td>
-                  <td>{customer.isVerified ? copy.verified : copy.unverified}</td>
-                  <td>{formatOpsDateTime(customer.lastLoginAt, locale)}</td>
-                  <td>{formatOpsDateTime(customer.createdAt, locale)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <OpsSelectableTable
+          page={page}
+          pageSize={pageSize}
+          selectLabel={copy.selectColumn}
+          headers={(
+            <>
+              <th>{copy.firstName}</th>
+              <th>{copy.lastName}</th>
+              <th>{copy.email}</th>
+              <th>{copy.phone}</th>
+              <th>{copy.status}</th>
+              <th>{copy.verification}</th>
+              <th>{copy.lastLogin}</th>
+              <th>{copy.createdAt}</th>
+            </>
+          )}
+          rows={items.map((customer) => ({
+            id: customer.id,
+            cells: [
+              <span key="first-name">
+                <a href={localizedPath(locale, `/ops/customers/${customer.id}`)}>
+                  {customer.firstName}
+                </a>
+              </span>,
+              customer.lastName,
+              customer.email,
+              customer.phone ?? "—",
+              customer.isActive ? copy.active : copy.inactive,
+              customer.isVerified ? copy.verified : copy.unverified,
+              formatOpsDateTime(customer.lastLoginAt, locale),
+              formatOpsDateTime(customer.createdAt, locale),
+            ],
+          }))}
+        />
       )}
 
       <OpsPagination

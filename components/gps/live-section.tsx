@@ -39,7 +39,7 @@ import { type DriveReport, type DriveVehicleInfo } from "@/lib/gps/drive";
 import { GpsPositionHistory, type GpsHistoryModel } from "@/components/gps/position-history";
 import { GpsVehicleIdentity } from "@/components/gps/vehicle-identity";
 import { GpsShareHistory } from "@/components/gps/share-history";
-import { GpsWifiPanel, type GpsWifiPanelDevice } from "@/components/gps/wifi-panel";
+import { GpsWifiFleetList, GpsWifiPanel, mergeWifiLive, type GpsWifiPanelDevice } from "@/components/gps/wifi-panel";
 import { GpsCameraLive } from "@/components/gps/camera-live";
 import { cameraIdlePhase } from "@/lib/gps/camera";
 import { type ShareHistoryPreset } from "@/lib/gps/share-history";
@@ -108,6 +108,7 @@ export function GpsLiveSection({
   sections = allGpsSections,
   opsFilter = false,
   locale = "tr",
+  initialTab = "gps",
 }: {
   copy: GpsCopy;
   listPath: string;
@@ -162,6 +163,7 @@ export function GpsLiveSection({
   sections?: GpsSectionVisibility;
   opsFilter?: boolean;
   locale?: PanelLocale;
+  initialTab?: "gps" | "wifi" | "camera";
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
@@ -187,7 +189,7 @@ export function GpsLiveSection({
     setSnapshot(initial);
   }
   const [clock, setClock] = useState(() => Date.now());
-  const [tab, setTab] = useState<"gps" | "wifi" | "camera">("gps");
+  const [tab, setTab] = useState<"gps" | "wifi" | "camera">(initialTab);
   const visibleTab = deviceControls ? tab : "gps";
   const [prefs, setPrefs] = useState<GpsPopupPrefs>(GPS_POPUP_DEFAULTS);
   const [labels, setLabels] = useState<GpsMapLabelPrefs>(GPS_MAP_LABEL_DEFAULTS);
@@ -768,7 +770,22 @@ export function GpsLiveSection({
               />
             ) : null}
           </div>
-          {wifiDevice ? <GpsWifiPanel copy={copy} device={wifiDevice} /> : wifi}
+          {wifiDevice ? (
+            <GpsWifiPanel
+              copy={copy}
+              device={mergeWifiLive(wifiDevice, snapshot)}
+              presence={presence}
+              clockMs={clock}
+            />
+          ) : wifi ?? (
+            <GpsWifiFleetList
+              copy={copy}
+              items={fleet ?? fleetVehicles ?? []}
+              mobileSelected={selectedFleet?.source === "mobile"}
+              listPath={listPath}
+              rangeSearch={rangeSearch}
+            />
+          )}
         </section>
       </div> : null}
       {deviceControls && visibleTab === "camera" ? (

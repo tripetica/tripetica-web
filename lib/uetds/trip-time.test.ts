@@ -269,6 +269,22 @@ test("AI/prefill trip times: missing start → now+65; missing end uses +2h and 
   assert.equal(keepSourceStart.endTime, "17:05");
   assert.equal(keepSourceStart.startFromFallback, false);
 
+  const keepTooSoon = applyUetdsAiExtractionTripTimes(
+    { startDate: "2026-09-20", startTime: "10:15", endDate: "", endTime: "" },
+    now,
+  );
+  assert.equal(keepTooSoon.startDate, "2026-09-20");
+  assert.equal(keepTooSoon.startTime, "10:15");
+  assert.equal(keepTooSoon.startFromFallback, false);
+
+  const keepDateOnly = applyUetdsAiExtractionTripTimes(
+    { startDate: "2026-10-19", startTime: "", endDate: "", endTime: "" },
+    now,
+  );
+  assert.equal(keepDateOnly.startDate, "2026-10-19");
+  assert.equal(keepDateOnly.startTime, "");
+  assert.equal(keepDateOnly.startFromFallback, false);
+
   const shortEnd = applyUetdsAiExtractionTripTimes(
     { startDate: "2026-09-20", startTime: "15:05", endDate: "2026-09-20", endTime: "15:20" },
     now,
@@ -402,7 +418,7 @@ for (const start of ["", "01:15", "04:50", "05:04", "05:05", "07:00"]) {
         startDate: start ? "2026-09-22" : "", startTime: start,
         endDate: end ? "2026-09-22" : "", endTime: end,
       }, istanbulLocalToUtcMs("2026-09-22T04:00"));
-      const appliedStart = start >= "05:05" ? start : "05:05";
+      const appliedStart = start || "05:05";
       const [hour, minute] = appliedStart.split(":").map(Number);
       const automatic = hour * 60 + minute + 120;
       const minimum = hour * 60 + minute + 30;
@@ -423,10 +439,10 @@ for (const [date, nextDate] of [["2026-09-22", "2026-09-23"], ["2026-09-30", "20
     const now = istanbulLocalToUtcMs(`${date}T23:30`);
     const input = { startDate: date, startTime: "23:00", endDate: date, endTime: "23:59", endManual: true };
     const ai = applyUetdsAiExtractionTripTimes(input, now);
-    assert.equal(ai.startDate, nextDate);
-    assert.equal(ai.startTime, "00:35");
-    assert.equal(ai.endDate, nextDate);
-    assert.equal(ai.endTime, "01:05");
+    assert.equal(ai.startDate, date);
+    assert.equal(ai.startTime, "23:00");
+    assert.equal(ai.endDate, date);
+    assert.equal(ai.endTime, "23:59");
     const submit = adjustUetdsTripTimesForSubmit(input, now);
     assert.equal(submit.startDate, nextDate);
     assert.equal(submit.startTime, "00:32");

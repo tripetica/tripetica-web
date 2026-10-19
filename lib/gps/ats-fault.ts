@@ -1,5 +1,5 @@
 import { parseAtsMinistrySource } from "@/lib/gps/ats-source";
-import { formatAtsKonumZamani } from "@/lib/uetds/ats-soap";
+import { formatAtsArizaZamani } from "@/lib/uetds/ats-soap";
 
 /** Circular (c): notify within 24 hours of the fault start. The repair clock does not restart. */
 export const ATS_FAULT_NOTIFY_MS = 24 * 60 * 60 * 1000;
@@ -95,22 +95,116 @@ export function formatRemainingTr(nowMs: number, endMs: number) {
   return `${left.days} gün ${left.hours} saat`;
 }
 
-/** V15 leaves arizaBaslangicTarihi unconstrained. The circular also requires the clock, so the konum timestamp pattern is used. */
+/** Live ministry code 159 requires dd/MM/yyyy HH:mm. Konum keeps seconds; this does not. */
 export function formatAtsFaultStart(instant: Date) {
-  return formatAtsKonumZamani(instant);
+  return formatAtsArizaZamani(instant);
 }
 
-export function istanbulHourKey(instantMs: number) {
+export type DeviceSignalState = "offline" | "no_gnss" | "restored";
+
+/** Link age uses the fleet stale window. GNSS age uses the 30-minute ATS suspicion window. */
+export function deviceSignalState(input: {
+  lastLinkMs: number | null;
+  lastGnssMs: number | null;
+  nowMs: number;
+  linkStaleMs?: number;
+  gnssStaleMs?: number;
+}): DeviceSignalState {
+  const linkStaleMs = input.linkStaleMs ?? 15 * 60 * 1000;
+  const gnssStaleMs = input.gnssStaleMs ?? ATS_FAULT_OUTAGE_MS;
+  const linkAge = input.lastLinkMs == null ? Number.POSITIVE_INFINITY : input.nowMs - input.lastLinkMs;
+  const gnssAge = input.lastGnssMs == null ? Number.POSITIVE_INFINITY : input.nowMs - input.lastGnssMs;
+  if (!Number.isFinite(linkAge) || linkAge > linkStaleMs) return "offline";
+  if (!Number.isFinite(gnssAge) || gnssAge > gnssStaleMs) return "no_gnss";
+  return "restored";
+}
+
+export type MinistryNoticeState =
+  | "not_sent"
+  | "sending"
+  | "accepted"
+  | "rejected"
+  | "disabled"
+  | "unknown"
+  | "limited";
+
+export function ministryNoticeState(input: {
+  status: string;
+  attempts: readonly { outcome: string }[];
+}): MinistryNoticeState {
+  if (input.status === "accepted" || input.attempts.some((row) => row.outcome === "accepted")) {
+    return "accepted";
+  }
+  if (input.attempts.some((row) => row.outcome === "sending")) return "sending";
+  if (input.status === "rejected") return "rejected";
+  if (input.status === "unknown") return "unknown";
+  if (input.status === "limit_blocked") return "limited";
+  if (input.status === "withheld" || input.attempts.some((row) => row.outcome === "withheld")) {
+    return "disabled";
+  }
+  return "not_sent";
+}
+
+export type PanelMinistryView = {
+  state: "not_sent" | "sending" | "accepted" | "rejected" | "unknown";
+  code: number | null;
+  detail: string | null;
+};
+
+/** The newest attempt wins. Accepted is the only success. A withheld try is not a ministry result. */
+export function panelMinistryView(input: {
+  status: string;
+  attempts: readonly { outcome: string; sonucKodu: number | null; sonucMesaji: string; attemptedAt?: string }[];
+}): PanelMinistryView {
+  const attempts = [...input.attempts].sort((left, right) => Date.parse(left.attemptedAt ?? "") - Date.parse(right.attemptedAt ?? ""));
+  if (input.status === "accepted" || attempts.some((row) => row.outcome === "accepted")) {
+    const accepted = [...attempts].reverse().find((row) => row.outcome === "accepted");
+    return { state: "accepted", code: accepted?.sonucKodu ?? 0, detail: null };
+  }
+  if (attempts.some((row) => row.outcome === "sending")) {
+    return { state: "sending", code: null, detail: null };
+  }
+  const latest = [...attempts].reverse().find((row) => row.outcome !== "withheld" && row.outcome !== "limit_blocked");
+  if (!latest) {
+    if (input.status === "rejected") return { state: "rejected", code: null, detail: null };
+    if (input.status === "unknown") return { state: "unknown", code: null, detail: null };
+    return { state: "not_sent", code: null, detail: null };
+  }
+  if (latest.outcome === "unknown") {
+    return { state: "unknown", code: latest.sonucKodu, detail: latest.sonucMesaji.trim() || null };
+  }
+  if (latest.outcome === "rejected") {
+    return { state: "rejected", code: latest.sonucKodu, detail: latest.sonucMesaji.trim() || null };
+  }
+  return { state: "not_sent", code: null, detail: null };
+}
+
+export function faultFormFields(instantMs: number) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
+    minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(new Date(instantMs));
   const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${read("year")}-${read("month")}-${read("day")}T${read("hour")}`;
+  return { date: `${read("year")}-${read("month")}-${read("day")}`, time: `${read("hour")}:${read("minute")}` };
+}
+
+export type FaultClearanceState = "open" | "closed_local";
+
+export function faultClearanceState(resolvedAt: string | null): FaultClearanceState {
+  return resolvedAt ? "closed_local" : "open";
+}
+
+/** One alert for the same silence. A newer GNSS time starts a new silence. */
+export function gnssOutageAlertIdentity(vehicleId: string, lastGnssMs: number | null) {
+  return {
+    sourceKey: `${vehicleId}:gnss`,
+    slot: lastGnssMs == null ? "silence:none" : `silence:${lastGnssMs}`,
+  };
 }
 
 export type GpsSubscriptionClass =
@@ -224,30 +318,24 @@ export function gnssIsCurrent(input: { tripStartMs: number; lastGnssMs: number |
   return input.nowMs - input.lastGnssMs < ATS_FAULT_OUTAGE_MS;
 }
 
+/** One reminder as the 72-hour repair deadline approaches, then one when it passes. */
 export function repairReminderDecision(input: {
   startedAtMs: number;
   nowMs: number;
   resolved: boolean;
   sent48: boolean;
-  sentHourKeys: readonly string[];
+  sent72: boolean;
 }) {
   if (input.resolved || input.nowMs < input.startedAtMs + ATS_FAULT_REMINDER_MS) {
     return null;
   }
   const overdue = input.nowMs >= input.startedAtMs + ATS_FAULT_REPAIR_MS;
-  if (!input.sent48) {
-    return { slot: "48h", overdue, kind: overdue ? "repair_overdue" as const : "repair_reminder" as const };
+  if (overdue) {
+    if (input.sent72) return null;
+    return { slot: "72h", overdue: true, kind: "repair_overdue" as const };
   }
-  const hour = istanbulHourKey(input.nowMs);
-  const firstHour = istanbulHourKey(input.startedAtMs + ATS_FAULT_REMINDER_MS);
-  if (hour === firstHour || input.sentHourKeys.includes(hour)) {
-    return null;
-  }
-  return {
-    slot: `hour:${hour}`,
-    overdue,
-    kind: overdue ? "repair_overdue" as const : "repair_reminder" as const,
-  };
+  if (input.sent48) return null;
+  return { slot: "48h", overdue: false, kind: "repair_reminder" as const };
 }
 
 export function elapsedMs(startedAtMs: number, nowMs: number) {
@@ -286,7 +374,8 @@ export function gnssOutageMail(input: {
     `Kontrol zamanı: ${formatFaultClock(input.checkpointMs)}`,
     `Son geçerli GNSS zamanı: ${input.lastGnssMs == null ? "Tanımlanmamış" : formatFaultClock(input.lastGnssMs)}`,
     `Son cihaz bağlantısı: ${input.lastLinkMs == null ? "Tanımlanmamış" : formatFaultClock(input.lastLinkMs)}`,
-    `Son başarılı ATS bildirimi: ${input.lastAtsMs == null ? "Tanımlanmamış" : formatFaultClock(input.lastAtsMs)}`,
+    `Son ATS kabul zamanı: ${input.lastAtsMs == null ? "Tanımlanmamış" : formatFaultClock(input.lastAtsMs)}`,
+    "ATS kabul zamanı, son konum paketinin Bakanlığa kabul edildiği andır. Cihazın GNSS ölçüm zamanından sonra olabilir.",
     `Kontrol anındaki konum yaşı: ${input.ageMs == null ? "sefer içinde geçerli konum yok" : formatElapsedTr(input.ageMs)}`,
     "",
     "Aktif sefer sırasında araçtan güncel GNSS konum verisi alınamıyor.",

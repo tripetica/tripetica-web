@@ -1,24 +1,26 @@
 import { parseIsoDate } from "@/lib/ops/process-filters";
 import {
   parseReservationDatePreset,
-  parseReservationOperation,
   pickupAtBounds,
+  reservationOperationWhereSql,
   type PickupAtBounds,
   type ReservationDatePreset,
-  type ReservationOperationFilter,
 } from "@/lib/ops/reservation-filters";
+
+export const PARTNER_ACCEPTED_OPERATIONS = ["active", "completed", "no_show"] as const;
+export type PartnerAcceptedOperation = (typeof PARTNER_ACCEPTED_OPERATIONS)[number];
 
 export type PartnerAcceptedJobFilters = {
   date: ReservationDatePreset | "";
   from: string;
   to: string;
-  operation: ReservationOperationFilter | "";
+  operation: PartnerAcceptedOperation;
 };
 
-export const PARTNER_ACCEPTED_COMPLETED_EXISTS_SQL = `EXISTS (
-         SELECT 1 FROM reservation_driver_tasks driver_task
-         WHERE driver_task.reservation_id = reservations.id
-           AND driver_task.current_stage = 'completed'
+export const PARTNER_ACCEPTED_PENDING_NO_SHOW_EXISTS_SQL = `EXISTS (
+         SELECT 1 FROM reservation_driver_no_show_reports no_show_report
+         WHERE no_show_report.reservation_id = reservations.id
+           AND no_show_report.review_status = 'pending'
        )`;
 
 export function firstSearchParam(value: string | string[] | undefined) {
@@ -38,7 +40,11 @@ export function parsePartnerAcceptedJobFilters(input: {
     date,
     from: date === "range" ? from : "",
     to: date === "range" ? to : "",
-    operation: parseReservationOperation(input.operation ?? ""),
+    operation: (PARTNER_ACCEPTED_OPERATIONS as readonly string[]).includes(
+      input.operation ?? "",
+    )
+      ? (input.operation as PartnerAcceptedOperation)
+      : "active",
   };
 }
 
@@ -49,12 +55,12 @@ export function partnerAcceptedJobQueryRecord(
     date: filters.date,
     from: filters.date === "range" ? filters.from : "",
     to: filters.date === "range" ? filters.to : "",
-    operation: filters.operation ?? "",
+    operation: filters.operation === "active" ? "" : filters.operation,
   };
 }
 
 export function hasActivePartnerAcceptedJobFilters(filters: PartnerAcceptedJobFilters) {
-  return Boolean(filters.date || filters.operation);
+  return Boolean(filters.date || filters.operation !== "active");
 }
 
 export function partnerAcceptedJobPickupBounds(
@@ -84,10 +90,13 @@ export function appendPickupAtBoundsSql(
   clauses.push(`${column} < $${values.length}`);
 }
 
-export function partnerAcceptedJobCompletedClause(
-  operation: ReservationOperationFilter | "",
-) {
-  return operation === "completed"
-    ? PARTNER_ACCEPTED_COMPLETED_EXISTS_SQL
-    : `NOT ${PARTNER_ACCEPTED_COMPLETED_EXISTS_SQL}`;
+export function partnerAcceptedJobOperationClause(operation: PartnerAcceptedOperation) {
+  if (operation === "completed") {
+    return reservationOperationWhereSql("completed")!;
+  }
+  if (operation === "no_show") {
+    return `(status = 'no_show' OR ${PARTNER_ACCEPTED_PENDING_NO_SHOW_EXISTS_SQL})`;
+  }
+  return `${reservationOperationWhereSql("active")!}
+       AND NOT ${PARTNER_ACCEPTED_PENDING_NO_SHOW_EXISTS_SQL}`;
 }

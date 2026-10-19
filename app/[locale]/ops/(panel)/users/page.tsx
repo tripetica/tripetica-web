@@ -7,6 +7,7 @@ import { formatOpsDateTime, parsePage, parseQuery } from "@/lib/ops/format";
 import { actorCan } from "@/lib/ops/session";
 import { listOpsUsers } from "@/lib/ops/users";
 import { OpsPagination } from "@/components/ops/pagination";
+import { OpsSelectableTable } from "@/components/ops/selectable-table";
 
 export const dynamic = "force-dynamic";
 
@@ -63,38 +64,38 @@ export default async function OpsUsersPage({
       {items.length === 0 ? (
         <p className="ops-empty">{copy.emptyUsers}</p>
       ) : (
-        <div className="ops-table-wrap">
-          <table className="ops-table">
-            <thead>
-              <tr>
-                <th>{copy.firstName}</th>
-                <th>{copy.lastName}</th>
-                <th>{copy.email}</th>
-                <th>{copy.role}</th>
-                <th>{copy.status}</th>
-                <th>{copy.lastLogin}</th>
-                <th>{copy.createdAt}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <a href={localizedPath(locale, `/ops/users/${item.id}`)}>
-                      {item.firstName}
-                    </a>
-                  </td>
-                  <td>{item.lastName}</td>
-                  <td>{item.email}</td>
-                  <td>{item.role === "owner" ? copy.owner : copy.employee}</td>
-                  <td>{item.isActive ? copy.active : copy.inactive}</td>
-                  <td>{formatOpsDateTime(item.lastLoginAt, locale)}</td>
-                  <td>{formatOpsDateTime(item.createdAt, locale)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <OpsSelectableTable
+          page={page}
+          pageSize={25}
+          selectLabel={copy.selectColumn}
+          headers={(
+            <>
+              <th>{copy.firstName}</th>
+              <th>{copy.lastName}</th>
+              <th>{copy.email}</th>
+              <th>{copy.role}</th>
+              <th>{copy.status}</th>
+              <th>{copy.lastLogin}</th>
+              <th>{copy.createdAt}</th>
+            </>
+          )}
+          rows={items.map((item) => ({
+            id: item.id,
+            cells: [
+              <span key="first-name">
+                <a href={localizedPath(locale, `/ops/users/${item.id}`)}>
+                  {item.firstName}
+                </a>
+              </span>,
+              item.lastName,
+              item.email,
+              item.role === "owner" ? copy.owner : copy.employee,
+              item.isActive ? copy.active : copy.inactive,
+              formatOpsDateTime(item.lastLoginAt, locale),
+              formatOpsDateTime(item.createdAt, locale),
+            ],
+          }))}
+        />
       )}
       <OpsPagination
         locale={locale}

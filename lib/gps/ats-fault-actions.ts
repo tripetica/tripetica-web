@@ -19,12 +19,27 @@ import {
   markFaultLimited,
   readFault,
   resolveFault,
+  updateFaultDraft,
 } from "@/lib/gps/ats-fault-store";
 import { isLocale, locales } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
-import { postAtsArizaBildir } from "@/lib/uetds/ats-post";
+import { atsFaultSocketOpen, postAtsArizaBildir } from "@/lib/uetds/ats-post";
 import { loadUetdsMinistryCredentials } from "@/lib/uetds/ministry-credentials";
+
+function readFaultDraft(formData: FormData) {
+  const startDate = String(formData.get("startDate") ?? "");
+  const startTime = String(formData.get("startTime") ?? "");
+  if (!startDate || !startTime) return null;
+  const started = istanbulLocalToUtcMs(`${startDate}T${startTime}`);
+  const kind = String(formData.get("kind") ?? "");
+  const description = String(formData.get("description") ?? "").trim();
+  if (!isAtsFaultKind(kind) || description.length < 1 || description.length > 500 || !Number.isFinite(started)) {
+    return null;
+  }
+  if (started > Date.now() + 2 * 60 * 1000) return null;
+  return { startedAt: new Date(started), kind, description };
+}
 
 function plateKey(plate: string) {
   return plate.replace(/\s+/g, "").toUpperCase();
@@ -119,6 +134,8 @@ export async function sendGpsAtsFaultAction(formData: FormData) {
   if (next === "second" && formData.get("confirmSecond") !== "yes") {
     redirect(`${back}?fault=${fault.id}&need=second`);
   }
+  const revised = readFaultDraft(formData);
+  if (revised) await updateFaultDraft(fault.id, revised);
   const attempts = await listAttempts(fault.id);
   const pending = attempts.some((row) => row.outcome === "unknown" || row.outcome === "sending");
   if (pending && formData.get("confirmUnknown") !== "yes") {
@@ -139,6 +156,9 @@ async function sendFault(faultId: string, actorId: string, allowUnknown: boolean
   }
   const attempts = await listAttempts(fault.id);
   if (attempts.some((row) => row.outcome === "unknown" || row.outcome === "sending") && !allowUnknown) {
+    return;
+  }
+  if (!atsFaultSocketOpen()) {
     return;
   }
   const begun = await beginMinistryAttempt(fault.id, actorId);

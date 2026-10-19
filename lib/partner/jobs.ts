@@ -18,7 +18,7 @@ import {
 } from "@/lib/partner/job-visibility";
 import {
   appendPickupAtBoundsSql,
-  partnerAcceptedJobCompletedClause,
+  partnerAcceptedJobOperationClause,
   partnerAcceptedJobPickupBounds,
   type PartnerAcceptedJobFilters,
 } from "@/lib/partner/accepted-job-filters";
@@ -295,7 +295,7 @@ export async function listAcceptedPartnerJobs(
   const values: unknown[] = [viewer.partnerId];
   const clauses = ["deleted_at IS NULL", "accepted_partner_id = $1"];
   if (filters) {
-    clauses.push(partnerAcceptedJobCompletedClause(filters.operation ?? ""));
+    clauses.push(partnerAcceptedJobOperationClause(filters.operation));
     const pickupBounds = partnerAcceptedJobPickupBounds(filters);
     if (pickupBounds) {
       appendPickupAtBoundsSql(clauses, values, pickupBounds);

@@ -3,6 +3,8 @@ import { type TeltonikaRecord } from "@/lib/teltonika/codec";
 
 export const TELTONIKA_IGNITION_IO = 239;
 export const TELTONIKA_DIN1_IO = 1;
+/** Flash backlog from a previous install is dropped. Live records stay. */
+export const TELTONIKA_MAX_AGE_MS = 30 * 60 * 1000;
 
 export type GpsReceiver = "esp32" | "teltonika";
 
@@ -28,7 +30,44 @@ export function teltonikaSequences(records: readonly TeltonikaRecord[]) {
   });
 }
 
+export function teltonikaCoordinate(record: TeltonikaRecord) {
+  if (
+    !Number.isFinite(record.latitude)
+    || !Number.isFinite(record.longitude)
+    || record.latitude < -90
+    || record.latitude > 90
+    || record.longitude < -180
+    || record.longitude > 180
+    || (record.latitude === 0 && record.longitude === 0)
+  ) {
+    return null;
+  }
+  return {
+    latitude: record.latitude,
+    longitude: record.longitude,
+    speedMps: record.speedKmh / 3.6,
+    headingDeg: record.headingDeg,
+    satellites: record.satellites,
+    recordedAt: new Date(record.timestampMs),
+  };
+}
+
+export function teltonikaNewestCoordinate(records: readonly TeltonikaRecord[]) {
+  let chosen: NonNullable<ReturnType<typeof teltonikaCoordinate>> | null = null;
+  for (const record of records) {
+    const point = teltonikaCoordinate(record);
+    if (!point) continue;
+    if (!chosen || point.recordedAt.getTime() >= chosen.recordedAt.getTime()) {
+      chosen = point;
+    }
+  }
+  return chosen;
+}
+
 export function teltonikaPoint(record: TeltonikaRecord, seq: number, now: Date): { point: GpsPoint } | { error: GpsPointError } {
+  if (record.timestampMs < now.getTime() - TELTONIKA_MAX_AGE_MS) {
+    return { error: "stale_time" };
+  }
   const point: GpsPoint = {
     seq,
     gnssTime: new Date(record.timestampMs),

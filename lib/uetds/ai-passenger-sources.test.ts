@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
 import { mergeAiExtractedSources, mergeAiPassengerSources } from "@/lib/uetds/ai-passenger-sources";
 import { mapAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
 import { repairUetdsExtractedPersonNames } from "@/lib/uetds/passenger-name";
@@ -73,4 +74,16 @@ test("the same slash name and passport number stay one person, and a different n
   assert.equal(merged[1]?.lastName, "CAI");
   assert.equal(repairUetdsExtractedPersonNames({ firstName: "SUN/CHONG=EC7094049" }).lastName, "SUN");
   assert.equal(repairUetdsExtractedPersonNames({ firstName: "SUN/CHONG=EC7094049" }).firstName, "CHONG");
+});
+
+test("reservation trip date wins over a passport birth date in either file order", () => {
+  const now = istanbulLocalToUtcMs("2026-10-18T22:47");
+  const passport = { startDate: "2005-03-18", startTime: undefined as string | undefined, passengers: [person("LOVELACE", "ADA", "C11111111", "DE", "female")] };
+  const voucher = { startDate: "2026-10-19", startTime: "06:00", origin: "Hotel", destination: "SAW", passengers: [person("LOVELACE", "ADA", "C11111111", "DE", "female")] };
+  for (const order of [[passport, voucher], [voucher, passport]]) {
+    const merged = mergeAiExtractedSources(order, now);
+    assert.equal(merged.startDate, "2026-10-19");
+    assert.equal(merged.startTime, "06:00");
+    assert.notEqual(merged.startDate, "2005-03-18");
+  }
 });

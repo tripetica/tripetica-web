@@ -2,6 +2,7 @@
 // https://uetds.uab.gov.tr/teknik-dokuman — airport codes are 99xxx, not IATA.
 import { airportPresets } from "@/lib/booking/catalog";
 import { countries, countryByIso2, normalizeIso2 } from "@/lib/geo/countries";
+import { iso2FromIso3, iso2FromNationalityPhrase } from "@/lib/geo/iso3166-alpha3";
 import officialCountries from "@/lib/uetds/data/official-countries.json";
 import officialPlaces from "@/lib/uetds/data/official-places.json";
 import {
@@ -241,6 +242,28 @@ export function officialUetdsNationalityCode(value: string | null | undefined): 
   if (!raw) {
     return null;
   }
+  const officialDirect = officialUetdsCountryByCode(raw);
+  if (officialDirect) {
+    return officialDirect.code;
+  }
+  const compact = raw.toUpperCase().replace(/[^A-Z]/g, "");
+  if (compact.length === 3 || compact.length === 1) {
+    const fromIso3 = iso2FromIso3(compact);
+    if (fromIso3) {
+      const official = officialUetdsNationalityCode(fromIso3 === "XK" ? "K" : fromIso3);
+      if (official) return official;
+    }
+  }
+  const fromPhrase = iso2FromNationalityPhrase(raw);
+  if (fromPhrase) {
+    const official = officialUetdsNationalityCode(fromPhrase === "XK" ? "K" : fromPhrase);
+    if (official) return official;
+  }
+  const strippedTitle = raw.replace(/^(the\s+)?((islamic|arab)\s+)?(republic|kingdom|state)\s+of(?:\s+the)?\s+/i, "").trim();
+  if (strippedTitle && strippedTitle.toLowerCase() !== raw.toLowerCase()) {
+    const fromTitle = officialUetdsNationalityCode(strippedTitle);
+    if (fromTitle) return fromTitle;
+  }
   const needle = foldCountryName(raw);
   const byOfficialName = COUNTRIES.find((country) => foldCountryName(country.name) === needle);
   if (byOfficialName) {
@@ -284,6 +307,7 @@ export function officialUetdsNationalityCode(value: string | null | undefined): 
     england: "GB",
     britain: "GB",
     "great britain": "GB",
+    xk: "K",
   };
   return aliases[needle] ?? null;
 }

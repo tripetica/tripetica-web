@@ -32,6 +32,7 @@ import {
   subscriptionPeriodLabel,
   type UetdsDriverSubscriptionListSummary,
 } from "@/lib/uetds/driver-subscription";
+import { useRowSelection } from "@/components/ops/use-row-selection";
 
 type OpsVehicleTableProps = {
   locale: Locale;
@@ -70,6 +71,7 @@ export function OpsVehicleTable({
   const pages = pageCount(total, pageSize);
   const startIndex = (page - 1) * pageSize;
   const skipFirstFetch = useRef(true);
+  const selection = useRowSelection(items.map((item) => item.id));
 
   useEffect(() => {
     if (skipFirstFetch.current) {
@@ -123,10 +125,20 @@ export function OpsVehicleTable({
         </p>
       ) : (
         <div className="ops-table-wrap">
-          <table className="ops-table">
+          <table className="ops-table ops-table-selectable ops-entity-selectable">
             <thead>
               <tr>
-                <th>{copy.driverRowIndex}</th>
+                <th className="ops-row-num-col">NO</th>
+                <th className="ops-check-col">
+                  <label className="ops-check-only">
+                    <span className="ops-sr-only">{copy.selectColumn}</span>
+                    <input
+                      type="checkbox"
+                      checked={selection.allSelected}
+                      onChange={selection.toggleAll}
+                    />
+                  </label>
+                </th>
                 <th>{copy.vehiclePlate}</th>
                 <th>{copy.vehicleBrandModel}</th>
                 <th>{copy.vehicleModelYear}</th>
@@ -145,9 +157,26 @@ export function OpsVehicleTable({
               </tr>
             </thead>
             <tbody>
-              {items.map((vehicle, index) => (
-                <tr key={vehicle.id}>
-                  <td>{startIndex + index + 1}</td>
+              {items.map((vehicle, index) => {
+                const selected = selection.selectedIds.has(vehicle.id);
+                return (
+                <tr
+                  key={vehicle.id}
+                  className={selected ? "is-selected" : undefined}
+                  aria-selected={selected}
+                  onClick={(event) => selection.onRowClick(event, vehicle.id)}
+                >
+                  <td className="ops-row-num-col">{startIndex + index + 1}</td>
+                  <td className="ops-check-col" onClick={(event) => event.stopPropagation()}>
+                    <label className="ops-check-only">
+                      <span className="ops-sr-only">{copy.selectColumn}</span>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => selection.toggle(vehicle.id)}
+                      />
+                    </label>
+                  </td>
                   <td>{vehicle.plate}</td>
                   <td>{partnerVehicleBrandModel(vehicle)}</td>
                   <td>{vehicle.modelYear ?? "—"}</td>
@@ -271,7 +300,8 @@ export function OpsVehicleTable({
                     </a>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

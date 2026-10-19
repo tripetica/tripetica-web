@@ -1,4 +1,5 @@
 import type { UetdsExtractedPassenger } from "@/lib/uetds/extract";
+import { tripInstantScore } from "@/lib/uetds/extracted-datetime";
 
 const MISSING_DOCUMENT = "11111111111";
 
@@ -71,16 +72,29 @@ type TripSlice = {
   tripKind?: "transfer" | "tour" | "charter" | "other";
   purpose?: string;
   fare?: string;
+  passengerCount?: number;
   passengers?: AiPassengerSource[];
 };
 
-/** Keep the first explicit trip value. Later files only fill fields that are still empty. */
-export function mergeAiExtractedSources<T extends TripSlice>(parts: T[]): T {
+/** Keep the first explicit trip value, except a later reservation clock beats a passport birth/issue date. */
+export function mergeAiExtractedSources<T extends TripSlice>(parts: T[], nowUtcMs = Date.now()): T {
   const merged = {} as T;
   for (const part of parts) {
-    for (const key of ["origin", "destination", "startDate", "startTime", "endDate", "endTime", "tripKind", "purpose", "fare"] as const) {
+    const currentScore = tripInstantScore(merged.startDate as string | undefined, merged.startTime as string | undefined, nowUtcMs);
+    const incomingScore = tripInstantScore(part.startDate, part.startTime, nowUtcMs);
+    if (incomingScore > currentScore) {
+      if (part.startDate) merged.startDate = part.startDate as never;
+      else delete merged.startDate;
+      if (part.startTime) merged.startTime = part.startTime as never;
+    } else {
+      if (!merged.startDate && part.startDate && incomingScore >= 0) merged.startDate = part.startDate as never;
+      if (!merged.startTime && part.startTime && incomingScore >= 0) merged.startTime = part.startTime as never;
+    }
+    for (const key of ["origin", "destination", "endDate", "endTime", "tripKind", "purpose", "fare"] as const) {
       if (!merged[key] && part[key]) merged[key] = part[key] as never;
     }
+    const stated = part.passengerCount ?? 0;
+    if (stated > (merged.passengerCount ?? 0)) merged.passengerCount = stated;
   }
   merged.passengers = mergeAiPassengerSources(parts.map((part) => part.passengers ?? []));
   return merged;

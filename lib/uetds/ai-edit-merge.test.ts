@@ -412,7 +412,7 @@ test("AI edit target save keeps the recorded clock while other fields change", (
   assert.equal(trip.endTime, "12:20");
 });
 
-test("a new notification still applies +65 and raises a short document end only to +30 minutes", () => {
+test("a new notification keeps the document start and raises a short document end only to +30 minutes", () => {
   const draft = createEmptyDraft("manual", { applyTripDefaults: false });
   draft.startDate = "2026-10-02";
   draft.startTime = "10:10";
@@ -425,6 +425,6 @@ test("a new notification still applies +65 and raises a short document end only 
     endDate: "2026-10-02",
     endTime: "10:30",
   }, now).draft;
-  assert.equal(next.startTime, "11:05");
-  assert.equal(next.endTime, "11:35");
+  assert.equal(next.startTime, "10:10");
+  assert.equal(next.endTime, "10:40");
 });

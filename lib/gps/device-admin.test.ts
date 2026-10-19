@@ -26,7 +26,8 @@ test("assignment does not rewrite stored positions and partners cannot provision
   const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(workspace, /surface === "partner" \? <CommandAudit/);
   assert.match(workspace, /<CommandAudit/);
-  assert.match(workspace, /surface === "ops" && route\.step > 1 \? <p>\{copy\.routeSampled\}/);
+  const history = readFileSync(new URL("../../components/gps/position-history.tsx", import.meta.url), "utf8");
+  assert.match(history, /history\.surface === "ops" && history\.step > 1 \? <p>\{copy\.routeSampled\}/);
   assert.match(assign, /INSERT INTO gps_device_assignments/);
   const board = readFileSync(new URL("../../components/gps/device-board.tsx", import.meta.url), "utf8");
   assert.match(board, /ops-table/);
@@ -63,7 +64,7 @@ test("assignment does not rewrite stored positions and partners cannot provision
   assert.match(deleteAction, /deleteGpsDeviceForActor/);
   assert.doesNotMatch(deleteAction, /firstName|lastName|Yıldırım|Yildirim/);
   assert.match(workspace, /canDelete \?/);
-  assert.match(workspace, /surface === "ops" && route\.step > 1 \? <p>\{copy\.routeSampled\}/);
+  assert.match(history, /history\.surface === "ops" && history\.step > 1 \? <p>\{copy\.routeSampled\}/);
   const dialog = readFileSync(new URL("../../components/gps/device-delete.tsx", import.meta.url), "utf8");
   assert.match(dialog, /type="button"/);
   assert.match(dialog, /deleteGpsDeviceAction/);

@@ -25,6 +25,15 @@ export type GpsFleetVehicle = {
   partnerName?: string | null;
   trackerModel?: string | null;
   manufacturer?: "esp32" | "teltonika" | null;
+  wifiEnabled?: boolean | null;
+  reportedWifiSsid?: string | null;
+  wifiClients?: number | null;
+  lteRegistration?: string | null;
+  network?: string | null;
+  rssi?: number | null;
+  pppStatus?: string | null;
+  naptStatus?: string | null;
+  apStatus?: string | null;
   din1State?: "on" | "off" | null;
   brand?: string | null;
   model?: string | null;
@@ -234,6 +243,15 @@ export function readGpsFleet(body: unknown): GpsFleetVehicle[] | null {
       partnerName: typeof row.partnerName === "string" ? row.partnerName : null,
       trackerModel: typeof row.trackerModel === "string" ? row.trackerModel : null,
       manufacturer: row.manufacturer === "esp32" || row.manufacturer === "teltonika" ? row.manufacturer : null,
+      wifiEnabled: row.wifiEnabled === true ? true : row.wifiEnabled === false ? false : null,
+      reportedWifiSsid: typeof row.reportedWifiSsid === "string" ? row.reportedWifiSsid : null,
+      wifiClients: numberOrNull(row.wifiClients),
+      lteRegistration: typeof row.lteRegistration === "string" ? row.lteRegistration : null,
+      network: typeof row.network === "string" ? row.network : null,
+      rssi: numberOrNull(row.rssi),
+      pppStatus: typeof row.pppStatus === "string" ? row.pppStatus : null,
+      naptStatus: typeof row.naptStatus === "string" ? row.naptStatus : null,
+      apStatus: typeof row.apStatus === "string" ? row.apStatus : null,
       din1State: row.din1State === "on" || row.din1State === "off" ? row.din1State : null,
       brand: optionalText(row, "brand"),
       model: optionalText(row, "model"),
@@ -255,6 +273,16 @@ export function mergeGpsFleetIdentity(
       vehicleId: vehicle.vehicleId || earlier.vehicleId || null,
       brand: vehicle.brand !== undefined ? vehicle.brand : (earlier.brand ?? null),
       model: vehicle.model !== undefined ? vehicle.model : (earlier.model ?? null),
+      manufacturer: vehicle.manufacturer ?? earlier.manufacturer ?? null,
+      wifiEnabled: vehicle.wifiEnabled !== undefined ? vehicle.wifiEnabled : earlier.wifiEnabled,
+      reportedWifiSsid: vehicle.reportedWifiSsid !== undefined ? vehicle.reportedWifiSsid : earlier.reportedWifiSsid,
+      wifiClients: vehicle.wifiClients !== undefined ? vehicle.wifiClients : earlier.wifiClients,
+      lteRegistration: vehicle.lteRegistration !== undefined ? vehicle.lteRegistration : earlier.lteRegistration,
+      network: vehicle.network !== undefined ? vehicle.network : earlier.network,
+      rssi: vehicle.rssi !== undefined ? vehicle.rssi : earlier.rssi,
+      pppStatus: vehicle.pppStatus !== undefined ? vehicle.pppStatus : earlier.pppStatus,
+      naptStatus: vehicle.naptStatus !== undefined ? vehicle.naptStatus : earlier.naptStatus,
+      apStatus: vehicle.apStatus !== undefined ? vehicle.apStatus : earlier.apStatus,
     };
   });
 }

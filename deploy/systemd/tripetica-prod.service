@@ -9,6 +9,8 @@ User=tripetica-prod
 Group=tripetica-prod
 WorkingDirectory=/srv/tripetica/current
 Environment=NODE_ENV=production
+# Live atsArizaBildir uses the same drop-in approval as the ATS worker.
+# The flag stays out of this unit so a copied service file cannot open the socket alone.
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3001
 Environment=PATH=/usr/bin:/usr/local/bin

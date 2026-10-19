@@ -8,6 +8,7 @@ import {
 import {
   classifyGpsSubscription,
   gnssCheckpointDecision,
+  gnssOutageAlertIdentity,
   gnssOutageMail,
   planGnssSuspicion,
   repairReminderDecision,
@@ -198,10 +199,11 @@ async function scanTrips(
         href: HREF,
       });
       const sourceKey = `${vehicleId}:${item.tripId}:${fix?.id ?? "none"}`;
+      const alert = gnssOutageAlertIdentity(vehicleId, lastGnssMs);
       const result = await deliverFaultAlert({
         kind: "gnss_outage",
-        sourceKey,
-        slot: String(item.plan.checkpointMs),
+        sourceKey: alert.sourceKey,
+        slot: alert.slot,
         plate,
         title: mail.subject,
         body: mail.text,
@@ -264,7 +266,7 @@ async function scanReminders(nowMs: number, dry: boolean, summary: { reminders: 
       nowMs,
       resolved: false,
       sent48: slots.includes("48h"),
-      sentHourKeys: slots.filter((slot) => slot.startsWith("hour:")).map((slot) => slot.slice(5)),
+      sent72: slots.includes("72h"),
     });
     if (!decision) continue;
     const mail = repairReminderMail({

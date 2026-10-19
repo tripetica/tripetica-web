@@ -49,16 +49,22 @@ test("atsKonumBildir XML follows the XSD sequence and keeps the GNSS timestamp",
   assert.equal(atsAutomaticFaultReportEnabled(), false);
 });
 
-test("atsArizaBildir is buildable and is not wrapped as a position report", () => {
+test("atsArizaBildir uses day/month/year hour:minute and rejects seconds", () => {
   const xml = atsArizaBildirInnerXml({
     username: "test-user",
     password: "test-secret",
     plate: "34EGP847",
-    arizaBaslangicTarihi: "07/01/2026",
+    arizaBaslangicTarihi: "07/01/2026 14:15",
     aciklama: "unit",
   });
-  assert.match(xml, /<wsuser>/);
-  assert.match(xml, /<plaka>34EGP847<\/plaka>/);
+  assert.match(xml, /<arizaBaslangicTarihi>07\/01\/2026 14:15<\/arizaBaslangicTarihi>/);
+  assert.throws(() => atsArizaBildirInnerXml({
+    username: "test-user",
+    password: "test-secret",
+    plate: "34EGP847",
+    arizaBaslangicTarihi: "07/01/2026 14:15:30",
+    aciklama: "unit",
+  }), /ats_fault_time/);
   assert.doesNotMatch(xml, /konumEkleInput|enlem|boylam/);
   const poster = readFileSync(new URL("./ats-post.ts", import.meta.url), "utf8");
   assert.match(poster, /ats_dispatch_withheld/);

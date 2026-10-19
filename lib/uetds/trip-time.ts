@@ -269,7 +269,9 @@ export function adjustUetdsTripTimesForSubmit(
 
 /**
  * Deterministic AI/prefill trip times (not model guessing):
- * - missing/too-early start → extraction_now + 65m
+ * - missing start (no written date) → extraction_now + 65m
+ * - a written reservation start is kept even when it is sooner than now + 65m
+ * - a written date without a clock is kept; the clock is not invented
  * - missing end → start + 3h at an airport, otherwise start + 2h
  * - an explicit end is kept when it meets the pickup minimum; a shorter one is raised only to that minimum
  */
@@ -294,10 +296,8 @@ export function applyUetdsAiExtractionTripTimes(
   let startDate = input.startDate.trim();
   let startTime = input.startTime.trim();
   let startFromFallback = false;
-  if (
-    !hasCompleteUetdsDateTime(startDate, startTime) ||
-    uetdsStartRemainingMs(startDate, startTime, nowUtcMs) < UETDS_DEFAULT_START_LEAD_MS
-  ) {
+  const completeStart = hasCompleteUetdsDateTime(startDate, startTime);
+  if (!completeStart && !startDate) {
     const start = uetdsMinimumStart(nowUtcMs);
     startDate = start.date;
     startTime = start.time;

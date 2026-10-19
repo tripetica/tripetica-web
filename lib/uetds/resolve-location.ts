@@ -41,9 +41,14 @@ export const UETDS_PLACE_AUTO_SELECT_SCORE_GAP = 25;
 
 const GENERIC_PLACE_TYPES = new Set([
   "locality",
+  "neighborhood",
   "political",
+  "sublocality",
+  "sublocality_level_1",
+  "sublocality_level_2",
   "administrative_area_level_1",
   "administrative_area_level_2",
+  "administrative_area_level_3",
   "country",
   "geocode",
 ]);
@@ -101,6 +106,80 @@ function queryLooksLikeAirport(query: string) {
   );
 }
 
+function queryLooksLikeAddress(query: string) {
+  const folded = fold(query);
+  return (
+    /\d/.test(folded) ||
+    /\b(CADDE|CADDESI|CD|SOKAK|SOKAGI|SOK|SK|BULVAR|BULVARI|BLV|NO|NUMARA|APT|APARTMAN|DAIRE)\b/.test(
+      folded,
+    )
+  );
+}
+
+function exactAdministrativeSuggestion(
+  query: string,
+  suggestion: UetdsPlaceSuggestionLike,
+) {
+  if (queryLooksLikeAddress(query) || queryLooksLikeAirport(query)) {
+    return false;
+  }
+  const queryIdentity = fold(query.split(/[,;]/, 1)[0] ?? "");
+  const primary = fold(suggestion.primaryText);
+  const types = suggestion.types ?? [];
+  return Boolean(
+    queryIdentity &&
+      primary === queryIdentity &&
+      types.some((type) => GENERIC_PLACE_TYPES.has(type)) &&
+      !types.some((type) => SPECIFIC_PLACE_TYPES.has(type)),
+  );
+}
+
+function isExactOfficialDistrictQuery(query: string, location: UetdsLocation) {
+  if (
+    location.locationType !== "district" ||
+    !isOfficialUetdsLocationReady(location) ||
+    !location.districtOrAirportName.trim()
+  ) {
+    return false;
+  }
+  let remaining = ` ${fold(query)} `;
+  const district = fold(location.districtOrAirportName);
+  const province = fold(location.provinceName);
+  if (!new RegExp(`(?:^| )${district.replace(/ /g, " +")}(?: |$)`).test(remaining.trim())) {
+    return false;
+  }
+  for (const identity of [district, province].filter(Boolean)) {
+    remaining = remaining.replace(
+      new RegExp(` ${identity.replace(/ /g, " +")} `, "g"),
+      " ",
+    );
+  }
+  remaining = remaining
+    .replace(/\b(ILCE|ILCESI|TURKIYE|TURKEY|TR)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return remaining.length === 0;
+}
+
+function isExactOfficialAirportQuery(query: string, location: UetdsLocation) {
+  if (
+    location.locationType !== "airport" ||
+    !isOfficialUetdsLocationReady(location) ||
+    !location.districtOrAirportName.trim() ||
+    queryLooksLikeAddress(query)
+  ) {
+    return false;
+  }
+  const normalizeAirport = (value: string) =>
+    fold(value)
+      .replace(/\b(AIRPORT|HAVAALANI)\b/g, "HAVALIMANI")
+      .replace(/\b(INTERNATIONAL|ULUSLARARASI|INTL)\b/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const queryIdentity = normalizeAirport(query.split(/[,;]/, 1)[0] ?? "");
+  return queryIdentity === normalizeAirport(location.districtOrAirportName);
+}
+
 export function isGenericCityLabel(label: string, query: string) {
   const foldedLabel = fold(label);
   const foldedQuery = fold(query);
@@ -149,6 +228,9 @@ export function scoreUetdsPlaceCandidate(input: {
   }
   if (allTypes.some((type) => SPECIFIC_PLACE_TYPES.has(type))) {
     score += 35;
+  }
+  if (exactAdministrativeSuggestion(input.query, input.suggestion)) {
+    score += 120;
   }
   if (allTypes.includes("airport") || input.location.locationType === "airport") {
     score += 40;
@@ -298,6 +380,16 @@ export async function enrichUetdsLocationFromText(
     formattedAddress: query.trim() || trimmed,
   });
   baseline.placeName = trimmed;
+
+  // An exact official administrative place or airport is already resolved.
+  // Searching Places must not replace its detail level with a courthouse,
+  // hotel, shop, car park, or other POI that happens to be inside it.
+  if (
+    isExactOfficialDistrictQuery(trimmed, baseline) ||
+    isExactOfficialAirportQuery(trimmed, baseline)
+  ) {
+    return baseline;
+  }
 
   if (!lookup) {
     return baseline;

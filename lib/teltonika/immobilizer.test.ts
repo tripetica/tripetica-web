@@ -173,7 +173,7 @@ test("device output, not the user request, decides active and passive", () => {
     deviceCount: 1,
   };
   assert.equal(immobilizerControlAllowed(allowed), true);
-  assert.equal(immobilizerControlAllowed({ ...allowed, partnerIsPrimary: false }), false);
+  assert.equal(immobilizerControlAllowed({ ...allowed, partnerIsPrimary: false }), true);
   assert.equal(immobilizerControlAllowed({ ...allowed, actorPartnerId: "other" }), false);
   assert.equal(immobilizerControlAllowed({ ...allowed, deviceReceiver: "esp32" }), false);
   assert.equal(immobilizerControlAllowed({ ...allowed, deviceCount: 2 }), false);
@@ -194,7 +194,9 @@ test("immobilizer requests stay out of the ESP32 command queue and the AVL liste
   assert.match(readFileSync(new URL("../../components/gps/immobilizer-switch.tsx", import.meta.url), "utf8"), /aria-checked/);
   assert.doesNotMatch(readFileSync(new URL("../../components/gps/immobilizer-switch.tsx", import.meta.url), "utf8"), /checked=\{currentRequest/);
   assert.match(live, /GpsImmobilizerSwitch/);
-  assert.match(readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8"), /deviceControls/);
+  assert.match(readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8"), /deviceControls \|\| loadImmobilizer/);
+  assert.match(readFileSync(new URL("../../app/[locale]/partner/(panel)/gps/page.tsx", import.meta.url), "utf8"), /loadImmobilizer/);
+  assert.doesNotMatch(action, /isPrimaryPartner/);
 });
 
 test("enable needs a server confirmation, and the switch keeps the verified output", () => {

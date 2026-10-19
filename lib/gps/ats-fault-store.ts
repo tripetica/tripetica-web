@@ -17,6 +17,7 @@ export type FaultContext = {
   driverName: string | null;
   driverPhone: string | null;
   lastSeenAt: string | null;
+  lastHeartbeatAt: string | null;
   lastGnssAt: string | null;
 };
 
@@ -74,13 +75,14 @@ export async function loadFaultContext(deviceId: string): Promise<FaultContext |
     last_name: string | null;
     phone: string | null;
     last_seen_at: Date | null;
+    last_heartbeat_at: Date | null;
     recorded_at: Date | null;
   }>(
     `SELECT device.id, device.device_code, device.imei, device.vehicle_id, vehicle.plate,
             device.partner_id, partner.name AS partner_name,
             vehicle.uetds_company_id AS company_id, company.short_name AS company_name,
             driver.id AS driver_id, driver.first_name, driver.last_name, driver.phone,
-            status.last_seen_at, status.recorded_at
+            status.last_seen_at, status.last_heartbeat_at, status.recorded_at
      FROM gps_devices device
      LEFT JOIN partners partner ON partner.id = device.partner_id
      LEFT JOIN partner_vehicles vehicle ON vehicle.id = device.vehicle_id
@@ -108,6 +110,7 @@ export async function loadFaultContext(deviceId: string): Promise<FaultContext |
     driverName: driverName || null,
     driverPhone: row.phone?.trim() || null,
     lastSeenAt: iso(row.last_seen_at),
+    lastHeartbeatAt: iso(row.last_heartbeat_at),
     lastGnssAt: iso(row.recorded_at),
   };
 }
@@ -215,6 +218,15 @@ export async function insertFault(input: {
     ],
   );
   return result.rows[0]?.id ?? null;
+}
+
+export async function updateFaultDraft(faultId: string, input: { startedAt: Date; kind: AtsFaultKind; description: string }) {
+  await getPool().query(
+    `UPDATE gps_ats_faults
+     SET started_at = $2, kind = $3, description = $4, updated_at = NOW()
+     WHERE id = $1 AND ministry_status <> 'accepted' AND resolved_at IS NULL`,
+    [faultId, input.startedAt.toISOString(), input.kind, input.description],
+  );
 }
 
 export async function readFault(id: string) {
@@ -444,14 +456,24 @@ export async function listPanelAlerts(limit = 40) {
 }
 
 export async function lastSuccessfulAtsAt(vehicleId: string) {
-  const result = await getPool().query<{ submitted_at: Date | null }>(
-    `SELECT submitted_at FROM gps_ats_submissions
+  const result = await getPool().query<{
+    submitted_at: Date | null;
+    gnss_time: Date | null;
+    position_note: string | null;
+  }>(
+    `SELECT submitted_at, gnss_time, position_note FROM gps_ats_submissions
      WHERE vehicle_id = $1 AND status = 'succeeded'
      ORDER BY submitted_at DESC NULLS LAST
      LIMIT 1`,
     [vehicleId],
   );
-  return iso(result.rows[0]?.submitted_at ?? null);
+  const row = result.rows[0];
+  if (!row?.submitted_at) return null;
+  return {
+    submittedAt: iso(row.submitted_at),
+    gnssTime: iso(row.gnss_time),
+    positionNote: row.position_note,
+  };
 }
 
 export async function sentReminderSlots(faultId: string) {

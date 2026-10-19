@@ -62,6 +62,13 @@ test("two passengers keep independent nationalities", () => {
   assert.equal(draft.passengers[0]?.nationality, "XS");
 });
 
+test("passport nationality words and ISO alpha-3 become official U-ETDS codes", () => {
+  assert.equal(countryIso2FromName("IRQ"), "IQ");
+  assert.equal(countryIso2FromName("IRAQI"), "IQ");
+  assert.equal(countryIso2FromName("Republic of Iraq"), "IQ");
+  assert.equal(officialUetdsCountryByCode(countryIso2FromName("IRQ") ?? "")?.name, "Irak");
+});
+
 test("England still maps to GB and colliding official names stay distinct", () => {
   assert.equal(countryIso2FromName("İngiltere"), "GB");
   assert.equal(countryIso2FromName("England"), "GB");

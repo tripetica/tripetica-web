@@ -62,17 +62,34 @@ test("live snapshot etag changes only when the device state changes", () => {
   assert.equal(GPS_LIVE_POLL_MS, 5000);
 });
 
-test("partner live payload keeps the map and drops device telemetry", () => {
-  const payload = gpsPartnerLivePayload(snapshot);
+test("partner live payload keeps the map and Wi-Fi status", () => {
+  const payload = gpsPartnerLivePayload({
+    ...snapshot,
+    wifiEnabled: true,
+    wifiClients: 2,
+    rssi: -70,
+    lteRegistration: "home",
+    pppStatus: "up",
+    naptStatus: "on",
+    apStatus: "up",
+  });
   assert.equal("firmware" in payload, false);
   assert.equal("operatorName" in payload, false);
-  assert.equal("rssi" in payload, false);
+  assert.equal("ipAddress" in payload, false);
   assert.equal(payload.latitude, 41.01);
+  assert.equal(payload.rssi, -70);
+  assert.equal(payload.lteRegistration, "home");
+  assert.equal(payload.pppStatus, "up");
+  assert.equal(payload.naptStatus, "on");
+  assert.equal(payload.apStatus, "up");
+  assert.equal(payload.wifiEnabled, true);
+  assert.equal(payload.wifiClients, 2);
   assert.equal(payload.manufacturer, "esp32");
   assert.equal(payload.satellites, 11);
   const parsed = readGpsLiveSnapshot(payload);
   assert.equal(parsed?.firmware, null);
   assert.equal(parsed?.operatorName, null);
+  assert.equal(parsed?.rssi, -70);
   assert.equal(parsed?.latitude, 41.01);
   assert.equal(parsed?.din1State, null);
   assert.equal(parsed?.manufacturer, "esp32");

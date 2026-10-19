@@ -14,7 +14,7 @@ const empty = {
 };
 for (const ambiguous of ["Aksaray", "Hilton"]) {
   for (const pickupAmbiguous of [false, true]) {
-    test(`${ambiguous}: ${pickupAmbiguous ? "pickup" : "dropoff"} keeps clean text and opens its own suggestions`, async () => {
+    test(`${ambiguous}: ${pickupAmbiguous ? "pickup" : "dropoff"} opens only the ambiguous location suggestions`, async () => {
       const origin = pickupAmbiguous ? ambiguous : "İstanbul havalimanı";
       const destination = pickupAmbiguous ? "İstanbul havalimanı" : ambiguous;
       const description = `Alış yeri ${origin} bırakma yeri ${destination} ücret 100`;
@@ -37,7 +37,7 @@ for (const ambiguous of ["Aksaray", "Hilton"]) {
             details: async (placeId) => ({ name: ambiguous, placeId, countryCode: "TR", region: "İstanbul", district: placeId === "a" ? "Fatih" : "Beyoğlu" }),
           },
         );
-        assert.deepEqual(queries, [origin, destination]);
+        assert.deepEqual(queries, [ambiguous]);
         for (const key of ["origin", "destination"] as const) {
           const value = draft[key === "origin" ? "originLocation" : "destinationLocation"];
           const unresolved = (key === "origin") === pickupAmbiguous;

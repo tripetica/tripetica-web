@@ -20,7 +20,7 @@ async function immobilizerActor(surface: "ops" | "partner", deviceId: string) {
     };
   }
   const partner = await getPartnerActor();
-  if (partner && !partner.mustChangePassword && partner.isPrimaryPartner && partnerHasTab(partner, "gps")) {
+  if (partner && !partner.mustChangePassword && partnerHasTab(partner, "gps")) {
     return {
       partnerScope: partner.partnerId,
       actorLabel: partner.partnerName,

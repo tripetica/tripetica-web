@@ -28,6 +28,7 @@ import {
   type FleetChoicesByPartner,
 } from "@/lib/partner/fleet-pairing-rules";
 import { formatPartnerFleetPhone, formatUetdsCompanyListLabel } from "@/lib/partner/fleet-view";
+import { useRowSelection } from "@/components/ops/use-row-selection";
 
 type OpsDriverTableProps = {
   locale: Locale;
@@ -65,6 +66,7 @@ export function OpsDriverTable({
   const pages = pageCount(total, pageSize);
   const startIndex = (page - 1) * pageSize;
   const skipFirstFetch = useRef(true);
+  const selection = useRowSelection(items.map((item) => item.id));
 
   useEffect(() => {
     if (skipFirstFetch.current) {
@@ -117,10 +119,20 @@ export function OpsDriverTable({
         <p className="ops-empty">{total === 0 && !query.trim() ? copy.emptyDrivers : copy.emptyDriverSearch}</p>
       ) : (
         <div className="ops-table-wrap ops-drivers-table-wrap">
-          <table className="ops-table ops-drivers-table">
+          <table className="ops-table ops-drivers-table ops-table-selectable ops-entity-selectable">
             <thead>
               <tr>
-                <th>{copy.driverRowIndex}</th>
+                <th className="ops-row-num-col">NO</th>
+                <th className="ops-check-col">
+                  <label className="ops-check-only">
+                    <span className="ops-sr-only">{copy.selectColumn}</span>
+                    <input
+                      type="checkbox"
+                      checked={selection.allSelected}
+                      onChange={selection.toggleAll}
+                    />
+                  </label>
+                </th>
                 <th aria-sort={dir === "asc" ? "ascending" : "descending"}>
                   <button
                     type="button"
@@ -147,9 +159,26 @@ export function OpsDriverTable({
               </tr>
             </thead>
             <tbody>
-              {items.map((driver, index) => (
-                <tr key={driver.id}>
-                  <td>{startIndex + index + 1}</td>
+              {items.map((driver, index) => {
+                const selected = selection.selectedIds.has(driver.id);
+                return (
+                <tr
+                  key={driver.id}
+                  className={selected ? "is-selected" : undefined}
+                  aria-selected={selected}
+                  onClick={(event) => selection.onRowClick(event, driver.id)}
+                >
+                  <td className="ops-row-num-col">{startIndex + index + 1}</td>
+                  <td className="ops-check-col" onClick={(event) => event.stopPropagation()}>
+                    <label className="ops-check-only">
+                      <span className="ops-sr-only">{copy.selectColumn}</span>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => selection.toggle(driver.id)}
+                      />
+                    </label>
+                  </td>
                   <td>{driver.fullName}</td>
                   <td>{formatPartnerFleetPhone(driver.phone)}</td>
                   <td>{formatPartnerDriverLanguages(driver.languageCodes, locale)}</td>
@@ -274,7 +303,8 @@ export function OpsDriverTable({
                     </a>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -255,8 +255,10 @@ test("gps schema does not call the ministry and keeps the device token hashed", 
   assert.doesNotMatch(header, /charging_inferred|chargingInferred|Şarj oluyor/);
   assert.match(header, /<dt>\{copy\.plate\}<\/dt>/);
   const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
+  const wifiPanel = readFileSync(new URL("../../components/gps/wifi-panel.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(workspace, /wifiClients \?\? 0/);
-  assert.match(workspace, /wifiClients === null/);
+  assert.doesNotMatch(wifiPanel, /wifiClients \?\? 0/);
+  assert.match(wifiPanel, /clients === null/);
   assert.match(controls, /wifi_max_clients/);
   assert.doesNotMatch(controls, /1234qwer/);
   const partnerPage = readFileSync(new URL("../../app/[locale]/partner/(panel)/gps/page.tsx", import.meta.url), "utf8");

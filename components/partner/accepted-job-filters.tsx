@@ -8,6 +8,7 @@ import { RESERVATION_DATE_PRESETS, type ReservationDatePreset } from "@/lib/ops/
 import {
   hasActivePartnerAcceptedJobFilters,
   partnerAcceptedJobQueryRecord,
+  type PartnerAcceptedOperation,
   type PartnerAcceptedJobFilters,
 } from "@/lib/partner/accepted-job-filters";
 import { type PartnerCopy } from "@/lib/partner/copy";
@@ -53,10 +54,20 @@ export function AcceptedJobFilters({ locale, copy, filters }: AcceptedJobFilters
     setPreset(filters.date);
   }
 
+  function operationHref(operation: PartnerAcceptedOperation) {
+    const params = new URLSearchParams(
+      Object.entries(
+        partnerAcceptedJobQueryRecord({ ...filters, operation }),
+      ).filter(([, value]) => value.length > 0),
+    );
+    const query = params.toString();
+    return `${localizedPath(locale, "/partner/accepted")}${query ? `?${query}` : ""}`;
+  }
+
   return (
     <form className="ops-filters ops-filters-wrap partner-accepted-filters" method="get">
-      {filters.operation === "completed" ? (
-        <input type="hidden" name="operation" value="completed" />
+      {filters.operation !== "active" ? (
+        <input type="hidden" name="operation" value={filters.operation} />
       ) : null}
       <div className="ops-date-filter">
         <p className="ops-date-filter-label">{copy.jobDateFilter}</p>
@@ -90,20 +101,20 @@ export function AcceptedJobFilters({ locale, copy, filters }: AcceptedJobFilters
         <div className="ops-date-filter">
           <p className="ops-date-filter-label">{copy.jobOperationStatus}</p>
           <div className="ops-date-chips" role="group" aria-label={copy.jobOperationStatus}>
-            <a
-              className={`ops-date-chip${filters.operation === "completed" ? " is-active" : ""}`}
-              href={`${localizedPath(locale, "/partner/accepted")}?${new URLSearchParams(
-                Object.entries(
-                  partnerAcceptedJobQueryRecord({
-                    ...filters,
-                    operation: filters.operation === "completed" ? "" : "completed",
-                  }),
-                ).filter(([, value]) => value.length > 0),
-              ).toString()}`}
-              aria-pressed={filters.operation === "completed"}
-            >
-              {copy.jobOperationCompleted}
-            </a>
+            {([
+              ["active", copy.jobOperationActive],
+              ["completed", copy.jobOperationCompleted],
+              ["no_show", copy.jobOperationNoShow],
+            ] as const).map(([operation, label]) => (
+              <a
+                key={operation}
+                className={`ops-date-chip${filters.operation === operation ? " is-active" : ""}`}
+                href={operationHref(operation)}
+                aria-current={filters.operation === operation ? "page" : undefined}
+              >
+                {label}
+              </a>
+            ))}
           </div>
         </div>
         {showRange ? (

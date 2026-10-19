@@ -55,9 +55,9 @@ const END_TIME_LABEL =
   /(?:bırakma\s*saati|bırakış\s*saati|varış\s*saati|dropoff\s*time|drop-off\s*time|end\s*time|время\s+(?:высадки|прибытия)|وقت\s+التوصيل)\s*[:\-]?\s*(\d{1,2}[:.]\d{2})/i;
 const TIME_LABEL = /(?:saat|time|час)\s*[:\-]?\s*(\d{1,2}[:.]\d{2})/i;
 const FROM_LABEL =
-  /(?:alış\s*yeri|alış\s*noktası|(?:alış|alis)(?!\s*saati)|başlangıç|biniş|from|pick-?up(?!\s*time)(?:\s*(?:place|location|point))?|nereden|отправление|место\s+подачи|مكان\s+الاستلام)\s*[:\-]?\s*([^\n]{3,80})/i;
+  /(?:alış\s*yeri|alış\s*noktası|(?:alış|alis)(?!\s*saati)|başlangıç|biniş|(?<![\p{L}])from(?![\p{L}])|pick-?up(?!\s*(?:time|only))(?:\s*(?:place|location|point))?|nereden|отправление|место\s+подачи|مكان\s+الاستلام)\s*[:\-]?\s*([^\n]{3,80})/iu;
 const TO_LABEL =
-  /(?:bırakma\s*yeri|bırakış\s*yeri|(?:bırakış|birakis|bırakma|birakma)(?!\s*saati)|varış(?:\s*noktası)?|to(?!\s*time)|drop-?off(?!\s*time)(?:\s*(?:place|location|point))?|nereye|назначение|destination|место\s+высадки|مكان\s+التوصيل)\s*[:\-]?\s*([^\n]{3,80})/i;
+  /(?:bırakma\s*yeri|bırakış\s*yeri|(?:bırakış|birakis|bırakma|birakma)(?!\s*saati)|varış(?:\s*noktası)?|(?<![\p{L}])to(?![\p{L}])(?!\s*time)|drop-?off(?!\s*time)(?:\s*(?:place|location|point))?|nereye|назначение|destination|место\s+высадки|مكان\s+التوصيل)\s*[:\-]?\s*([^\n]{3,80})/iu;
 const FARE_LABEL = /(?:ücret|ucret|tutar|price|fare)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/i;
 const NAME_LABEL = /(?:ad\s*soyad|name|имя|الاسم)\s*[:\-]?\s*([^\n]{3,80})/i;
 const FIRST_LABEL = /(?:first\s*name|имя|الاسم\s+الأول)\s*[:\-]\s*([^\n,]{2,40})/i;

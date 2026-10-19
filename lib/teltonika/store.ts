@@ -1,6 +1,6 @@
 import { getPool } from "@/lib/db/postgres";
 import { ingestTelemetry } from "@/lib/gps/ingest";
-import { teltonikaDin1, teltonikaIgnition, teltonikaImeiAllowed, teltonikaPoint, teltonikaSequences } from "@/lib/teltonika/accept";
+import { teltonikaDin1, teltonikaIgnition, teltonikaImeiAllowed, teltonikaNewestCoordinate, teltonikaPoint, teltonikaSequences } from "@/lib/teltonika/accept";
 import { dout1Readings } from "@/lib/teltonika/immobilizer";
 import { teltonikaGreenDriving, type GreenDrivingReading } from "@/lib/teltonika/green-driving";
 import { type TeltonikaPacket } from "@/lib/teltonika/codec";
@@ -66,6 +66,7 @@ export async function storeTeltonikaPacket(imei: string, packet: TeltonikaPacket
       if (event) green.push(event);
     }
   }
+  const liveHint = teltonikaNewestCoordinate(packet.records);
   if (points.length > 0) {
     const stored = await ingestTelemetry(device.id, points, []);
     if (stored.http !== 200) return { ack: 0 };
@@ -97,9 +98,26 @@ export async function storeTeltonikaPacket(imei: string, packet: TeltonikaPacket
          din1_state = CASE WHEN $4::text IS NULL THEN din1_state ELSE $4 END,
          firmware = COALESCE(firmware, 'FMB920'),
          green_driving_parser_at = COALESCE(green_driving_parser_at, NOW()),
+         latitude = CASE WHEN $5::float8 IS NOT NULL AND (recorded_at IS NULL OR $10::timestamptz >= recorded_at) THEN $5 ELSE latitude END,
+         longitude = CASE WHEN $6::float8 IS NOT NULL AND (recorded_at IS NULL OR $10::timestamptz >= recorded_at) THEN $6 ELSE longitude END,
+         speed_mps = CASE WHEN $7::float8 IS NOT NULL AND (recorded_at IS NULL OR $10::timestamptz >= recorded_at) THEN $7 ELSE speed_mps END,
+         heading_deg = CASE WHEN $8::float8 IS NOT NULL AND (recorded_at IS NULL OR $10::timestamptz >= recorded_at) THEN $8 ELSE heading_deg END,
+         satellites = CASE WHEN $9::int IS NOT NULL AND (recorded_at IS NULL OR $10::timestamptz >= recorded_at) THEN $9 ELSE satellites END,
+         recorded_at = CASE WHEN $10::timestamptz IS NOT NULL AND (recorded_at IS NULL OR $10 >= recorded_at) THEN $10 ELSE recorded_at END,
          updated_at = NOW()
      WHERE device_id = $1`,
-    [device.id, gnssFix, ignition, din1],
+    [
+      device.id,
+      gnssFix || Boolean(liveHint),
+      ignition,
+      din1,
+      liveHint?.latitude ?? null,
+      liveHint?.longitude ?? null,
+      liveHint?.speedMps ?? null,
+      liveHint?.headingDeg ?? null,
+      liveHint?.satellites ?? null,
+      liveHint?.recordedAt.toISOString() ?? null,
+    ],
   );
   if (device.partner_id && device.vehicle_id) {
     for (const event of green) {

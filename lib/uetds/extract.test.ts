@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
 import { createEmptyDraft, createPassengerDraft } from "@/lib/uetds/draft";
 import { countryIso2FromName, extractUetdsFromText, mergeExtractedDraft } from "@/lib/uetds/extract";
 import { mapAiUetdsExtraction, mergeAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
@@ -53,8 +54,10 @@ Açıklama: Transfer
 Ücret: 40 TL
 `;
 
+const LIST_NOW = istanbulLocalToUtcMs("2026-10-10T09:00");
+
 test("a numbered example list keeps every passenger and the shared country", () => {
-  const extracted = extractUetdsFromText(EXAMPLE_LIST);
+  const extracted = extractUetdsFromText(EXAMPLE_LIST, LIST_NOW);
   assert.equal(extracted.passengers?.length, 4);
   assert.deepEqual(extracted.passengers?.map((passenger) => [passenger.firstName, passenger.lastName, passenger.nationality]), [
     ["Oliver", "Bennett", "GB"],
@@ -83,12 +86,12 @@ test("an image extraction with an empty passenger array still uses the visible l
     flightCode: null,
     visibleText: EXAMPLE_LIST,
     passengers: [],
-  });
+  }, "", LIST_NOW);
   assert.equal(mapped.passengers?.length, 4);
   assert.equal(mapped.passengers?.[0]?.firstName, "Oliver");
   assert.equal(mapped.passengers?.[3]?.lastName, "Parker");
   assert.equal(mapped.passengers?.every((passenger) => passenger.nationality === "GB"), true);
-  const merged = mergeAiUetdsExtraction(createEmptyDraft("manual"), mapped, Date.parse("2026-10-10T09:00:00Z"));
+  const merged = mergeAiUetdsExtraction(createEmptyDraft("manual"), mapped, LIST_NOW);
   assert.equal(merged.draft.passengers.length, 4);
   assert.equal(merged.draft.passengers[1]?.firstName, "Charlotte");
   assert.equal(merged.draft.passengers[1]?.nationality, "GB");
@@ -115,7 +118,7 @@ test("nameless model shells do not hide the readable passenger list", () => {
       { firstName: null, lastName: null, nationality: "İngiltere", identityNumber: null, gender: "male" },
       { firstName: null, lastName: null, nationality: "İngiltere", identityNumber: null, gender: "female" },
     ],
-  });
+  }, "", LIST_NOW);
   assert.equal(mapped.passengers?.length, 4);
   assert.deepEqual(
     mapped.passengers?.map((passenger) => [passenger.firstName, passenger.lastName, passenger.nationality]),

@@ -218,6 +218,12 @@ test("the DEV worker cannot be pointed at production or at the live ministry", (
   assert.doesNotMatch(prodService, /allow-test/);
   assert.match(prodTimer, /OnUnitActiveSec=2min/);
   assert.doesNotMatch(prodService, /ATS_LIVE_DISPATCH=approved/);
+  const webUnit = readFileSync(new URL("../../deploy/systemd/tripetica-prod.service", import.meta.url), "utf8");
+  const webDropIn = readFileSync(new URL("../../deploy/systemd/tripetica-prod.service.d/ats-live-dispatch.conf", import.meta.url), "utf8");
+  assert.doesNotMatch(webUnit, /ATS_LIVE_DISPATCH=approved/);
+  assert.match(webDropIn, /ATS_LIVE_DISPATCH=approved/);
+  assert.match(webDropIn, /ATS_MINISTRY_DISPATCH=withheld/);
+  assert.match(webDropIn, /EXPECTED_DATABASE=tripetica/);
   const poster = readFileSync(new URL("../uetds/ats-post.ts", import.meta.url), "utf8");
   const dispatcher = readFileSync(new URL("./ats-run.ts", import.meta.url), "utf8");
   assert.match(poster, /atsLiveDispatchAllowed/);

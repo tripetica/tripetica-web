@@ -52,14 +52,14 @@ test("old and invalid low-battery heartbeats do not replace a valid report", () 
 });
 
 test("partner surfaces keep the switch and drop the mode select", () => {
-  const workspace = readFileSync(new URL("../../components/gps/device-workspace.tsx", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../../components/gps/wifi-panel.tsx", import.meta.url), "utf8");
   const header = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
   const shell = readFileSync(new URL("../../components/partner/shell.tsx", import.meta.url), "utf8");
   const ops = readFileSync(new URL("../../components/ops/shell.tsx", import.meta.url), "utf8");
   const ingest = readFileSync(new URL("./ingest.ts", import.meta.url), "utf8");
   const warning = readFileSync(new URL("../../components/partner/low-battery-warning.tsx", import.meta.url), "utf8");
   const camera = readFileSync(new URL("../../components/gps/camera-live.tsx", import.meta.url), "utf8");
-  assert.match(workspace, /surface === "ops"[\s\S]*<select name="mode"/);
+  assert.match(panel, /surface === "ops"[\s\S]*<select name="mode"/);
   assert.match(header, /gps-battery is-low/);
   assert.match(header, /snapshot\.batteryPercent < 20/);
   assert.match(header, /gps-battery-icon/);
@@ -68,7 +68,7 @@ test("partner surfaces keep the switch and drop the mode select", () => {
   assert.match(copy, /Seçimleri uygula/);
   assert.match(copy, /Apply selections/);
   assert.match(copy, /Применить выбор/);
-  assert.doesNotMatch(copy, /Rotayı göster|Show route|Показать маршрут/);
+  assert.doesNotMatch(copy, /showRoute: "Rotayı göster"|showRoute: "Show route"|showRoute: "Показать маршрут"/);
   assert.match(shell, /PartnerLowBatteryWarning/);
   assert.doesNotMatch(ops, /PartnerLowBatteryWarning/);
   assert.doesNotMatch(ingest, /low_battery_grace_remaining_seconds = 600/);

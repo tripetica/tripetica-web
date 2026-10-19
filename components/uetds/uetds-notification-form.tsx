@@ -37,7 +37,7 @@ import { extractionHasStructuredFields } from "@/lib/uetds/extract";
 import { cloneUetdsDraft } from "@/lib/uetds/ai-edit";
 import { captureAiEditSnapshot, planAiEditContinue, portalNextDraftFromSnapshot, type AiEditChangePlan, type AiEditSnapshot, type PortalNextDraft } from "@/lib/uetds/ai-edit-snapshot";
 import { AiEditLunaWorkspace } from "@/components/uetds/ai-edit-luna-workspace";
-import { AI_EXTRACTION_MAX_TEXT, mergeAiUetdsExtraction, type AiExtractionMergeOptions } from "@/lib/uetds/ai-extraction-schema";
+import { AI_EXTRACTION_MAX_TEXT, mergeAiUetdsExtraction, type AiExtractionMergeOptions, type AiExtractionNotice } from "@/lib/uetds/ai-extraction-schema";
 import {
   createBrowserUetdsPlacesLookup,
   enrichUetdsDraftLocationsFromText,
@@ -105,6 +105,24 @@ function provenanceHint(value: UetdsFieldProvenance, copy: UetdsFormCopy) {
     return copy.fromReservation;
   }
   return null;
+}
+
+function formatExtractionNotices(copy: UetdsFormCopy, notices: AiExtractionNotice[], draft: UetdsDraft) {
+  const lines = notices.map((notice) => {
+    if (notice.code === "passengerGap") {
+      return copy.extractPassengerGap
+        .replace("{stated}", String(notice.stated))
+        .replace("{identified}", String(notice.identified));
+    }
+    if (notice.code === "documentStartKept") {
+      return copy.extractDocumentStart.replace("{date}", notice.date).replace("{time}", notice.time);
+    }
+    return copy.extractSubmitMinimum.replace("{date}", notice.date).replace("{time}", notice.time);
+  });
+  if (draft.startDate && !draft.startTime) {
+    lines.push(copy.extractNeedClock);
+  }
+  return lines.join(" ");
 }
 
 function ProvenanceNote({
@@ -719,11 +737,11 @@ export function UetdsNotificationForm({
       setLocationPrefillVersion((version) => version + 1);
       setConflicts(merged.conflicts);
       const missingAfter = missingMandatoryFields({ ...merged.draft, ...enriched });
-      setExtractHint(
-        merged.conflicts.length || missingAfter.length || countSuggestedFields({ ...merged.draft, ...enriched })
-          ? copy.extractPartial
-          : copy.extractApplied,
-      );
+      const noticeText = formatExtractionNotices(copy, merged.notices ?? [], applied);
+      const baseHint = merged.conflicts.length || missingAfter.length || countSuggestedFields({ ...merged.draft, ...enriched }) || noticeText
+        ? copy.extractPartial
+        : copy.extractApplied;
+      setExtractHint([baseHint, noticeText].filter(Boolean).join(" "));
       return true;
     } catch {
       setExtractHint(copy.extractFailed);

@@ -227,7 +227,7 @@ test("A/B: one clear clock is today's start and is not ignored", () => {
   assert.equal(transfer.endTime, "22:30");
 });
 
-test("a clock earlier than now + 65 minutes becomes now + 65; a later clock is kept", () => {
+test("a written clock stays on the form even when it is sooner than now + 65 minutes", () => {
   for (const text of [
     "20:00",
     "Transfer saati 20:00",
@@ -235,15 +235,16 @@ test("a clock earlier than now + 65 minutes becomes now + 65; a later clock is k
     "Rezervasyon saati 20:00",
     "Sefer başlangıç saati 20:00",
     "Başlangıç zamanı 20:00",
+    "Alış saati 18:30",
   ]) {
     const kept = mergedStart(text, OCT8_1800);
     assert.equal(kept.startDate, "2026-10-08", text);
-    assert.equal(kept.startTime, "20:00", text);
+    assert.equal(kept.startTime, text.includes("18:30") ? "18:30" : "20:00", text);
   }
-  for (const text of ["Alış saati 18:30", "Başlangıç zamanı 17:00", "Sefer başlangıç saati 15:00"]) {
-    const raised = mergedStart(text, OCT8_1800);
-    assert.equal(raised.startDate, "2026-10-08", text);
-    assert.equal(raised.startTime, "19:05", text);
+  for (const text of ["Başlangıç zamanı 17:00", "Sefer başlangıç saati 15:00"]) {
+    const fallback = mergedStart(text, OCT8_1800);
+    assert.equal(fallback.startDate, "2026-10-08", text);
+    assert.equal(fallback.startTime, "19:05", text);
   }
 });
 
@@ -452,7 +453,7 @@ test("a dateless 1:35 at 19:54 is the next occurrence inside 12 hours, and it st
   assert.equal(draft.endTime, "03:35");
   const tooSoon = mergedStart("20:00", OCT8_1954);
   assert.equal(tooSoon.startDate, "2026-10-08");
-  assert.equal(tooSoon.startTime, "20:59");
+  assert.equal(tooSoon.startTime, "20:00");
 });
 
 test("an image clock with no date is the start, including a clock the model put on the end", () => {
@@ -602,15 +603,182 @@ test("an ambiguous numeric date is not guessed and a Turkish date is day-first",
   assert.equal(turkishDraft.startTime, "14:30");
 });
 
-test("a written pickup before the 65 minute minimum is still raised", () => {
+test("a written pickup before the 65 minute minimum stays on the form", () => {
   const now = istanbulLocalToUtcMs("2026-10-17T14:00");
   const draft = mergedStart("Pick-up date & time: 2026-10-17 14:30", now);
   assert.equal(draft.startDate, "2026-10-17");
-  assert.equal(draft.startTime, "15:05");
+  assert.equal(draft.startTime, "14:30");
+  const merged = mergeAiUetdsExtraction(
+    createEmptyDraft("manual", { applyTripDefaults: false }),
+    mapAiUetdsExtraction({ ...empty, startDate: "2026-10-17", startTime: "14:30" }, "Pick-up date & time: 2026-10-17 14:30", now),
+    now,
+  );
+  assert.equal(merged.draft.startTime, "14:30");
+  assert.ok(merged.notices.some((notice) => notice.code === "documentStartKept"));
+  assert.ok(merged.notices.some((notice) => notice.code === "submitMinimum"));
 });
 
 test("a missing pickup still falls back to now + 65 minutes", () => {
   const draft = mergedStart("From: Hotel Sultanahmet\nTo: Istanbul Airport\nPassengers: 2", NIGHT);
   assert.equal(draft.startDate, "2026-10-17");
   assert.equal(draft.startTime, "01:57");
+});
+
+const BOOKING_NOW = istanbulLocalToUtcMs("2026-10-18T22:47");
+const AGENCY_VOUCHER = `17:37
+BOOKAA000001
+RIDE AND CUSTOMER DETAILS
+19.10.2026 - 06:00
+Sample Bosphorus Hotel, Besiktas/Istanbul, Turkiye
+Istanbul Airport Sabiha Gokcen (SAW), Pendik/Istanbul, Turkiye
+ca. 40 km
+Ada Lovelace / 3 Passengers
++491111111111 For pick-up only
+`;
+
+test("agency voucher hyphen datetime beats the phone clock and is not now + 65", () => {
+  const parsed = parseDescribedTripDates(AGENCY_VOUCHER, BOOKING_NOW);
+  assert.equal(parsed.start?.status, "resolved");
+  if (parsed.start?.status === "resolved") {
+    assert.equal(parsed.start.date, "2026-10-19");
+    assert.equal(parsed.start.time, "06:00");
+  }
+  const formats = [
+    "19.10.2026 - 06:00",
+    "19/10/2026 06:00",
+    "2026-10-19 06:00",
+    "19 Ekim 2026 saat 06:00",
+    "October 19, 2026 at 6:00 AM",
+    "19 октября 2026 в 06:00",
+    "Pickup: 06:00\n19.10.2026",
+    "Departure: 06:00\n19.10.2026",
+    "Pick-up time: 6 AM\n19.10.2026",
+  ];
+  for (const text of formats) {
+    const draft = mergedStart(text, BOOKING_NOW);
+    assert.equal(draft.startDate, "2026-10-19", text);
+    assert.equal(draft.startTime, "06:00", text);
+    assert.notEqual(draft.startTime, "23:52", text);
+  }
+  const mapped = mapAiUetdsExtraction(
+    {
+      ...empty,
+      startDate: null,
+      startTime: null,
+      origin: "Sample Bosphorus Hotel",
+      destination: "Sabiha Gokcen (SAW)",
+      visibleText: AGENCY_VOUCHER,
+      passengers: [
+        { firstName: "Ada", lastName: "Lovelace", nationality: "GB", identityNumber: "C11111111", gender: "female" },
+        { firstName: "Grace", lastName: "Hopper", nationality: "BA", identityNumber: "B22222222", gender: "female" },
+      ],
+    },
+    "",
+    BOOKING_NOW,
+  );
+  assert.equal(mapped.startDate, "2026-10-19");
+  assert.equal(mapped.startTime, "06:00");
+  assert.equal(mapped.passengerCount, 3);
+  assert.equal(mapped.passengers?.length, 2);
+  const merged = mergeAiUetdsExtraction(createEmptyDraft("manual", { applyTripDefaults: false }), mapped, BOOKING_NOW);
+  assert.equal(merged.draft.startDate, "2026-10-19");
+  assert.equal(merged.draft.startTime, "06:00");
+  assert.equal(merged.draft.endDate, "2026-10-19");
+  assert.equal(merged.draft.endTime, "08:00");
+  assert.equal(merged.draft.passengers.length, 3);
+  assert.equal(merged.draft.passengers[2]?.firstName, "");
+  assert.ok(merged.notices.some((notice) => notice.code === "passengerGap" && notice.stated === 3 && notice.identified === 2));
+  const sources = mergeAiExtractedSources([
+    { startDate: "2026-10-19", startTime: "06:00", passengerCount: 3, origin: "Sample Bosphorus Hotel", destination: "Sabiha Gokcen (SAW)", passengers: [{ firstName: "Ada", lastName: "Lovelace" }] },
+    { passengers: [{ firstName: "Ada", lastName: "Lovelace", identityNumber: "C11111111" }, { firstName: "Grace", lastName: "Hopper", identityNumber: "B22222222" }] },
+  ]);
+  assert.equal(sources.startTime, "06:00");
+  assert.equal(sources.passengerCount, 3);
+  assert.equal(sources.passengers?.length, 2);
+});
+
+test("relative Istanbul dates resolve from the request clock without inventing a morning hour", () => {
+  const now = istanbulLocalToUtcMs("2026-10-18T22:47");
+  assert.deepEqual(startOf("Bugün 21:00", now), startOf("Today 21:00", now));
+  const today = startOf("Bu akşam 21:00", now);
+  assert.equal(today?.status, "resolved");
+  if (today?.status === "resolved") {
+    assert.equal(today.date, "2026-10-18");
+    assert.equal(today.time, "21:00");
+  }
+  const tomorrow = startOf("Yarın sabah 06:30", now);
+  assert.equal(tomorrow?.status, "resolved");
+  if (tomorrow?.status === "resolved") {
+    assert.equal(tomorrow.date, "2026-10-19");
+    assert.equal(tomorrow.time, "06:30");
+  }
+  const vague = startOf("Yarın sabah", now);
+  assert.equal(vague?.status, "resolved");
+  if (vague?.status === "resolved") {
+    assert.equal(vague.date, "2026-10-19");
+    assert.equal(vague.time, "");
+  }
+  const after = startOf("Öbür gün", now);
+  assert.equal(after?.status, "resolved");
+  if (after?.status === "resolved") {
+    assert.equal(after.date, "2026-10-20");
+    assert.equal(after.time, "");
+  }
+  const monday = startOf("Next Monday", now);
+  assert.equal(monday?.status, "resolved");
+  if (monday?.status === "resolved") {
+    assert.equal(monday.date, "2026-10-19");
+  }
+  const russian = startOf("Завтра 06:00", now);
+  assert.equal(russian?.status, "resolved");
+  if (russian?.status === "resolved") {
+    assert.equal(russian.date, "2026-10-19");
+    assert.equal(russian.time, "06:00");
+  }
+});
+
+const SYNTHETIC_PASSPORT = `REISEPASS
+Surname TEST
+Given names ADA
+Date of birth 18.03.2005
+Date of issue 07.07.2026
+Date of expiry 06.07.2032
+`;
+
+test("passport birth and issue dates are not the transfer start", () => {
+  const parsed = parseDescribedTripDates(SYNTHETIC_PASSPORT, BOOKING_NOW);
+  assert.equal(parsed.start, null);
+  const mapped = mapAiUetdsExtraction(
+    { ...empty, startDate: "2005-03-18", startTime: "06:00", visibleText: SYNTHETIC_PASSPORT },
+    "",
+    BOOKING_NOW,
+  );
+  assert.notEqual(mapped.startDate, "2005-03-18");
+  assert.notEqual(mapped.startDate, "2026-07-07");
+  const draft = mergeAiUetdsExtraction(
+    createEmptyDraft("manual", { applyTripDefaults: false }),
+    mapped,
+    BOOKING_NOW,
+  ).draft;
+  assert.notEqual(draft.startDate, "2005-03-18");
+});
+
+test("a later reservation clock replaces a passport birth date from an earlier file", () => {
+  const passport = mapAiUetdsExtraction(
+    { ...empty, startDate: "2005-03-18", startTime: null, visibleText: SYNTHETIC_PASSPORT, passengers: [{ firstName: "Ada", lastName: "Lovelace", nationality: "DE", identityNumber: "C11111111", gender: "female" }] },
+    "",
+    BOOKING_NOW,
+  );
+  const voucher = mapAiUetdsExtraction(
+    { ...empty, startDate: null, startTime: null, origin: "Sample Bosphorus Hotel", destination: "Sabiha Gokcen (SAW)", visibleText: AGENCY_VOUCHER, passengers: [{ firstName: "Ada", lastName: "Lovelace", nationality: "DE", identityNumber: null, gender: "female" }] },
+    "",
+    BOOKING_NOW,
+  );
+  const combined = mergeAiExtractedSources([passport, voucher], BOOKING_NOW);
+  assert.equal(combined.startDate, "2026-10-19");
+  assert.equal(combined.startTime, "06:00");
+  const draft = mergeAiUetdsExtraction(createEmptyDraft("manual", { applyTripDefaults: false }), combined, BOOKING_NOW).draft;
+  assert.equal(draft.startDate, "2026-10-19");
+  assert.equal(draft.startTime, "06:00");
+  assert.notEqual(draft.startDate, "2005-03-18");
 });

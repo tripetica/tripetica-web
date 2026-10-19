@@ -4,6 +4,7 @@ import test from "node:test";
 import { isOfficialUetdsLocationReady } from "@/lib/uetds/location";
 import {
   applyUetdsPlaceDetails,
+  enrichUetdsDraftLocationsFromText,
   enrichUetdsLocationFromText,
   pickAutoSelectedUetdsPlace,
   scoreUetdsPlaceCandidate,
@@ -34,7 +35,6 @@ const IST_DETAILS = {
 };
 
 function airportLookup(winner: "saw" | "ist", withCityNoise = true): UetdsPlacesLookup {
-  const winnerDetails = winner === "saw" ? SAW_DETAILS : IST_DETAILS;
   const winnerPrimary =
     winner === "saw" ? "Sabiha Gökçen Havalimanı (SAW)" : "İstanbul Havalimanı (IST)";
   return {
@@ -95,18 +95,141 @@ test("auto-select SAW IATA → official 99102", async () => {
   assert.match(location.placeName, /Sabiha/i);
 });
 
-test("auto-select İstanbul Havalimanı → IST → 99157", async () => {
-  const location = await enrichUetdsLocationFromText("İstanbul Havalimanı", airportLookup("ist"));
+test("exact İstanbul Havalimanı stays at airport detail instead of a narrower POI", async () => {
+  let searched = false;
+  const location = await enrichUetdsLocationFromText("İstanbul Havalimanı", {
+    async search() {
+      searched = true;
+      return [
+        {
+          placeId: "airport-parking",
+          primaryText: "İstanbul Havalimanı Otopark",
+          secondaryText: "Arnavutköy/İstanbul",
+          types: ["parking", "point_of_interest", "establishment"],
+        },
+      ];
+    },
+    async details() {
+      throw new Error("Exact official airport must not request Place details");
+    },
+  });
+  assert.equal(searched, false);
   assert.equal(location.districtOrAirportCode, "99157");
   assert.equal(location.locationType, "airport");
-  assert.match(location.placeName, /İstanbul Havalimanı|Istanbul/i);
-  assert.equal(location.googlePlaceId, "ist");
+  assert.equal(location.placeName, "İstanbul Havalimanı");
+  assert.equal(location.googlePlaceId, "");
 });
 
 test("auto-select IST Airport → 99157", async () => {
   const location = await enrichUetdsLocationFromText("IST Airport", airportLookup("ist"));
   assert.equal(location.districtOrAirportCode, "99157");
   assert.equal(location.googlePlaceId, "ist");
+});
+
+test("district-only pickup and dropoff keep their exact administrative detail level", async () => {
+  const searched: string[] = [];
+  const draft = await enrichUetdsDraftLocationsFromText(
+    {
+      origin: "Şişli, İstanbul",
+      destination: "Bağcılar, İstanbul",
+      originLocation: applyUetdsPlaceDetails({
+        details: null,
+        primaryText: "Şişli, İstanbul",
+      }),
+      destinationLocation: applyUetdsPlaceDetails({
+        details: null,
+        primaryText: "Bağcılar, İstanbul",
+      }),
+      originReview: true,
+      destinationReview: true,
+    },
+    {
+      search: async (query) => {
+        searched.push(query);
+        return [
+          {
+            placeId: "wrong-poi",
+            primaryText:
+              query.startsWith("Şişli")
+                ? "İstanbul Adalet Sarayı"
+                : "Bağcılar İstanbulkart Başvuru Merkezi",
+            secondaryText: query,
+            types: ["point_of_interest", "establishment"],
+          },
+        ];
+      },
+      details: async () => null,
+    },
+  );
+  assert.deepEqual(searched, []);
+  assert.equal(draft.origin, "Şişli, İstanbul");
+  assert.equal(draft.originLocation.placeName, "Şişli, İstanbul");
+  assert.equal(draft.originLocation.districtOrAirportName, "ŞİŞLİ");
+  assert.equal(draft.originLocation.googlePlaceId, "");
+  assert.equal(draft.originReview, false);
+  assert.equal(draft.destination, "Bağcılar, İstanbul");
+  assert.equal(draft.destinationLocation.placeName, "Bağcılar, İstanbul");
+  assert.equal(draft.destinationLocation.districtOrAirportName, "BAĞCILAR");
+  assert.equal(draft.destinationLocation.googlePlaceId, "");
+  assert.equal(draft.destinationReview, false);
+});
+
+test("Kadıköy district is not replaced by a POI inside Kadıköy", async () => {
+  let searched = false;
+  const location = await enrichUetdsLocationFromText("Kadıköy, İstanbul", {
+    search: async () => {
+      searched = true;
+      return [
+        {
+          placeId: "poi",
+          primaryText: "Kadıköy Belediyesi",
+          secondaryText: "Kadıköy/İstanbul",
+          types: ["point_of_interest", "establishment"],
+        },
+      ];
+    },
+    details: async () => null,
+  });
+  assert.equal(searched, false);
+  assert.equal(location.placeName, "Kadıköy, İstanbul");
+  assert.equal(location.districtOrAirportName, "KADIKÖY");
+  assert.equal(location.googlePlaceId, "");
+  assert.equal(location.review, false);
+});
+
+test("neighborhood query prefers the exact neighborhood result over a similarly named POI", async () => {
+  const location = await enrichUetdsLocationFromText("Moda, İstanbul", {
+    search: async () => [
+      {
+        placeId: "poi",
+        primaryText: "Moda Sahnesi",
+        secondaryText: "Kadıköy/İstanbul",
+        types: ["point_of_interest", "establishment"],
+      },
+      {
+        placeId: "neighborhood",
+        primaryText: "Moda",
+        secondaryText: "Kadıköy/İstanbul",
+        types: ["neighborhood", "political"],
+      },
+    ],
+    details: async (placeId) => ({
+      name: placeId === "neighborhood" ? "Moda" : "Moda Sahnesi",
+      formattedAddress: "Caferağa, Kadıköy/İstanbul, Türkiye",
+      district: "Kadıköy",
+      region: "İstanbul",
+      countryCode: "TR",
+      types:
+        placeId === "neighborhood"
+          ? ["neighborhood", "political"]
+          : ["point_of_interest", "establishment"],
+      placeId,
+    }),
+  });
+  assert.equal(location.placeName, "Moda");
+  assert.equal(location.googlePlaceId, "neighborhood");
+  assert.equal(location.districtOrAirportName, "KADIKÖY");
+  assert.equal(location.review, false);
 });
 
 test("auto-select Conforium hotel → Zeytinburnu 1739 with Google address", async () => {
@@ -150,6 +273,58 @@ test("auto-select Conforium hotel → Zeytinburnu 1739 with Google address", asy
   assert.match(location.placeName, /Conforium/i);
   assert.match(location.formattedAddress, /Zeytinburnu/i);
   assert.equal(location.googlePlaceId, "hotel");
+});
+
+test("explicit courthouse name may select that exact POI", async () => {
+  const location = await enrichUetdsLocationFromText("İstanbul Adalet Sarayı", {
+    search: async () => [
+      {
+        placeId: "courthouse",
+        primaryText: "İstanbul Adalet Sarayı",
+        secondaryText: "Şişli/İstanbul",
+        types: ["courthouse", "point_of_interest", "establishment"],
+      },
+    ],
+    details: async () => ({
+      name: "İstanbul Adalet Sarayı",
+      formattedAddress: "Çağlayan, Şişli/İstanbul, Türkiye",
+      district: "Şişli",
+      region: "İstanbul",
+      countryCode: "TR",
+      types: ["courthouse", "point_of_interest", "establishment"],
+      placeId: "courthouse",
+    }),
+  });
+  assert.equal(location.placeName, "İstanbul Adalet Sarayı");
+  assert.equal(location.googlePlaceId, "courthouse");
+  assert.equal(location.districtOrAirportName, "ŞİŞLİ");
+  assert.equal(location.review, false);
+});
+
+test("unmatched location stays unresolved instead of selecting an unrelated POI", async () => {
+  const location = await enrichUetdsLocationFromText("Belirsiz Özel Konum", {
+    search: async () => [
+      {
+        placeId: "unrelated",
+        primaryText: "Başka Bir İşletme",
+        secondaryText: "İstanbul",
+        types: ["point_of_interest", "establishment"],
+      },
+    ],
+    details: async () => ({
+      name: "Başka Bir İşletme",
+      formattedAddress: "İstanbul, Türkiye",
+      district: "Fatih",
+      region: "İstanbul",
+      countryCode: "TR",
+      types: ["point_of_interest", "establishment"],
+      placeId: "unrelated",
+    }),
+  });
+  assert.equal(location.placeName, "Belirsiz Özel Konum");
+  assert.equal(location.googlePlaceId, "");
+  assert.equal(location.districtOrAirportCode, "");
+  assert.equal(location.review, true);
 });
 
 test("ambiguous Hilton Hotel does not auto-select or invent official codes", async () => {

@@ -157,6 +157,8 @@ export default async function PartnerGpsPage({
       historyPath={localizedPath(locale, "/partner/gps")}
       rangeSearch={rangeParams.toString()}
       deviceControls={deviceControls}
+      loadImmobilizer
+      initialTab={one(query.tab) === "wifi" ? "wifi" : one(query.tab) === "camera" ? "camera" : "gps"}
       drive={drive}
       driveVehicle={driveVehicle}
       green={green}
@@ -185,6 +187,15 @@ function fleetVehicle(
     source: "device",
     vehicleId: device.vehicleId,
     manufacturer: device.manufacturer,
+    wifiEnabled: device.reportedWifiEnabled,
+    reportedWifiSsid: device.reportedWifiSsid,
+    wifiClients: device.wifiClients,
+    lteRegistration: device.lteRegistration,
+    network: device.network,
+    rssi: device.rssi,
+    pppStatus: device.pppStatus,
+    naptStatus: device.naptStatus,
+    apStatus: device.apStatus,
     din1State: device.din1State,
     driverName: device.vehicleId ? drivers.get(device.vehicleId) ?? null : null,
   }, identities);

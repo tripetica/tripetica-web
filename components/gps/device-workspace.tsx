@@ -60,6 +60,7 @@ export async function GpsDeviceWorkspace({
   maintenanceBase,
   fleetUrl,
   loadImmobilizer = false,
+  initialTab = "gps",
 }: {
   locale: Locale;
   copy: GpsCopy;
@@ -99,6 +100,7 @@ export async function GpsDeviceWorkspace({
   maintenanceBase?: string;
   fleetUrl?: string;
   loadImmobilizer?: boolean;
+  initialTab?: "gps" | "wifi" | "camera";
 }) {
   const listPath = portalPath
     ? localizedPath(locale, portalPath)
@@ -169,6 +171,7 @@ export async function GpsDeviceWorkspace({
           wifi={null}
           camera={null}
           deviceControls={deviceControls}
+          initialTab={initialTab}
           sections={sections}
           liveUrl={liveUrl}
           maintenanceUrl={maintenanceBase}
@@ -251,6 +254,7 @@ export async function GpsDeviceWorkspace({
         wifiMode={device.wifiMode}
         canToggleWifi={deviceControls && (surface === "partner" || canManage) && Boolean(device.partnerId)}
         deviceControls={deviceControls}
+        initialTab={initialTab}
         showDeviceList={showDeviceList}
         viewerId={viewerId}
         historyQuery={`${fromIso}|${toIso}`}
@@ -291,6 +295,7 @@ export async function GpsDeviceWorkspace({
           canManage,
           partnerId: device.partnerId,
           lte: device.lteRegistration ?? device.network,
+          network: device.network,
           reportedSsid: device.reportedWifiSsid,
           clients: device.wifiClients,
           reportedMaxClients: device.reportedMaxClients,
@@ -298,6 +303,14 @@ export async function GpsDeviceWorkspace({
           wifiMode: device.wifiMode,
           wifiSsid: device.wifiSsid,
           wifiMaxClients: device.wifiMaxClients,
+          lastHeartbeatAt: device.lastHeartbeatAt,
+          manufacturer: device.manufacturer,
+          reportedEnabled: device.reportedWifiEnabled,
+          rssi: device.rssi,
+          pppStatus: device.pppStatus,
+          naptStatus: device.naptStatus,
+          apStatus: device.apStatus,
+          wifiPolicy: device.wifiPolicy,
         } : null}
         cameraDevice={deviceControls ? {
           deviceId: device.id,

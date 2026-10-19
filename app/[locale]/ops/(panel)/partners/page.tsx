@@ -73,6 +73,8 @@ export default async function OpsPartnersPage({
           copy={copy}
           items={items}
           filters={filters}
+          page={page}
+          pageSize={OPS_PARTNERS_PAGE_SIZE}
         />
       )}
       <OpsPagination

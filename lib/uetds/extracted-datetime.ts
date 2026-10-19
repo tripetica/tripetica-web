@@ -113,21 +113,25 @@ const MONTHS: Record<string, number> = {
 };
 
 const MONTH_PHRASE =
-  /(\d{1,2})[ \t]+(\p{L}+)(?:[ \t]+(\d{4}))?(?:[ \t]+(?:saat(?:i)?|at|um|в|a[ \t]+las))?[ \t]*(\d{1,2})[:.](\d{2})(?:[ \t]*([ap])\.?m\.?)?/giu;
+  /(\d{1,2})[ \t]+(\p{L}+)(?:[ \t]+(\d{4}))?(?:[ \t]+(?:saat(?:i)?|at|um|в|a[ \t]+las))?[ \t]*(?:[-–—][ \t]*)?(\d{1,2})[:.](\d{2})(?:[ \t]*([ap])\.?m\.?)?/giu;
 const MONTH_DATE =
   /(?<!\d)(\d{1,2})[ \t]+(\p{L}+)[ \t]+(\d{4})(?![ \t]*\d)/giu;
 const MONTH_FIRST_PHRASE =
   /(?:(?<!\d)(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?\s*,?\s*)?(\p{L}+)\s+(\d{1,2}),?\s+(\d{4})(?!\d)/giu;
 const ISO_PHRASE =
-  /(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:(?:[tT]|[ \t]+)(?:at|saat(?:i)?|um|в|a[ \t]+las)?[ \t]*(\d{1,2})[:.](\d{2})(?:[ \t]*([ap])\.?m\.?)?)?(?!\d)/giu;
+  /(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:(?:[tT]|[ \t]+|[-–—][ \t]*)(?:at|saat(?:i)?|um|в|a[ \t]+las)?[ \t]*(\d{1,2})[:.](\d{2})(?:[ \t]*([ap])\.?m\.?)?)?(?!\d)/giu;
 const KOREAN_PHRASE =
   /(?<!\d)(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일(?:\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분?)?)?/gu;
 const MERIDIEM_CLOCK = /(?<!\d)(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?(?!\p{L})/giu;
 const TOMORROW_PHRASE =
   /(yarın|yarin|tomorrow)(?:\s+saati?)?\s+(\d{1,2})[:.](\d{2})/giu;
+const RELATIVE_DAY =
+  /(?<!\p{L})(bugün|bugun|today|сегодня|bu\s+gece|tonight|this\s+evening|bu\s+akşam|bu\s+aksam|yarın|yarin|tomorrow|завтра|öbür\s+gün|obur\s+gun|day\s+after\s+tomorrow|послезавтра)(?:\s+(sabah(?:ı|i)?|morning|akşam(?:ı|i)?|aksam(?:i)?|evening|gece|night))?(?:\s+(?:saat(?:i)?|at|в)?\s*(\d{1,2})[:.](\d{2}))?(?!\p{L})/giu;
+const WEEKDAY_PHRASE =
+  /(?<!\p{L})(?:(next|gelecek|следующ\w*)\s+)?(pazartesi|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pazar|monday|tuesday|wednesday|thursday|friday|saturday|sunday|понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)(?:\s+(sabah(?:ı|i)?|morning|akşam(?:ı|i)?|aksam(?:i)?|evening))?(?:\s+(?:saat(?:i)?|at|в)?\s*(\d{1,2})[:.](\d{2}))?(?!\p{L})/giu;
 const CLOCK_PHRASE = /(?<!\d[./])(?<!\d)(\d{1,2})([:.])(\d{2})(?!\.\d)(?!\d)/g;
 const NUMERIC_EXPLICIT =
-  /(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4})(?:[ \t]*(?:at|saat(?:i)?|um|в|a[ \t]+las|,)?[ \t]*(\d{1,2})[:.](\d{2})(?:[ \t]*([ap])\.?m\.?)?)?(?!\d)/giu;
+  /(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4})(?:[ \t]*(?:[-–—]|at|saat(?:i)?|um|в|a[ \t]+las|,)?[ \t]*(\d{1,2})[:.](\d{2})(?:[ \t]*([ap])\.?m\.?)?)?(?!\d)/giu;
 const NUMERIC_YEARLESS =
   /(\d{1,2})[./](\d{1,2})\s+(\d{1,2})[:.](\d{2})/g;
 
@@ -265,12 +269,58 @@ function yearlessResult(month: number, day: number, hour: number, minute: number
   };
 }
 
+const IDENTITY_DATE_LINE =
+  /geburt|birth|geboren|dogum|doğum|geburtsdatum|date\s+of\s+birth|issue|issued|ausstellung|duzenleme|date\s+of\s+issue|expiry|expiration|gueltig|gültig|valid\s+(?:until|thru|to)|date\s+of\s+expir|gecerlilik|geçerlilik|passport|pasaport|reisepass|mrz/u;
+
+export function isIdentityDocumentDateLine(line: string) {
+  return IDENTITY_DATE_LINE.test(foldToken(line));
+}
+
+export function sourceIsIdentityDocument(text: string) {
+  const folded = foldToken(text);
+  const identity = /reisepass|pasaport|passport\b|geburtsdatum|mrz|p<[a-z]{3}/u.test(folded);
+  const trip = /pick[\s-]*up|alis\s+yeri|transfer|rezervasyon|book[a-z]*\s|19\.\d{2}\.20/u.test(folded);
+  return identity && !trip;
+}
+
+/** Birth/issue/expiry years are not transfer starts. */
+export function isImplausibleTripDate(date: string | undefined, nowUtcMs: number) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return false;
+  }
+  const year = Number(date.slice(0, 4));
+  const nowYear = Number(todayDate(nowUtcMs).slice(0, 4));
+  return year < nowYear - 1 || year > nowYear + 1;
+}
+
+export function tripInstantScore(date: string | undefined, time: string | undefined, nowUtcMs: number) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return time ? 0 : -1;
+  }
+  if (isImplausibleTripDate(date, nowUtcMs)) {
+    return -100;
+  }
+  const clock = time && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "12:00";
+  const utc = istanbulLocalToUtcMs(`${date}T${clock}`);
+  if (!Number.isFinite(utc)) {
+    return -1;
+  }
+  const delta = utc - nowUtcMs;
+  let score = 10;
+  if (time) score += 8;
+  if (delta >= 0 && delta <= UETDS_YEARLESS_WINDOW_MS) score += 20;
+  if (delta < 0 && delta > -UETDS_YEARLESS_WINDOW_MS) score += 5;
+  return score;
+}
+
 function roleAt(text: string, index: number): "start" | "end" | "ignore" | "unlabelled" {
   const lineStart = text.lastIndexOf("\n", Math.max(0, index - 1)) + 1;
+  const lineEnd = text.indexOf("\n", index);
+  const line = foldToken(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd));
   // The label is only the line that carries this clock. "Bırakma yeri" is a
   // place, so a later "Saati 23:00" stays an unlabeled start.
   const prefix = foldToken(text.slice(lineStart, index));
-  if (/(flight|ucus|рейс|вылет|прилет|прилёт|kalkis|booking\s*created|created|olustur|check-?in|check-?out)/u.test(prefix)) {
+  if (isIdentityDocumentDateLine(line) || /(flight|ucus|рейс|вылет|прилет|прилёт|kalkis|booking\s*created|created|olustur|check-?in|check-?out)/u.test(prefix)) {
     return "ignore";
   }
   if (/(bitis|birak(?:ma|is)\s+(?:saati|saat|zaman)|varis|drop-?off\s+(?:time|date)|end\s+(?:time|date)|высадк|прибыт)/u.test(prefix)) {
@@ -286,10 +336,86 @@ function todayDate(nowUtcMs: number) {
   return formatUtcToIstanbulLocal(nowUtcMs).slice(0, 10);
 }
 
+function addIstanbulDays(nowUtcMs: number, days: number) {
+  const noon = istanbulLocalToUtcMs(`${todayDate(nowUtcMs)}T12:00`);
+  return formatUtcToIstanbulLocal(noon + days * 24 * 60 * 60 * 1000).slice(0, 10);
+}
+
 function tomorrowDate(nowUtcMs: number) {
-  const today = todayDate(nowUtcMs);
-  const noon = istanbulLocalToUtcMs(`${today}T12:00`);
-  return formatUtcToIstanbulLocal(noon + 24 * 60 * 60 * 1000).slice(0, 10);
+  return addIstanbulDays(nowUtcMs, 1);
+}
+
+function istanbulWeekday(nowUtcMs: number) {
+  const [year, month, day] = todayDate(nowUtcMs).split("-").map(Number);
+  return new Date(Date.UTC(year, (month ?? 1) - 1, day)).getUTCDay();
+}
+
+const WEEKDAYS: Record<string, number> = {
+  pazar: 0,
+  sunday: 0,
+  воскресенье: 0,
+  pazartesi: 1,
+  monday: 1,
+  понедельник: 1,
+  sali: 2,
+  tuesday: 2,
+  вторник: 2,
+  carsamba: 3,
+  wednesday: 3,
+  среда: 3,
+  persembe: 4,
+  thursday: 4,
+  четверг: 4,
+  cuma: 5,
+  friday: 5,
+  пятница: 5,
+  cumartesi: 6,
+  saturday: 6,
+  суббота: 6,
+};
+
+function nextWeekdayDate(nowUtcMs: number, weekday: number, forceNext: boolean) {
+  const current = istanbulWeekday(nowUtcMs);
+  let delta = (weekday - current + 7) % 7;
+  if (delta === 0 && forceNext) {
+    delta = 7;
+  }
+  return addIstanbulDays(nowUtcMs, delta);
+}
+
+function relativeDayOffset(token: string) {
+  const folded = foldToken(token);
+  if (/(bugun|today|сегодня|bu gece|tonight|this evening|bu aksam)/.test(folded)) {
+    return 0;
+  }
+  if (/(obur gun|day after tomorrow|послезавтра)/.test(folded)) {
+    return 2;
+  }
+  if (/(yarin|tomorrow|завтра)/.test(folded)) {
+    return 1;
+  }
+  return null;
+}
+
+function lineBounds(text: string, index: number) {
+  const start = text.lastIndexOf("\n", Math.max(0, index - 1)) + 1;
+  const end = text.indexOf("\n", index);
+  return { start, end: end === -1 ? text.length : end };
+}
+
+/** Phone status-bar clocks sit on the first line of a screenshot, not a lone trip clock. */
+function isStatusBarClock(text: string, index: number) {
+  const before = text.slice(0, index).replace(/[\s\u200e\u200f]/g, "");
+  if (before.length > 0) {
+    return false;
+  }
+  const { end } = lineBounds(text, index);
+  const after = text.slice(end).replace(/^\s+/u, "");
+  if (!after) {
+    return false;
+  }
+  const line = text.slice(index, end);
+  return !/\d{1,2}[./-]\d{1,2}|\d{4}/.test(line);
 }
 
 /** No written day: the nearest strictly future clock inside the next 12 hours. */
@@ -447,6 +573,53 @@ function collectPhrases(text: string, nowUtcMs: number): Found[] {
       spans.push({ start: match.index, end: match.index + match[0].length });
     }
   }
+  for (const match of text.matchAll(RELATIVE_DAY)) {
+    if (match.index == null || overlaps(match.index, match[0].length, spans)) {
+      continue;
+    }
+    const offset = relativeDayOffset(match[1] ?? "");
+    if (offset == null) {
+      continue;
+    }
+    const clock = match[3] == null ? null : withMeridiem(Number(match[3]), Number(match[4]), undefined);
+    const item = explicitResult(
+      Number(addIstanbulDays(nowUtcMs, offset).slice(0, 4)),
+      Number(addIstanbulDays(nowUtcMs, offset).slice(5, 7)),
+      Number(addIstanbulDays(nowUtcMs, offset).slice(8, 10)),
+      clock?.hour ?? 0,
+      clock?.minute ?? 0,
+      match.index,
+    );
+    if (item) {
+      item.yearExplicit = false;
+      if (!clock) item.time = "";
+    }
+    remember(found, spans, item, match.index, match[0].length);
+  }
+  for (const match of text.matchAll(WEEKDAY_PHRASE)) {
+    if (match.index == null || overlaps(match.index, match[0].length, spans)) {
+      continue;
+    }
+    const weekday = WEEKDAYS[foldToken(match[2] ?? "")];
+    if (weekday == null) {
+      continue;
+    }
+    const date = nextWeekdayDate(nowUtcMs, weekday, Boolean(match[1]));
+    const clock = match[4] == null ? null : withMeridiem(Number(match[4]), Number(match[5]), undefined);
+    const item = explicitResult(
+      Number(date.slice(0, 4)),
+      Number(date.slice(5, 7)),
+      Number(date.slice(8, 10)),
+      clock?.hour ?? 0,
+      clock?.minute ?? 0,
+      match.index,
+    );
+    if (item) {
+      item.yearExplicit = false;
+      if (!clock) item.time = "";
+    }
+    remember(found, spans, item, match.index, match[0].length);
+  }
   for (const match of text.matchAll(TOMORROW_PHRASE)) {
     if (match.index == null || overlaps(match.index, match[0].length, spans)) {
       continue;
@@ -488,6 +661,10 @@ function collectPhrases(text: string, nowUtcMs: number): Found[] {
     if (match.index == null || overlaps(match.index, match[0].length, spans)) {
       continue;
     }
+    if (isStatusBarClock(text, match.index)) {
+      spans.push({ start: match.index, end: match.index + match[0].length });
+      continue;
+    }
     const hour = Number(match[1]);
     const minute = Number(match[3]);
     const role = roleAt(text, match.index);
@@ -518,7 +695,7 @@ function collectPhrases(text: string, nowUtcMs: number): Found[] {
   return found.sort((left, right) => left.index - right.index);
 }
 
-function placeClocks(items: Found[], nowUtcMs: number, endClock: boolean): Found[] {
+function placeClocks(items: Found[], nowUtcMs: number, endClock: boolean, text = ""): Found[] {
   const clocks = items.filter(isResolved).filter((item) => item.clockOnly);
   const rest = items.filter((item) => !(item.status === "resolved" && item.clockOnly));
   if (clocks.length === 0) {
@@ -528,7 +705,10 @@ function placeClocks(items: Found[], nowUtcMs: number, endClock: boolean): Found
   const dateOnly = dated.filter((item) => !item.time);
   const complete = dated.filter((item) => item.time);
   if (complete.length === 0 && dateOnly.length === 1) {
-    const times = new Set(clocks.map((item) => item.time));
+    const dateLine = lineBounds(text, dateOnly[0]!.index).start;
+    const sameLine = clocks.filter((item) => lineBounds(text, item.index).start === dateLine);
+    const pool = sameLine.length > 0 ? sameLine : clocks;
+    const times = new Set(pool.map((item) => item.time));
     if (times.size !== 1) {
       return [...rest, { status: "rejected", index: clocks[0]!.index }];
     }
@@ -537,7 +717,7 @@ function placeClocks(items: Found[], nowUtcMs: number, endClock: boolean): Found
       {
         status: "resolved",
         date: dateOnly[0]!.date,
-        time: clocks[0]!.time,
+        time: pool[0]!.time,
         yearExplicit: dateOnly[0]!.yearExplicit,
         index: dateOnly[0]!.index,
       },
@@ -580,13 +760,15 @@ function uniqueResolved(items: Found[]): SourceDateTime | null {
   if (items.length === 0) {
     return null;
   }
-  const resolved = items.filter((item) => item.status === "resolved");
-  const keys = new Set(resolved.map((item) => `${item.date}T${item.time}`));
+  const resolved = items.filter((item): item is ResolvedFound => item.status === "resolved");
+  const complete = resolved.filter((item) => item.date && item.time && !item.clockOnly);
+  const pool = complete.length > 0 ? complete : resolved;
+  const keys = new Set(pool.map((item) => `${item.date}T${item.time}`));
   if (keys.size > 1) {
     return { status: "rejected" };
   }
   if (keys.size === 1) {
-    return withoutIndex(resolved[0]!);
+    return withoutIndex(pool[0]!);
   }
   if (items.some((item) => item.status === "rejected")) {
     return { status: "rejected" };
@@ -646,12 +828,12 @@ export function parseDescribedTripDates(text: string, nowUtcMs: number): {
       barePool = barePool.filter((item) => !used.has(item.index));
     }
   }
-  const labelledStart = uniqueResolved(placeClocks(startPool, nowUtcMs, false));
-  const end = uniqueResolved(placeClocks(endItems, nowUtcMs, true));
+  const labelledStart = uniqueResolved(placeClocks(startPool, nowUtcMs, false, text));
+  const end = uniqueResolved(placeClocks(endItems, nowUtcMs, true, text));
   if (labelledStart) {
     return { start: labelledStart, end };
   }
-  const bare = uniqueResolved(placeClocks(barePool, nowUtcMs, false));
+  const bare = uniqueResolved(placeClocks(barePool, nowUtcMs, false, text));
   return { start: bare, end };
 }
 
@@ -723,6 +905,16 @@ export function reconcileExtractedTripDates(input: {
   const described = parseDescribedTripDates(input.description, input.nowUtcMs);
   let start = sideFromModel(input.startDate, input.startTime, described.start, input.nowUtcMs);
   let end = sideFromModel(input.endDate, input.endTime, described.end, input.nowUtcMs);
+  if (sourceIsIdentityDocument(input.description)) {
+    start = { date: undefined, time: undefined };
+    end = { date: undefined, time: undefined };
+  }
+  if (isImplausibleTripDate(start.date, input.nowUtcMs)) {
+    start = { date: undefined, time: start.time };
+  }
+  if (isImplausibleTripDate(end.date, input.nowUtcMs)) {
+    end = { date: undefined, time: end.time };
+  }
   const text = input.description.trim();
   const explicitEnd = described.end?.status === "resolved";
   const explicitStart = described.start?.status === "resolved";

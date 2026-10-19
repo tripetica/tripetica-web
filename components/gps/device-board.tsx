@@ -8,6 +8,7 @@ import { gpsClock, gpsSpeed } from "@/lib/gps/format";
 import { gpsPresence } from "@/lib/gps/presence";
 import { type GpsDeviceListItem, type GpsVehicleChoice } from "@/lib/gps/queries";
 import { GpsDeviceCreateForm } from "@/components/gps/device-create-form";
+import { useRowSelection } from "@/components/ops/use-row-selection";
 
 export function GpsDeviceBoard({
   locale,
@@ -35,7 +36,7 @@ export function GpsDeviceBoard({
   const [manufacturer, setManufacturer] = useState("");
   const [model, setModel] = useState("");
   const [installation, setInstallation] = useState("");
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleUpperCase("tr-TR");
     return devices.filter((device) => {
@@ -59,6 +60,11 @@ export function GpsDeviceBoard({
       return true;
     });
   }, [devices, fix, installation, manufacturer, model, now, partnerId, presence, query, surface, wifi]);
+  const selection = useRowSelection(
+    surface === "ops" ? visible.map((device) => device.id) : [],
+  );
+  const selectLabel =
+    locale === "en" ? "Select" : locale === "ru" ? "Выбор" : "Seç";
 
   return (
     <div className="gps-screen">
@@ -149,9 +155,20 @@ export function GpsDeviceBoard({
       ) : null}
       {visible.length === 0 ? <p className="gps-empty">{copy.empty}</p> : surface === "ops" ? (
         <div className="ops-table-wrap gps-device-table">
-          <table className="ops-table">
+          <table className="ops-table ops-table-selectable ops-entity-selectable">
             <thead>
               <tr>
+                <th className="ops-row-num-col">NO</th>
+                <th className="ops-check-col">
+                  <label className="ops-check-only">
+                    <span className="ops-sr-only">{selectLabel}</span>
+                    <input
+                      type="checkbox"
+                      checked={selection.allSelected}
+                      onChange={selection.toggleAll}
+                    />
+                  </label>
+                </th>
                 <th>{copy.manufacturer}</th>
                 <th>{copy.trackerModel}</th>
                 <th>{copy.deviceId}</th>
@@ -169,10 +186,27 @@ export function GpsDeviceBoard({
               </tr>
             </thead>
             <tbody>
-              {visible.map((device) => {
+              {visible.map((device, index) => {
                 const href = localizedPath(locale, `/ops/gps/${device.id}`);
+                const selected = selection.selectedIds.has(device.id);
                 return (
-                  <tr key={device.id}>
+                  <tr
+                    key={device.id}
+                    className={selected ? "is-selected" : undefined}
+                    aria-selected={selected}
+                    onClick={(event) => selection.onRowClick(event, device.id)}
+                  >
+                    <td className="ops-row-num-col">{index + 1}</td>
+                    <td className="ops-check-col" onClick={(event) => event.stopPropagation()}>
+                      <label className="ops-check-only">
+                        <span className="ops-sr-only">{selectLabel}</span>
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => selection.toggle(device.id)}
+                        />
+                      </label>
+                    </td>
                     <td>{device.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</td>
                     <td>{modelText(device.trackerModel, device.linkTechnology)}</td>
                     <td>{device.deviceCode}</td>

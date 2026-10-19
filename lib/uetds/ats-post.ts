@@ -26,6 +26,16 @@ export function atsLiveDispatchAllowed(
     && env.ATS_MINISTRY_DISPATCH !== "allow-test";
 }
 
+/** True only when this process may open the ministry fault socket. It does not send. */
+export function atsFaultSocketOpen(
+  env: Record<string, string | undefined> = process.env,
+) {
+  const runtime = resolveUetdsMinistryRuntime(env);
+  if (runtime === "test") return atsMinistryDispatchAllowed(env);
+  if (runtime === "live") return atsLiveDispatchAllowed(env);
+  return false;
+}
+
 /**
  * Posts atsKonumBildir on the runtime endpoint.
  * DEV reaches only the test service, and only when ATS_MINISTRY_DISPATCH=allow-test.

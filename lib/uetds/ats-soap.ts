@@ -39,6 +39,8 @@ export type AtsArizaInput = {
 };
 
 const KONUM_ZAMANI = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/;
+/** Live atsArizaBildir rejects seconds. Code 159 requires dd/MM/yyyy HH:mm. */
+export const ATS_ARIZA_ZAMANI = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/;
 
 export function formatAtsKonumZamani(instant: Date, timeZone = "Europe/Istanbul") {
   if (!Number.isFinite(instant.getTime())) {
@@ -58,6 +60,27 @@ export function formatAtsKonumZamani(instant: Date, timeZone = "Europe/Istanbul"
   const text = `${read("day")}/${read("month")}/${read("year")} ${read("hour")}:${read("minute")}:${read("second")}`;
   if (!KONUM_ZAMANI.test(text)) {
     throw new Error("ats_gnss_time");
+  }
+  return text;
+}
+
+export function formatAtsArizaZamani(instant: Date, timeZone = "Europe/Istanbul") {
+  if (!Number.isFinite(instant.getTime())) {
+    throw new Error("ats_fault_time");
+  }
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  const text = `${read("day")}/${read("month")}/${read("year")} ${read("hour")}:${read("minute")}`;
+  if (!ATS_ARIZA_ZAMANI.test(text)) {
+    throw new Error("ats_fault_time");
   }
   return text;
 }
@@ -85,6 +108,9 @@ ${soapField("plaka", input.plate)}
 }
 
 export function atsArizaBildirInnerXml(input: AtsArizaInput) {
+  if (!ATS_ARIZA_ZAMANI.test(input.arizaBaslangicTarihi)) {
+    throw new Error("ats_fault_time");
+  }
   return `${soapUserXml(input.username, input.password)}
 ${soapField("plaka", input.plate)}
 ${soapField("arizaBaslangicTarihi", input.arizaBaslangicTarihi)}

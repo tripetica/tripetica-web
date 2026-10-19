@@ -1,5 +1,5 @@
 import { atsFaultCopy } from "@/lib/gps/ats-fault-copy";
-import { formatFaultClock } from "@/lib/gps/ats-fault";
+import { formatFaultClock, ministryNoticeState } from "@/lib/gps/ats-fault";
 import { listFaults, listPanelAlerts, listRecentAttempts } from "@/lib/gps/ats-fault-store";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
@@ -36,7 +36,7 @@ export async function AtsFaultLists({ locale, mode }: { locale: Locale; mode: "f
                     <td>{fault.deviceId ? <a href={localizedPath(locale, `/ops/gps/${fault.deviceId}`)}>{fault.plate}</a> : fault.plate}</td>
                     <td>{copy.kinds[fault.kind]}</td>
                     <td>{formatFaultClock(Date.parse(fault.startedAt))}</td>
-                    <td>{fault.ministryStatus}</td>
+                    <td>{ministryHeadline(copy, fault.ministryStatus)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -59,7 +59,7 @@ export async function AtsFaultLists({ locale, mode }: { locale: Locale; mode: "f
                 <tr key={row.id}>
                   <td>{row.plate}</td>
                   <td>{formatFaultClock(row.attempted_at.getTime())}</td>
-                  <td>{row.outcome}</td>
+                  <td>{copy.outcomes[row.outcome as keyof typeof copy.outcomes] ?? copy.ministryUnknown}</td>
                   <td>{row.sonuc_kodu == null ? "—" : row.sonuc_kodu} {row.sonuc_mesaji ?? ""}</td>
                 </tr>
               ))}
@@ -69,4 +69,18 @@ export async function AtsFaultLists({ locale, mode }: { locale: Locale; mode: "f
       )}
     </section>
   );
+}
+
+function ministryHeadline(
+  copy: ReturnType<typeof atsFaultCopy>,
+  status: string,
+) {
+  const notice = ministryNoticeState({ status, attempts: [] });
+  if (notice === "accepted") return copy.ministryAccepted;
+  if (notice === "rejected") return copy.ministryRejected;
+  if (notice === "unknown") return copy.ministryUnknown;
+  if (notice === "limited") return copy.ministryLimited;
+  if (notice === "disabled") return copy.ministryDisabled;
+  if (notice === "sending") return copy.ministrySending;
+  return copy.ministryNotSent;
 }

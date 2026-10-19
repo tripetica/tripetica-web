@@ -11,10 +11,15 @@ import {
   faultReportingWindow,
   formatAtsFaultStart,
   formatRemainingTr,
+  deviceSignalState,
+  faultClearanceState,
   gnssCheckpointDecision,
   gnssIsCurrent,
+  gnssOutageAlertIdentity,
   gnssOutageMail,
+  ministryNoticeState,
   nextFaultReport,
+  panelMinistryView,
   planGnssSuspicion,
   repairReminderDecision,
 } from "@/lib/gps/ats-fault";
@@ -181,13 +186,15 @@ test("the suspicion mail names the checkpoint and the scanner cannot send a mini
   assert.match(mail.text, /Kontrol zamanı: 15\.10\.2026 – 12:30/);
   assert.match(mail.text, /Son geçerli GNSS zamanı: 15\.10\.2026 – 11:58/);
   assert.match(mail.text, /Son cihaz bağlantısı: 15\.10\.2026 – 12:20/);
-  assert.match(mail.text, /Son başarılı ATS bildirimi: 15\.10\.2026 – 11:50/);
+  assert.match(mail.text, /Son ATS kabul zamanı: 15\.10\.2026 – 11:50/);
+  assert.match(mail.text, /GNSS ölçüm zamanından sonra olabilir/);
   const scan = readFileSync(new URL("./ats-fault-scan.ts", import.meta.url), "utf8");
   assert.match(scan, /classifyGpsSubscription/);
   assert.match(scan, /service_gps_ats_enabled/);
   assert.match(scan, /ats_ministry_source/);
   assert.match(scan, /hasOpenAcceptedFault/);
-  assert.match(scan, /slot: String\(item\.plan\.checkpointMs\)/);
+  assert.match(scan, /gnssOutageAlertIdentity/);
+  assert.doesNotMatch(scan, /slot: String\(item\.plan\.checkpointMs\)/);
   assert.match(scan, /kind: "gnss_outage"/);
   assert.doesNotMatch(scan, /postAtsArizaBildir|atsArizaBildir|setdigout/);
   assert.doesNotMatch(scan, /ATS GÖNDERİM HATASI|scanAtsError|ats_error/);
@@ -203,57 +210,105 @@ test("the suspicion mail names the checkpoint and the scanner cannot send a mini
   assert.doesNotMatch(migration, /gps_ats_faults/);
 });
 
-test("repair reminders start at 48h and continue after 72h until the fault is closed", () => {
+test("repair reminders fire once before 72h and once when the deadline passes", () => {
   assert.equal(repairReminderDecision({
     startedAtMs: start,
     nowMs: start + 47 * 3_600_000,
     resolved: false,
     sent48: false,
-    sentHourKeys: [],
+    sent72: false,
   }), null);
   const firstReminder = repairReminderDecision({
     startedAtMs: start,
     nowMs: start + 48 * 3_600_000,
     resolved: false,
     sent48: false,
-    sentHourKeys: [],
+    sent72: false,
   });
   assert.equal(firstReminder?.slot, "48h");
   assert.equal(firstReminder?.overdue, false);
   assert.equal(repairReminderDecision({
     startedAtMs: start,
-    nowMs: start + 48 * 3_600_000,
-    resolved: false,
-    sent48: true,
-    sentHourKeys: [],
-  }), null);
-  const hourly = repairReminderDecision({
-    startedAtMs: start,
     nowMs: start + 49 * 3_600_000,
     resolved: false,
     sent48: true,
-    sentHourKeys: [],
-  });
-  assert.match(hourly?.slot ?? "", /^hour:/);
+    sent72: false,
+  }), null);
   const overdue = repairReminderDecision({
     startedAtMs: start,
     nowMs: start + ATS_FAULT_REPAIR_MS,
     resolved: false,
     sent48: true,
-    sentHourKeys: [],
+    sent72: false,
   });
+  assert.equal(overdue?.slot, "72h");
   assert.equal(overdue?.kind, "repair_overdue");
+  assert.equal(repairReminderDecision({
+    startedAtMs: start,
+    nowMs: start + 80 * 3_600_000,
+    resolved: false,
+    sent48: true,
+    sent72: true,
+  }), null);
   assert.equal(repairReminderDecision({
     startedAtMs: start,
     nowMs: start + 80 * 3_600_000,
     resolved: true,
     sent48: true,
-    sentHourKeys: [],
+    sent72: false,
   }), null);
 });
 
-test("ministry fault XML uses the konum timestamp and the scanner cannot send it", () => {
-  assert.equal(formatAtsFaultStart(new Date("2026-10-15T07:00:00.000Z")), "15/10/2026 10:00:00");
+test("device, ministry, and clearance stay separate, and one silence alerts once", () => {
+  const now = start + 12 * 3_600_000;
+  assert.equal(deviceSignalState({ lastLinkMs: start, lastGnssMs: start, nowMs: now }), "offline");
+  assert.equal(deviceSignalState({ lastLinkMs: now - 60_000, lastGnssMs: start, nowMs: now }), "no_gnss");
+  assert.equal(deviceSignalState({ lastLinkMs: now - 60_000, lastGnssMs: now - 60_000, nowMs: now }), "restored");
+  assert.equal(ministryNoticeState({ status: "withheld", attempts: [{ outcome: "withheld" }] }), "disabled");
+  assert.equal(ministryNoticeState({ status: "accepted", attempts: [{ outcome: "accepted" }] }), "accepted");
+  assert.equal(ministryNoticeState({ status: "rejected", attempts: [{ outcome: "rejected" }] }), "rejected");
+  assert.equal(ministryNoticeState({ status: "local", attempts: [] }), "not_sent");
+  assert.equal(faultClearanceState(null), "open");
+  assert.equal(faultClearanceState("2026-10-21T20:15:00.000Z"), "closed_local");
+  const first = gnssOutageAlertIdentity("vehicle-1", start);
+  const repeat = gnssOutageAlertIdentity("vehicle-1", start);
+  const nextSilence = gnssOutageAlertIdentity("vehicle-1", start + 3_600_000);
+  assert.equal(first.sourceKey, repeat.sourceKey);
+  assert.equal(first.slot, repeat.slot);
+  assert.notEqual(first.slot, nextSilence.slot);
+  const section = readFileSync(new URL("../../components/gps/ats-fault-section.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(section, /fault\.ministryStatus\}/);
+  assert.match(section, /panelMinistryView/);
+  assert.match(section, /historyTitle/);
+  assert.match(section, /<details/);
+  assert.doesNotMatch(section, /copy\.ministryReady/);
+  const actions = readFileSync(new URL("./ats-fault-actions.ts", import.meta.url), "utf8");
+  assert.match(actions, /atsFaultSocketOpen/);
+  assert.match(actions, /postAtsArizaBildir/);
+  assert.equal(panelMinistryView({
+    status: "unknown",
+    attempts: [
+      { outcome: "rejected", sonucKodu: 159, sonucMesaji: "Tarih bilgisi hatalı", attemptedAt: "2026-10-19T09:56:00.000Z" },
+      { outcome: "unknown", sonucKodu: null, sonucMesaji: "U-ETDS servisine bağlanılamadı", attemptedAt: "2026-10-19T09:58:00.000Z" },
+    ],
+  }).state, "unknown");
+  assert.equal(panelMinistryView({
+    status: "rejected",
+    attempts: [{ outcome: "rejected", sonucKodu: 159, sonucMesaji: "Tarih bilgisi hatalı", attemptedAt: "2026-10-19T09:56:00.000Z" }],
+  }).code, 159);
+  assert.equal(panelMinistryView({
+    status: "withheld",
+    attempts: [{ outcome: "withheld", sonucKodu: null, sonucMesaji: "kapalı", attemptedAt: "2026-10-19T08:08:00.000Z" }],
+  }).state, "not_sent");
+  assert.equal(panelMinistryView({
+    status: "accepted",
+    attempts: [{ outcome: "accepted", sonucKodu: 0, sonucMesaji: "ok", attemptedAt: "2026-10-19T09:00:00.000Z" }],
+  }).state, "accepted");
+});
+
+test("ministry fault time is day/month/year hour:minute, without konum seconds", () => {
+  assert.equal(formatAtsFaultStart(new Date("2026-10-15T07:00:00.000Z")), "15/10/2026 10:00");
+  assert.notEqual(formatAtsFaultStart(new Date("2026-10-15T07:00:45.000Z")), "15/10/2026 10:00:45");
   const scan = readFileSync(new URL("./ats-fault-scan.ts", import.meta.url), "utf8");
   const post = readFileSync(new URL("../uetds/ats-post.ts", import.meta.url), "utf8");
   assert.doesNotMatch(scan, /postAtsArizaBildir|atsArizaBildir|setdigout/);

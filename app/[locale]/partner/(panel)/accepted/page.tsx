@@ -36,9 +36,11 @@ export default async function PartnerAcceptedJobsPage({
   const emptyLabel =
     filters.operation === "completed"
       ? copy.jobAcceptedCompletedEmpty
+      : filters.operation === "no_show"
+        ? copy.jobAcceptedNoShowEmpty
       : hasActivePartnerAcceptedJobFilters(filters)
-        ? copy.jobAcceptedFilterEmpty
-        : copy.jobAcceptedEmpty;
+          ? copy.jobAcceptedFilterEmpty
+          : copy.jobAcceptedEmpty;
   const [jobs, drivers, vehicles] = await Promise.all([
     listAcceptedPartnerJobs(
       {

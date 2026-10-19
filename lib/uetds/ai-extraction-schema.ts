@@ -1,4 +1,5 @@
 import { countryIso2FromName, extractUetdsFromText, mergeExtractedDraft, type UetdsExtractedDraft } from "@/lib/uetds/extract";
+import { applyPassportDocumentFacts } from "@/lib/uetds/passport-fields";
 import { canonicalGroupPurpose, identityTypeFromValue, isUetdsTripKind, purposeForTripKind, type UetdsDraft, type UetdsTripKind } from "@/lib/uetds/draft";
 import { normalizeUetdsFare } from "@/lib/uetds/fare";
 import { normalizeUetdsPurposeText } from "@/lib/uetds/form-language";
@@ -6,7 +7,7 @@ import { repairUetdsExtractedPersonNames } from "@/lib/uetds/passenger-name";
 import { preferUetdsPlaceQuery } from "@/lib/uetds/place-query";
 import { resolveOfficialUetdsLocation } from "@/lib/uetds/official-locations";
 import { reconcileExtractedTripDates, yearlessSentinelDate } from "@/lib/uetds/extracted-datetime";
-import { applyUetdsAiExtractionTripTimes, isUetdsAirportPickup } from "@/lib/uetds/trip-time";
+import { applyUetdsAiExtractionTripTimes, isUetdsAirportPickup, uetdsMinimumStart, uetdsStartRemainingMs, UETDS_DEFAULT_START_LEAD_MS } from "@/lib/uetds/trip-time";
 
 export const AI_EXTRACTION_MAX_TEXT = 30_000;
 export const AI_EXTRACTION_MAX_PASSENGERS = 60;
@@ -232,10 +233,18 @@ export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = 
   if (!mapped.fare && listed.fare) mapped.fare = listed.fare;
   if (!mapped.origin && listed.origin) mapped.origin = listed.origin;
   if (!mapped.destination && listed.destination) mapped.destination = listed.destination;
+  if (!mapped.startDate && listed.startDate) mapped.startDate = listed.startDate;
   if (!mapped.startTime && listed.startTime) mapped.startTime = listed.startTime;
   if (!mapped.purpose && listed.purpose) mapped.purpose = listed.purpose;
+  if (listed.passengerCount) mapped.passengerCount = listed.passengerCount;
+  mapped.passengers = applyPassportDocumentFacts(mapped.passengers, sourceText);
   return mapped;
 }
+
+export type AiExtractionNotice =
+  | { code: "passengerGap"; stated: number; identified: number }
+  | { code: "documentStartKept"; date: string; time: string }
+  | { code: "submitMinimum"; date: string; time: string };
 
 export type AiExtractionMergeOptions = {
   /** Keep the notified passenger count. Extra extracted rows are ignored. */
@@ -352,7 +361,7 @@ export function mergeAiUetdsExtraction(
     merged.conflicts = merged.conflicts.filter(
       (item) => item.path !== "startDate" && item.path !== "startTime" && item.path !== "endDate" && item.path !== "endTime",
     );
-    return merged;
+    return { ...merged, notices: [] };
   }
   // The new form already shows an automatic end. A start-only source must not
   // freeze that previous clock as a manual end.
@@ -387,5 +396,23 @@ export function mergeAiUetdsExtraction(
       merged.draft.fieldProvenance.endTime = "suggested";
     }
   }
-  return merged;
+  const notices: AiExtractionNotice[] = [];
+  const identified = (extracted.passengers ?? []).filter((passenger) => passenger.firstName?.trim() || passenger.lastName?.trim()).length;
+  const stated = extracted.passengerCount ?? 0;
+  if (stated > identified) {
+    notices.push({ code: "passengerGap", stated, identified });
+  }
+  const documentStart = Boolean(extracted.startDate && extracted.startTime);
+  if (documentStart && merged.draft.startDate && merged.draft.startTime) {
+    notices.push({
+      code: "documentStartKept",
+      date: merged.draft.startDate,
+      time: merged.draft.startTime,
+    });
+    if (uetdsStartRemainingMs(merged.draft.startDate, merged.draft.startTime, nowUtcMs) < UETDS_DEFAULT_START_LEAD_MS) {
+      const minimum = uetdsMinimumStart(nowUtcMs);
+      notices.push({ code: "submitMinimum", date: minimum.date, time: minimum.time });
+    }
+  }
+  return { ...merged, notices };
 }

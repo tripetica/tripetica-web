@@ -1,4 +1,5 @@
 import { localizedPath } from "@/lib/i18n/path";
+import { OpsSelectableTable } from "@/components/ops/selectable-table";
 import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
 import {
@@ -19,6 +20,8 @@ type PartnerTableProps = {
   copy: OpsCopy;
   items: OpsPartnerListItem[];
   filters: PartnerListFilters;
+  page: number;
+  pageSize: number;
 };
 
 function SortHeader({
@@ -57,12 +60,21 @@ function SortHeader({
   );
 }
 
-export function PartnerTable({ locale, copy, items, filters }: PartnerTableProps) {
+export function PartnerTable({
+  locale,
+  copy,
+  items,
+  filters,
+  page,
+  pageSize,
+}: PartnerTableProps) {
   return (
-    <div className="ops-table-wrap">
-      <table className="ops-table">
-        <thead>
-          <tr>
+    <OpsSelectableTable
+      page={page}
+      pageSize={pageSize}
+      selectLabel={copy.selectColumn}
+      headers={(
+        <>
             <SortHeader
               locale={locale}
               label={copy.partnerCode}
@@ -90,33 +102,29 @@ export function PartnerTable({ locale, copy, items, filters }: PartnerTableProps
               filters={filters}
             />
             <th>{copy.details}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.partnerCode}</td>
-              <td>{item.name}</td>
-              <td>{item.contactName ?? "—"}</td>
-              <td>{item.phone ?? "—"}</td>
-              <td>
-                <span className={`ops-status-badge ${partnerStatusBadgeClass(item.status)}`}>
-                  {partnerStatusLabel(item.status, copy)}
-                </span>
-              </td>
-              <td>{partnerLevelLabel(item, copy)}</td>
-              <td>
-                <a
-                  className="ops-row-detail"
-                  href={localizedPath(locale, `/ops/partners/${item.id}`)}
-                >
-                  {copy.details}
-                </a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        </>
+      )}
+      rows={items.map((item) => ({
+        id: item.id,
+        cells: [
+          item.partnerCode,
+          item.name,
+          item.contactName ?? "—",
+          item.phone ?? "—",
+          <span key="status" className={`ops-status-badge ${partnerStatusBadgeClass(item.status)}`}>
+            {partnerStatusLabel(item.status, copy)}
+          </span>,
+          partnerLevelLabel(item, copy),
+          <span key="details">
+            <a
+              className="ops-row-detail"
+              href={localizedPath(locale, `/ops/partners/${item.id}`)}
+            >
+              {copy.details}
+            </a>
+          </span>,
+        ],
+      }))}
+    />
   );
 }

@@ -259,7 +259,8 @@ export function immobilizerControlAllowed(input: {
   if (!input.vehicleId || input.deviceVehicleId !== input.vehicleId) return false;
   if (!input.devicePartnerId) return false;
   if (input.surface === "ops") return input.opsCanManage;
-  return input.partnerIsPrimary && input.actorPartnerId === input.devicePartnerId;
+  void input.partnerIsPrimary;
+  return input.actorPartnerId === input.devicePartnerId;
 }
 
 export function dout1FromValues(values: readonly (number | null)[]) {
