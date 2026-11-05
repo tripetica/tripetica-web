@@ -68,8 +68,8 @@ function mapItem(row: ListRow): UetdsNotificationListItem {
 }
 
 const LIST_SQL = `SELECT id, created_at, partner_id, reservation_id, source, status, company_id, company_short_name, ministry_env, ministry_reference, snapshot
-     FROM uetds_notifications
-     WHERE ($1::uuid IS NULL OR partner_id = $1)
+     FROM uetds_notifications notification
+     WHERE ($1::uuid IS NULL OR partner_can_access_uetds_notification($1, notification.id))
        AND (
          $2 = ''
          OR COALESCE(ministry_reference, '') ILIKE '%' || $2 || '%'
@@ -130,9 +130,9 @@ export async function getUetdsNotification(input: {
   }
   const result = await query<ListRow>(
     `SELECT id, created_at, partner_id, reservation_id, source, status, company_id, company_short_name, ministry_env, ministry_reference, snapshot
-     FROM uetds_notifications
+     FROM uetds_notifications notification
      WHERE id = $1
-       AND ($2::uuid IS NULL OR partner_id = $2)
+       AND ($2::uuid IS NULL OR partner_can_access_uetds_notification($2, notification.id))
        AND ($3::uuid IS NULL OR driver_id = $3)
        AND ($4::uuid[] IS NULL OR vehicle_id = ANY($4::uuid[]))
      LIMIT 1`,

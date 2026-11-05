@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   saveDriverAuthority,
   saveDriverVehiclePair,
+  saveDriverVehicleSet,
   saveVehicleDriverPair,
+  saveVehicleDriverSet,
 } from "../partner/fleet-pairing";
 
 const partnerA = "11111111-1111-4111-8111-111111111111";
@@ -30,7 +32,7 @@ type Authority = {
   companyIds: string[];
 };
 
-test("one fleet pairing is shared, replaceable, and partner-owned", async () => {
+test("a vehicle keeps every linked driver and a driver keeps one vehicle", async () => {
   const globals = globalThis as typeof globalThis & { tripeticaPgPool?: unknown };
   const before = globals.tripeticaPgPool;
   const drivers: Driver[] = [
@@ -50,33 +52,84 @@ test("one fleet pairing is shared, replaceable, and partner-owned", async () => 
   ];
   let pairs: Pair[] = [];
 
-  globals.tripeticaPgPool = {
-    query: async (sql: string, values: unknown[]) => {
+  const mockQuery = async (sql: string, values: unknown[] = []) => {
       assert.doesNotMatch(sql, /password_sealed|identity_sealed|SELECT \*/);
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+        return { rows: [] };
+      }
       if (sql.includes("INSERT INTO partner_fleet_defaults")) {
-        pairs.push({
-          partnerId: String(values[0]),
-          driverId: String(values[1]),
-          vehicleId: String(values[2]),
-        });
+        const driverIds = Array.isArray(values[1]) ? values[1].map(String) : [String(values[1])];
+        const vehicleIds = Array.isArray(values[2]) ? values[2].map(String) : [String(values[2])];
+        if (sql.includes("unnest")) {
+          if (sql.includes("AS driver_id")) {
+            const ids = (Array.isArray(values[2]) ? values[2] : []).map(String);
+            for (const id of ids) {
+              pairs.push({
+                partnerId: String(values[0]),
+                driverId: id,
+                vehicleId: String(values[1]),
+              });
+            }
+          } else {
+            const ids = sql.includes("AS vehicle_id") ? vehicleIds : driverIds;
+            for (const id of ids) {
+              pairs.push({
+                partnerId: String(values[0]),
+                driverId: sql.includes("AS vehicle_id") ? String(values[1]) : id,
+                vehicleId: sql.includes("AS vehicle_id") ? id : String(values[1]),
+              });
+            }
+          }
+        } else {
+          pairs.push({
+            partnerId: String(values[0]),
+            driverId: String(values[1]),
+            vehicleId: String(values[2]),
+          });
+        }
         return { rows: [{ driver_id: values[1] }] };
       }
-      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("OR vehicle_id")) {
-        pairs = pairs.filter(
-          (pair) =>
-            !(
-              pair.partnerId === values[0] &&
-              (pair.driverId === values[1] || pair.vehicleId === values[2])
-            ),
-        );
+      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("vehicle_id <>") && sql.includes("ANY")) {
+        const ids = new Set((Array.isArray(values[0]) ? values[0] : []).map(String));
+        const vehicleId = String(values[1]);
+        pairs = pairs.filter((pair) => !(ids.has(pair.driverId) && pair.vehicleId !== vehicleId));
         return { rows: [] };
       }
-      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("driver_id = $2")) {
-        pairs = pairs.filter((pair) => !(pair.partnerId === values[0] && pair.driverId === values[1]));
+      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("NOT (vehicle_id = ANY")) {
+        const keep = new Set((Array.isArray(values[1]) ? values[1] : []).map(String));
+        pairs = pairs.filter((pair) => pair.driverId !== values[0] || keep.has(pair.vehicleId));
         return { rows: [] };
       }
-      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("vehicle_id = $2")) {
-        pairs = pairs.filter((pair) => !(pair.partnerId === values[0] && pair.vehicleId === values[1]));
+      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("NOT (driver_id = ANY")) {
+        const keep = new Set((Array.isArray(values[1]) ? values[1] : []).map(String));
+        pairs = pairs.filter((pair) => pair.vehicleId !== values[0] || keep.has(pair.driverId));
+        return { rows: [] };
+      }
+      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("driver_id = $1")) {
+        pairs = pairs.filter((pair) => pair.driverId !== values[0]);
+        return { rows: [] };
+      }
+      if (sql.includes("DELETE FROM partner_fleet_defaults") && sql.includes("vehicle_id = $1")) {
+        pairs = pairs.filter((pair) => pair.vehicleId !== values[0]);
+        return { rows: [] };
+      }
+      if (sql.includes("FROM partner_drivers") && sql.includes("ANY($2::uuid[])")) {
+        const ids = new Set((Array.isArray(values[1]) ? values[1] : []).map(String));
+        return {
+          rows: drivers
+            .filter((item) => ids.has(item.id) && item.partnerId === values[0] && !item.deleted)
+            .map((item) => ({ id: item.id })),
+        };
+      }
+      if (sql.includes("FROM partner_vehicles") && sql.includes("ANY($2::uuid[])")) {
+        const ids = new Set((Array.isArray(values[1]) ? values[1] : []).map(String));
+        return {
+          rows: vehicles
+            .filter((item) => ids.has(item.id) && item.partnerId === values[0] && !item.deleted)
+            .map((item) => ({ id: item.id })),
+        };
+      }
+      if (sql.includes("SET vehicle_derived_visibility = TRUE")) {
         return { rows: [] };
       }
       if (sql.includes("JOIN partner_vehicles")) {
@@ -122,7 +175,13 @@ test("one fleet pairing is shared, replaceable, and partner-owned", async () => 
         return { rows: [] };
       }
       throw new Error(`unexpected sql: ${sql}`);
-    },
+  };
+  globals.tripeticaPgPool = {
+    query: mockQuery,
+    connect: async () => ({
+      query: mockQuery,
+      release: () => undefined,
+    }),
   };
 
   try {
@@ -143,21 +202,52 @@ test("one fleet pairing is shared, replaceable, and partner-owned", async () => 
     assert.equal(fromDriver.ok, true);
     assert.equal(pairs.length, 2);
 
-    const replaced = await saveDriverVehiclePair({
+    const shared = await saveDriverVehiclePair({
+      partnerId: partnerA,
+      driverId: driverB,
+      vehicleId: vehicleA,
+    });
+    assert.equal(shared.ok, true);
+    assert.equal(
+      pairs.filter((pair) => pair.vehicleId === vehicleA).length,
+      2,
+    );
+    assert.equal(pairs.some((pair) => pair.driverId === driverB && pair.vehicleId === vehicleB), false);
+
+    const secondVehicle = await saveDriverVehiclePair({
       partnerId: partnerA,
       driverId: driverA,
       vehicleId: vehicleB,
     });
-    assert.equal(replaced.ok, true);
-    assert.deepEqual(pairs, [{ partnerId: partnerA, driverId: driverA, vehicleId: vehicleB }]);
+    assert.equal(secondVehicle.ok, true);
+    assert.equal(pairs.filter((pair) => pair.driverId === driverA).length, 1);
+    assert.equal(
+      (await saveDriverVehicleSet({
+        partnerId: partnerA,
+        driverId: driverA,
+        vehicleIds: [vehicleA, vehicleB],
+      })).ok,
+      false,
+    );
+    assert.equal(pairs.filter((pair) => pair.driverId === driverA).length, 1);
+    const kept = await saveVehicleDriverSet({
+      partnerId: partnerA,
+      vehicleId: vehicleA,
+      driverIds: [driverA, driverB],
+    });
+    assert.equal(kept.ok, true);
+    assert.equal(pairs.filter((pair) => pair.driverId === driverA).length, 1);
+    assert.equal(pairs.some((pair) => pair.driverId === driverB && pair.vehicleId === vehicleA), true);
 
     const cleared = await saveVehicleDriverPair({
       partnerId: partnerA,
-      vehicleId: vehicleB,
+      vehicleId: vehicleA,
       driverId: null,
     });
     assert.equal(cleared.ok, true);
-    assert.deepEqual(pairs, []);
+    assert.equal(pairs.some((pair) => pair.vehicleId === vehicleA), false);
+    assert.equal(pairs.some((pair) => pair.driverId === driverA), false);
+    assert.equal(pairs.some((pair) => pair.driverId === driverB), false);
 
     assert.equal(
       (await saveDriverVehiclePair({ partnerId: partnerA, driverId: driverA, vehicleId: foreignVehicle })).ok,
@@ -167,7 +257,7 @@ test("one fleet pairing is shared, replaceable, and partner-owned", async () => 
       (await saveVehicleDriverPair({ partnerId: partnerA, vehicleId: vehicleA, driverId: foreignDriver })).ok,
       false,
     );
-    assert.deepEqual(pairs, []);
+    assert.equal(pairs.some((pair) => pair.vehicleId === foreignVehicle), false);
 
     const linked = await saveDriverAuthority({
       partnerId: partnerA,

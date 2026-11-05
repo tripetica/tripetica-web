@@ -39,11 +39,15 @@ export function partnerTabPath(tab: PartnerTab) {
   return TAB_PATHS.find((item) => item.tab === tab)?.prefix ?? "/partner/profile";
 }
 
-export function partnerHasTab(actor: { isOwner: boolean; tabs: readonly string[] }, tab: PartnerTab) {
+export function partnerHasTab(
+  actor: { isOwner: boolean; tabs: readonly string[]; deniedTabs?: readonly string[] },
+  tab: PartnerTab,
+) {
+  if ((actor.deniedTabs ?? []).includes(tab)) return false;
   return actor.isOwner || actor.tabs.includes(tab);
 }
 
-export function firstPartnerTabPath(actor: { isOwner: boolean; tabs: readonly string[] }) {
+export function firstPartnerTabPath(actor: { isOwner: boolean; tabs: readonly string[]; deniedTabs?: readonly string[] }) {
   const tab = PARTNER_TABS.find((item) => partnerHasTab(actor, item));
   return tab ? partnerTabPath(tab) : "/partner/profile";
 }

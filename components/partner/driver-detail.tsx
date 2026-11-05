@@ -5,6 +5,8 @@ import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
 import { DriverPermissionsEditor } from "@/components/partner/driver-permissions";
+import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
+import { patchPartnerDriverVehicleAction } from "@/lib/partner/fleet-list-actions";
 import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
 import { LanguageMultiSelect } from "@/components/partner/language-multi-select";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
@@ -41,7 +43,7 @@ type PartnerDriverDetailProps = {
   activeUetdsCompanies: readonly UetdsCompanyRef[];
   vehicles: readonly FleetChoice[];
   authorities: readonly AuthorityChoice[];
-  defaultVehicleId: string;
+  vehicleIds: readonly string[];
   defaultAuthorityId: string;
   permissions: DriverPermissions;
 };
@@ -54,7 +56,7 @@ type DriverDraft = {
   phoneNational: string;
   languages: string[];
   uetdsCompanyId: string;
-  defaultVehicleId: string;
+  vehicleIds: string[];
   defaultAuthorityId: string;
 };
 
@@ -93,7 +95,7 @@ function choiceLabel(options: readonly FleetChoice[], id: string, emptyLabel: st
 
 function draftFromDriver(
   driver: PartnerDriverRecord,
-  links: { defaultVehicleId: string; defaultAuthorityId: string },
+  links: { vehicleIds: readonly string[]; defaultAuthorityId: string },
 ): DriverDraft {
   const storedPhone = fromStoredPhone(driver.phoneCountryCode, driver.phone);
   return {
@@ -104,7 +106,7 @@ function draftFromDriver(
     phoneNational: storedPhone.national,
     languages: driver.languageCodes,
     uetdsCompanyId: driver.uetdsCompanyId ?? "",
-    defaultVehicleId: links.defaultVehicleId,
+    vehicleIds: [...links.vehicleIds],
     defaultAuthorityId: links.defaultAuthorityId,
   };
 }
@@ -118,7 +120,7 @@ function draftsEqual(left: DriverDraft, right: DriverDraft) {
     left.phoneNational.replace(/\D/g, "") === right.phoneNational.replace(/\D/g, "") &&
     left.languages.join(",") === right.languages.join(",") &&
     left.uetdsCompanyId === right.uetdsCompanyId &&
-    left.defaultVehicleId === right.defaultVehicleId &&
+    left.vehicleIds.join(",") === right.vehicleIds.join(",") &&
     left.defaultAuthorityId === right.defaultAuthorityId
   );
 }
@@ -159,6 +161,7 @@ function DetailRow({
           className="partner-edit-btn"
           aria-label={editLabel}
           aria-pressed={editing}
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={onEdit}
         >
           <PencilIcon />
@@ -176,15 +179,22 @@ export function PartnerDriverDetail({
   activeUetdsCompanies,
   vehicles,
   authorities,
-  defaultVehicleId,
+  vehicleIds,
   defaultAuthorityId,
   permissions,
 }: PartnerDriverDetailProps) {
   const baseline = useMemo(
-    () => draftFromDriver(driver, { defaultVehicleId, defaultAuthorityId }),
-    [driver, defaultVehicleId, defaultAuthorityId],
+    () => draftFromDriver(driver, { vehicleIds, defaultAuthorityId }),
+    [driver, vehicleIds, defaultAuthorityId],
   );
   const [draft, setDraft] = useState(baseline);
+  const vehicleKey = vehicleIds.join(",");
+  const [seenVehicleKey, setSeenVehicleKey] = useState(vehicleKey);
+  const [vehicleBaseline, setVehicleBaseline] = useState(vehicleKey);
+  if (seenVehicleKey !== vehicleKey) {
+    setSeenVehicleKey(vehicleKey);
+    setVehicleBaseline(vehicleKey);
+  }
   const [editing, setEditing] = useState<Partial<Record<EditableField, boolean>>>({});
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
@@ -211,13 +221,19 @@ export function PartnerDriverDetail({
     error: null,
     ok: false,
   });
-  const dirty = !draftsEqual(draft, baseline);
+  const dirty = !draftsEqual(draft, {
+    ...baseline,
+    vehicleIds: vehicleBaseline.split(",").filter(Boolean),
+  });
   const isEditing = Object.values(editing).some(Boolean);
   const mode = partnerDriverDetailMode(isEditing, dirty);
   const listHref = localizedPath(locale, "/partner/drivers");
 
   function discardEdits() {
-    setDraft(baseline);
+    setDraft({
+      ...baseline,
+      vehicleIds: vehicleBaseline.split(",").filter(Boolean),
+    });
     setEditing({});
   }
 
@@ -413,24 +429,35 @@ export function PartnerDriverDetail({
             setEditing((current) => ({ ...current, defaultVehicle: !current.defaultVehicle }))
           }
         >
-          {editing.defaultVehicle ? (
-            <FleetOptionalSelect
-              name="defaultVehicleId"
-              value={draft.defaultVehicleId}
-              emptyLabel={copy.fleetPairNone}
+          <input type="hidden" name="vehicleLinksPresent" value="1" />
+          {draft.vehicleIds.slice(0, 1).map((id) => <input key={id} type="hidden" name="defaultVehicleId" value={id} />)}
+          <div onPointerDown={(event) => event.stopPropagation()}>
+            <FleetLinkMenu
+              mode="single"
+              values={draft.vehicleIds.slice(0, 1)}
               options={vehicles}
-              onChange={(defaultVehicleId) =>
-                setDraft((current) => ({ ...current, defaultVehicleId }))
-              }
+              emptyLabel={copy.fleetPairNone}
+              saveLabel={copy.driverSave}
+              cancelLabel={copy.cancelEdit}
+              saveFailedLabel={copy.driverSaveFailed}
+              open={Boolean(editing.defaultVehicle)}
+              onOpenChange={(next) => setEditing((current) => ({ ...current, defaultVehicle: next }))}
+              showTrigger={false}
+              onSave={async (next) => {
+                const result = await patchPartnerDriverVehicleAction({
+                  locale,
+                  driverId: driver.id,
+                  vehicleId: next[0] ?? "",
+                });
+                if (!result.ok) {
+                  return false;
+                }
+                setDraft((current) => ({ ...current, vehicleIds: result.vehicleIds }));
+                setVehicleBaseline(result.vehicleIds.join(","));
+                return true;
+              }}
             />
-          ) : (
-            <>
-              <input type="hidden" name="defaultVehicleId" value={draft.defaultVehicleId} />
-              <p className="partner-billing-value">
-                {choiceLabel(vehicles, draft.defaultVehicleId, copy.fleetPairNone)}
-              </p>
-            </>
-          )}
+          </div>
         </DetailRow>
 
         <DetailRow

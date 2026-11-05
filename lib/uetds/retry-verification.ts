@@ -48,7 +48,7 @@ export async function retryUetdsFinalVerification(input: {
     `UPDATE uetds_notifications SET status = $2, snapshot = $3::jsonb
      WHERE id = $1 AND status = 'partial' AND snapshot = $4::jsonb
        AND ministry_env = $5 AND ministry_reference = $6
-       AND ($7::uuid IS NULL OR partner_id = $7)
+       AND ($7::uuid IS NULL OR partner_can_access_uetds_notification($7, id))
      RETURNING id`,
     [notification.id, status, JSON.stringify(next), notification.snapshotJson, runtime, notification.ministryReference,
       input.actorType === "partner" ? input.partnerId : null],

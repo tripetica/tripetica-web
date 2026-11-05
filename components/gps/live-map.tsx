@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { mountGoogleMap, type GpsMapHandle, type GpsMapMarker, type GpsMarkerIcon } from "@/components/gps/google-map";
 import { gpsAddressCell } from "@/lib/gps/address-format";
 import { GPS_FLEET_FOLLOW_ZOOM, GPS_FLEET_GLIDE_MS, gpsFleetFrame, gpsFleetIdsChanged, gpsFleetMarkerClick, gpsFleetPadding, gpsFleetStoredMarker } from "@/lib/gps/fleet";
 import { gpsApplyVehicleFix, gpsSelectVehicle, type GpsFollowView } from "@/lib/gps/follow";
@@ -39,6 +38,7 @@ export function GpsLiveMap({
   prefs,
   labels,
   addressPending = "Adres aranıyor…",
+  unavailableLabel = "Harita görüntülenemiyor.",
   active = true,
   pins,
   selectedVehicleId = null,
@@ -51,18 +51,18 @@ export function GpsLiveMap({
   prefs?: GpsPopupPrefs;
   labels?: GpsMapLabelPrefs;
   addressPending?: string;
+  unavailableLabel?: string;
   active?: boolean;
   pins?: GpsFleetMapPin[];
   selectedVehicleId?: string | null;
   onVehicleSelect?: (id: string) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
-  const markerRef = useRef<LeafletMarker | null>(null);
+  const mapRef = useRef<GpsMapHandle | null>(null);
+  const markerRef = useRef<GpsMapMarker | null>(null);
   const popupNode = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef(0);
   const framedRef = useRef(false);
-  const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const addressAbort = useRef<AbortController | null>(null);
   const addressLine = useRef("");
   const requestedCell = useRef("");
@@ -72,14 +72,14 @@ export function GpsLiveMap({
   pendingText.current = addressPending;
   const modelRef = useRef({ marker, prefs });
   const labelsRef = useRef(labels ?? GPS_MAP_LABEL_DEFAULTS);
-  const labelCache = useRef(new Map<LeafletMarker, string>());
+  const labelCache = useRef(new Map<GpsMapMarker, string>());
   const pinsRef = useRef(pins);
   labelsRef.current = labels ?? GPS_MAP_LABEL_DEFAULTS;
   const onSelectRef = useRef(onVehicleSelect);
   const selectedFleetRef = useRef<string | null>(selectedVehicleId);
   const followHeldRef = useRef(false);
   const movingMapRef = useRef(false);
-  const fleetMarkers = useRef(new Map<string, LeafletMarker>());
+  const fleetMarkers = useRef(new Map<string, GpsMapMarker>());
   const fleetPopups = useRef(new Map<string, HTMLDivElement>());
   const fleetFrames = useRef(new Map<string, number>());
   const fleetPlaced = useRef(new Map<string, string>());
@@ -96,6 +96,7 @@ export function GpsLiveMap({
     selectedIdRef.current = vehicleId;
   }
   const [mapEpoch, setMapEpoch] = useState(0);
+  const [unavailable, setUnavailable] = useState(false);
   const trackKey = JSON.stringify(track);
   const selectedPin = pins?.find((pin) => pin.id === selectedVehicleId) ?? null;
   const liveLatitude = live?.latitude ?? selectedPin?.latitude ?? null;
@@ -107,14 +108,13 @@ export function GpsLiveMap({
 
   function paint() {
     const pin = markerRef.current;
-    const leaflet = leafletRef.current;
     const current = modelRef.current.marker;
     const currentPrefs = modelRef.current.prefs;
     const node = popupNode.current;
-    if (!pin || !leaflet || !current || !currentPrefs || !node) {
+    if (!pin || !mapRef.current || !current || !currentPrefs || !node) {
       return;
     }
-    pin.setIcon(vehicleIcon(leaflet, current.state));
+    pin.setIcon(vehicleIcon(current.state));
     fillPopup(node, current, currentPrefs, addressLine.current);
   }
 
@@ -126,7 +126,7 @@ export function GpsLiveMap({
       latitude: pin.latitude,
       longitude: pin.longitude,
     })));
-    const seen = new Set<LeafletMarker>();
+    const seen = new Set<GpsMapMarker>();
     for (const pin of fleet) {
       const marker = fleetMarkers.current.get(pin.markerKey ?? pin.id);
       if (!marker) continue;
@@ -202,14 +202,25 @@ export function GpsLiveMap({
     }
     let cancelled = false;
     framedRef.current = false;
+    const observed = new ResizeObserver(() => {
+      mapRef.current?.invalidateSize();
+    });
+    observed.observe(node);
+    const timer = window.setTimeout(() => {
     void (async () => {
-      const leaflet = await import("leaflet");
-      const L = leaflet.default ?? leaflet;
-      if (cancelled) {
+      let created: GpsMapHandle;
+      try {
+        created = await mountGoogleMap(node, () => {
+          if (!cancelled) setUnavailable(true);
+        });
+      } catch {
+        if (!cancelled) setUnavailable(true);
         return;
       }
-      leafletRef.current = L;
-      const created = L.map(node, { zoomControl: true });
+      if (cancelled) {
+        created.remove();
+        return;
+      }
       mapRef.current = created;
       created.on("dragstart", () => {
         followHeldRef.current = true;
@@ -217,22 +228,18 @@ export function GpsLiveMap({
       created.on("zoomstart", () => {
         if (!movingMapRef.current) followHeldRef.current = true;
       });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap",
-        maxZoom: 19,
-      }).addTo(created);
       const points = JSON.parse(trackKey) as GpsMapPoint[];
       const bounds: [number, number][] = [];
       if (points.length > 1) {
-        L.polyline(points.map((point) => [point.latitude, point.longitude] as [number, number]), {
+        created.addPolyline(points.map((point) => [point.latitude, point.longitude] as [number, number]), {
           color: "#1d4ed8",
           weight: 4,
-        }).addTo(created);
+        });
       }
       points.forEach((point, index) => {
         const role = index === 0 ? "start" : index === points.length - 1 ? "end" : "point";
         const color = role === "start" ? "#15803d" : role === "end" ? "#b91c1c" : "#64748b";
-        L.circleMarker([point.latitude, point.longitude], {
+        created.addCircle([point.latitude, point.longitude], {
           radius: role === "point" ? 4 : 8,
           color,
           fillColor: color,
@@ -243,11 +250,11 @@ export function GpsLiveMap({
       });
       holdMapMove(() => {
         if (bounds.length === 0) {
-          if (!pinsRef.current?.length) created.setView([41.015, 28.979], 10);
+          if (!pinsRef.current?.length) created.setView([41.015, 28.979], 10, { animate: false });
         } else if (bounds.length === 1) {
-          created.setView(bounds[0], 15);
+          created.setView(bounds[0], 15, { animate: false });
         } else {
-          created.fitBounds(bounds, { padding: [24, 24] });
+          created.fitBounds(bounds, { padding: [24, 24], animate: false });
         }
       });
       window.setTimeout(() => {
@@ -255,20 +262,25 @@ export function GpsLiveMap({
         holdMapMove(() => created.invalidateSize());
       }, 0);
       if (!cancelled) {
+        setUnavailable(false);
         setMapEpoch((value) => value + 1);
       }
     })();
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      observed.disconnect();
       window.cancelAnimationFrame(frameRef.current);
       for (const frame of fleetFrames.current.values()) window.cancelAnimationFrame(frame);
       addressAbort.current?.abort();
       markerRef.current?.remove();
       markerRef.current = null;
       popupNode.current = null;
+      for (const pin of fleetMarkers.current.values()) pin.remove();
+      fleetMarkers.current.clear();
       mapRef.current?.remove();
       mapRef.current = null;
-      leafletRef.current = null;
     };
   }, [trackKey]);
 
@@ -283,23 +295,20 @@ export function GpsLiveMap({
     }
     let cancelled = false;
     void (async () => {
-      const imported = await import("leaflet");
-      const leaflet = leafletRef.current ?? imported.default ?? imported;
       if (cancelled || mapRef.current !== map) {
         return;
       }
-      leafletRef.current = leaflet;
       const next: [number, number] = [liveLatitude, liveLongitude];
       const existing = markerRef.current;
       if (!existing) {
-        const pin = leaflet.marker(next, {
-          icon: vehicleIcon(leaflet, modelRef.current.marker?.state ?? "idle"),
+        const pin = map.addMarker(next, {
+          icon: vehicleIcon(modelRef.current.marker?.state ?? "idle"),
           autoPanOnFocus: false,
         }).addTo(map);
         const node = document.createElement("div");
         node.className = "gps-popup";
         popupNode.current = node;
-        pin.bindPopup(node, { autoPan: false, keepInView: false });
+        pin.bindPopup(node, { autoPan: false, keepInView: false, autoPanOnFocus: false });
         pin.on("popupopen", () => loadAddressRef.current());
         pin.on("popupclose", () => addressAbort.current?.abort());
         pin.on("click", () => {
@@ -394,12 +403,9 @@ export function GpsLiveMap({
     }
     let cancelled = false;
     void (async () => {
-      const imported = await import("leaflet");
-      const leaflet = leafletRef.current ?? imported.default ?? imported;
       if (cancelled || mapRef.current !== map) {
         return;
       }
-      leafletRef.current = leaflet;
       const alive = new Set(pins.map((pin) => pin.markerKey ?? pin.id));
       for (const [id, pin] of fleetMarkers.current) {
         if (alive.has(id)) continue;
@@ -415,15 +421,15 @@ export function GpsLiveMap({
         const markerKey = pin.markerKey ?? pin.id;
         let marker = fleetMarkers.current.get(markerKey);
         if (!marker) {
-          marker = leaflet.marker([pin.latitude, pin.longitude], {
-            icon: vehicleIcon(leaflet, pin.marker.state),
+          marker = map.addMarker([pin.latitude, pin.longitude], {
+            icon: vehicleIcon(pin.marker.state),
             autoPanOnFocus: false,
             zIndexOffset: pin.id === selectedFleetRef.current ? 1000 : 0,
           }).addTo(map);
           const node = document.createElement("div");
           node.className = "gps-popup";
           fleetPopups.current.set(pin.id, node);
-          marker.bindPopup(node, { autoPan: false, keepInView: false });
+          marker.bindPopup(node, { autoPan: false, keepInView: false, autoPanOnFocus: false });
           marker.off("click");
           marker.on("popupopen", () => {
             if (pin.id !== selectedFleetRef.current) return;
@@ -431,7 +437,7 @@ export function GpsLiveMap({
             loadFleetAddress(pin.id);
           });
           marker.on("click", (event) => {
-            if (event.originalEvent) leaflet.DomEvent.stop(event.originalEvent);
+            event?.originalEvent?.stopPropagation();
             const previous = selectedFleetRef.current;
             const decision = gpsFleetMarkerClick({
               selectedId: previous,
@@ -459,7 +465,7 @@ export function GpsLiveMap({
             holdMapMove(() => map.setView([pin.latitude, pin.longitude], GPS_FLEET_FOLLOW_ZOOM, { animate: false }));
           }
         } else {
-          marker.setIcon(vehicleIcon(leaflet, pin.marker.state));
+          marker.setIcon(vehicleIcon(pin.marker.state));
           marker.setZIndexOffset(pin.id === selectedFleetRef.current ? 1000 : 0);
           const nextKey = fleetPlaceKey(pin);
           if (fleetPlaced.current.get(markerKey) !== nextKey) {
@@ -495,9 +501,14 @@ export function GpsLiveMap({
     paintLabels();
   }, [labels?.plate, labels?.driver, pins, marker?.plate, marker?.driver]);
 
-  return <div ref={host} className="gps-map" />;
+  return (
+    <div className="gps-map" data-map-engine={unavailable ? "unavailable" : "google"}>
+      <div ref={host} className="gps-map-canvas" />
+      {unavailable ? <p className="gps-map-unavailable">{unavailableLabel}</p> : null}
+    </div>
+  );
 
-  function centerOn(map: LeafletMap, view: GpsFollowView) {
+  function centerOn(map: GpsMapHandle, view: GpsFollowView) {
     if (followHeldRef.current) return;
     holdMapMove(() => focusSelected(map, view));
   }
@@ -554,7 +565,7 @@ export function GpsLiveMap({
   }
 
   function glideFleet(
-    marker: LeafletMarker,
+    marker: GpsMapMarker,
     next: [number, number],
     id: string,
     onFrame: (latitude: number, longitude: number) => void,
@@ -579,7 +590,7 @@ function fleetPlaceKey(pin: GpsFleetMapPin) {
   return `${pin.latitude.toFixed(6)},${pin.longitude.toFixed(6)}`;
 }
 
-function fitFleet(map: LeafletMap, pins: readonly GpsFleetMapPin[]) {
+function fitFleet(map: GpsMapHandle, pins: readonly GpsFleetMapPin[]) {
   const frame = gpsFleetFrame(pins);
   if (frame.kind === "empty") return;
   if (frame.kind === "single") {
@@ -593,10 +604,10 @@ function fitFleet(map: LeafletMap, pins: readonly GpsFleetMapPin[]) {
 }
 
 function syncMapLabel(
-  marker: LeafletMarker,
+  marker: GpsMapMarker,
   lines: string[],
   offset: [number, number],
-  cache: Map<LeafletMarker, string>,
+  cache: Map<GpsMapMarker, string>,
 ) {
   const html = gpsMapLabelHtml(lines);
   const signature = `${html}@${offset[0]},${offset[1]}`;
@@ -618,18 +629,14 @@ function syncMapLabel(
   });
 }
 
-export function vehicleIcon(
-  leaflet: typeof import("leaflet"),
-  state: GpsMarkerState,
-  extraClass = "",
-) {
-  return leaflet.divIcon({
+export function vehicleIcon(state: GpsMarkerState, extraClass = ""): GpsMarkerIcon {
+  return {
     className: extraClass ? `gps-status-wrap ${extraClass}` : "gps-status-wrap",
     html: `<div class="gps-status is-${state}"></div>`,
     iconSize: [22, 22],
     iconAnchor: [11, 11],
     popupAnchor: [0, -26],
-  });
+  };
 }
 
 function fillPopup(
@@ -654,7 +661,7 @@ function fillPopup(
   });
 }
 
-function currentView(map: LeafletMap, selectedId: string | null): GpsFollowView {
+function currentView(map: GpsMapHandle, selectedId: string | null): GpsFollowView {
   const center = map.getCenter();
   return {
     selectedId,
@@ -663,7 +670,7 @@ function currentView(map: LeafletMap, selectedId: string | null): GpsFollowView 
   };
 }
 
-function focusSelected(map: LeafletMap, view: GpsFollowView) {
+function focusSelected(map: GpsMapHandle, view: GpsFollowView) {
   if (!view.center || view.selectedId === null) {
     return;
   }
@@ -671,7 +678,7 @@ function focusSelected(map: LeafletMap, view: GpsFollowView) {
 }
 
 function glide(
-  marker: LeafletMarker,
+  marker: GpsMapMarker,
   next: [number, number],
   frameRef: { current: number },
   onFrame: (latitude: number, longitude: number) => void,

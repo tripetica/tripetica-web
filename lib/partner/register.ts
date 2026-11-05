@@ -114,9 +114,10 @@ export async function createPartnerApplication(input: {
           password_hash,
           role,
           status,
-          must_change_password
+          must_change_password,
+          is_owner
        )
-       VALUES ($1, $2, $3, 'admin', 'pending', FALSE)`,
+       VALUES ($1, $2, $3, 'admin', 'pending', FALSE, TRUE)`,
       [created.id, email, passwordHash],
     );
     await client.query("COMMIT");

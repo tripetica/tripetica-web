@@ -113,9 +113,10 @@ export async function createOrResetPrimaryPartnerUser(password: string) {
         password_hash,
         role,
         status,
-        must_change_password
+        must_change_password,
+        is_owner
      )
-     VALUES ($1, $2, $3, 'admin', 'active', TRUE)
+     VALUES ($1, $2, $3, 'admin', 'active', TRUE, TRUE)
      RETURNING id, email, partner_id`,
     [partner.id, email, passwordHash],
   );

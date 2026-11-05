@@ -85,17 +85,17 @@ async function ownedVehicle(client: PoolClient, vehicleId: string, partnerId: st
   const result = await client.query<{ id: string }>(
     `SELECT id
        FROM partner_vehicles
-      WHERE id = $1 AND partner_id = $2 AND deleted_at IS NULL
+      WHERE id = $1 AND partner_can_access_vehicle($2, id) AND deleted_at IS NULL
       FOR UPDATE`,
     [vehicleId, partnerId],
   );
   return result.rows[0]?.id ?? null;
 }
 
-async function readProfile(client: PoolClient, vehicleId: string, partnerId: string) {
+async function readProfile(client: PoolClient, vehicleId: string) {
   const result = await client.query<ProfileRow>(
-    `${PROFILE_SQL} WHERE vehicle_id = $1 AND partner_id = $2 FOR UPDATE`,
-    [vehicleId, partnerId],
+    `${PROFILE_SQL} WHERE vehicle_id = $1 FOR UPDATE`,
+    [vehicleId],
   );
   return result.rows[0] ?? null;
 }
@@ -200,16 +200,15 @@ function cursorOf(row: ProfileRow): MaintenanceCursor | null {
   };
 }
 
-async function activePhysical(client: PoolClient, vehicleId: string, partnerId: string) {
+async function activePhysical(client: PoolClient, vehicleId: string) {
   const result = await client.query<{ present: boolean }>(
     `SELECT EXISTS (
        SELECT 1
          FROM gps_devices device
         WHERE device.vehicle_id = $1
-          AND device.partner_id = $2
           AND device.status = 'active'
      ) AS present`,
-    [vehicleId, partnerId],
+    [vehicleId],
   );
   return result.rows[0]?.present === true;
 }
@@ -234,7 +233,7 @@ async function readPoints(client: PoolClient, row: ProfileRow, source: "physical
 }
 
 async function catchUpLocked(client: PoolClient, row: ProfileRow, now: Date) {
-  const source = maintenanceDistanceSource(await activePhysical(client, row.vehicle_id, row.partner_id));
+  const source = maintenanceDistanceSource(await activePhysical(client, row.vehicle_id));
   let working = row;
   if (row.distance_source && row.distance_source !== source) {
     const switched = await client.query<ProfileRow>(
@@ -298,15 +297,15 @@ export async function syncVehicleMaintenance(vehicleId: string, partnerId: strin
   const snapshot = await withMaintenanceLock(vehicleId, async (client) => {
     const vehicle = await ownedVehicle(client, vehicleId, partnerId);
     if (!vehicle) return null;
-    const row = await readProfile(client, vehicleId, partnerId);
+    const row = await readProfile(client, vehicleId);
     if (!row) return { started: false as const, vehicleId, today };
     const caught = await catchUpLocked(client, row, now);
     return loadSnapshot(client, caught, today);
   });
   if (snapshot && snapshot.started && maintenanceDeliveryEnabled()) {
-    await deliverVehicleMaintenanceNotice(vehicleId, partnerId, locale, now);
+    await deliverVehicleMaintenanceNotice(vehicleId, partnerId, locale);
     return withMaintenanceLock(vehicleId, async (client) => {
-      const row = await readProfile(client, vehicleId, partnerId);
+      const row = await readProfile(client, vehicleId);
       if (!row) return { started: false as const, vehicleId, today };
       return loadSnapshot(client, row, today);
     });
@@ -389,9 +388,9 @@ function claimedDriver(row: {
   };
 }
 
-async function claimNotice(vehicleId: string, partnerId: string, locale: MaintenanceLocale, now: Date): Promise<ClaimedNotice | null> {
+async function claimNotice(vehicleId: string, partnerId: string, locale: MaintenanceLocale): Promise<ClaimedNotice | null> {
   return withMaintenanceLock(vehicleId, async (client) => {
-    const row = await readProfile(client, vehicleId, partnerId);
+    const row = await readProfile(client, vehicleId);
     if (!row) return null;
     const figures = maintenanceFigures({
       verifiedKm: row.verified_km,
@@ -421,13 +420,21 @@ async function claimNotice(vehicleId: string, partnerId: string, locale: Mainten
               NULLIF(trim(driver.first_name), '') AS driver_first_name,
               driver.phone AS driver_phone
          FROM partner_vehicles vehicle
-         LEFT JOIN partner_fleet_defaults pairing
-           ON pairing.vehicle_id = vehicle.id AND pairing.partner_id = vehicle.partner_id
+         LEFT JOIN LATERAL (
+           SELECT pairing.driver_id
+             FROM partner_fleet_defaults pairing
+             JOIN partner_drivers linked
+               ON linked.id = pairing.driver_id
+              AND linked.deleted_at IS NULL
+            WHERE pairing.vehicle_id = vehicle.id
+            ORDER BY pairing.created_at, linked.last_name, linked.id
+            LIMIT 1
+         ) pairing ON TRUE
          LEFT JOIN partner_drivers driver
            ON driver.id = pairing.driver_id
-          AND driver.partner_id = vehicle.partner_id
-          AND driver.deleted_at IS NULL
-        WHERE vehicle.id = $1 AND vehicle.partner_id = $2 AND vehicle.deleted_at IS NULL`,
+        WHERE vehicle.id = $1
+          AND partner_can_access_vehicle($2, vehicle.id)
+          AND vehicle.deleted_at IS NULL`,
       [vehicleId, partnerId],
     );
     const context = vehicle.rows[0];
@@ -601,10 +608,11 @@ async function assignedMaintenanceDriver(vehicleId: string, partnerId: string): 
        FROM partner_fleet_defaults pairing
        JOIN partner_drivers driver
          ON driver.id = pairing.driver_id
-        AND driver.partner_id = pairing.partner_id
         AND driver.deleted_at IS NULL
       WHERE pairing.vehicle_id = $1
-        AND pairing.partner_id = $2`,
+        AND partner_can_access_vehicle($2, pairing.vehicle_id)
+      ORDER BY pairing.created_at, driver.last_name, driver.id
+      LIMIT 1`,
     [vehicleId, partnerId],
   );
   const row = result.rows[0];
@@ -664,8 +672,8 @@ async function driverPushSubscriptions(partnerId: string, driverId: string): Pro
   }));
 }
 
-export async function deliverVehicleMaintenanceNotice(vehicleId: string, partnerId: string, locale: MaintenanceLocale, now = new Date()) {
-  const claimed = await claimNotice(vehicleId, partnerId, locale, now);
+export async function deliverVehicleMaintenanceNotice(vehicleId: string, partnerId: string, locale: MaintenanceLocale) {
+  const claimed = await claimNotice(vehicleId, partnerId, locale);
   if (!claimed) return { sent: false as const };
   const driver = await assignedMaintenanceDriver(vehicleId, partnerId);
   let driverNotice = claimed.driver;
@@ -808,14 +816,14 @@ export async function startVehicleMaintenance(input: {
     return await withMaintenanceLock(input.vehicleId, async (client) => {
       const vehicle = await ownedVehicle(client, input.vehicleId, input.partnerId);
       if (!vehicle) return { ok: false as const, error: "forbidden" as const };
-      const existing = await readProfile(client, input.vehicleId, input.partnerId);
+      const existing = await readProfile(client, input.vehicleId);
       if (existing) return { ok: true as const, snapshot: await loadSnapshot(client, existing, today) };
       const duplicate = await client.query(
         `SELECT 1 FROM vehicle_maintenance_events WHERE vehicle_id = $1 AND idempotency_key = $2`,
         [input.vehicleId, input.idempotencyKey],
       );
       if (duplicate.rows.length > 0) {
-        const again = await readProfile(client, input.vehicleId, input.partnerId);
+        const again = await readProfile(client, input.vehicleId);
         if (again) return { ok: true as const, snapshot: await loadSnapshot(client, again, today) };
       }
       const inserted = await client.query<ProfileRow>(
@@ -867,7 +875,7 @@ export async function correctVehicleMaintenance(input: {
         `SELECT 1 FROM vehicle_maintenance_events WHERE vehicle_id = $1 AND idempotency_key = $2`,
         [input.vehicleId, input.idempotencyKey],
       );
-      const row = await readProfile(client, input.vehicleId, input.partnerId);
+      const row = await readProfile(client, input.vehicleId);
       if (!row) return { ok: false as const, error: "missing" as const };
       if (duplicate.rows.length > 0) return { ok: true as const, snapshot: await loadSnapshot(client, row, today) };
       const updated = await client.query<ProfileRow>(
@@ -886,13 +894,13 @@ export async function correctVehicleMaintenance(input: {
           RETURNING vehicle_id, partner_id, cycle_id::text, start_km, interval_km, last_service_km,
                     last_service_on::text, verified_km, verified_at, distance_m::text,
                     cursor_at, cursor_latitude, cursor_longitude, cursor_point_id, distance_source, distance_gap`,
-        [input.vehicleId, input.partnerId, input.odometerKm, now.toISOString()],
+        [input.vehicleId, row.partner_id, input.odometerKm, now.toISOString()],
       );
       const next = updated.rows[0];
       if (!next) return { ok: false as const, error: "failed" as const };
       await insertEvent(client, {
         vehicleId: input.vehicleId,
-        partnerId: input.partnerId,
+        partnerId: row.partner_id,
         cycleId: next.cycle_id,
         kind: "correction",
         odometerKm: input.odometerKm,
@@ -924,7 +932,7 @@ export async function completeVehicleMaintenance(input: {
     return await withMaintenanceLock(input.vehicleId, async (client) => {
       const vehicle = await ownedVehicle(client, input.vehicleId, input.partnerId);
       if (!vehicle) return { ok: false as const, error: "forbidden" as const };
-      const row = await readProfile(client, input.vehicleId, input.partnerId);
+      const row = await readProfile(client, input.vehicleId);
       if (!row) return { ok: false as const, error: "missing" as const };
       const duplicate = await client.query(
         `SELECT 1 FROM vehicle_maintenance_events WHERE vehicle_id = $1 AND idempotency_key = $2`,
@@ -951,13 +959,13 @@ export async function completeVehicleMaintenance(input: {
           RETURNING vehicle_id, partner_id, cycle_id::text, start_km, interval_km, last_service_km,
                     last_service_on::text, verified_km, verified_at, distance_m::text,
                     cursor_at, cursor_latitude, cursor_longitude, cursor_point_id, distance_source, distance_gap`,
-        [input.vehicleId, input.partnerId, figures.estimatedKm, today],
+        [input.vehicleId, caught.partner_id, figures.estimatedKm, today],
       );
       const next = updated.rows[0];
       if (!next) return { ok: false as const, error: "failed" as const };
       await insertEvent(client, {
         vehicleId: input.vehicleId,
-        partnerId: input.partnerId,
+        partnerId: caught.partner_id,
         cycleId: next.cycle_id,
         kind: "service",
         odometerKm: figures.estimatedKm,
@@ -990,7 +998,7 @@ export async function editVehicleMaintenance(input: {
     return await withMaintenanceLock(input.vehicleId, async (client) => {
       const vehicle = await ownedVehicle(client, input.vehicleId, input.partnerId);
       if (!vehicle) return { ok: false as const, error: "forbidden" as const };
-      const row = await readProfile(client, input.vehicleId, input.partnerId);
+      const row = await readProfile(client, input.vehicleId);
       if (!row) return { ok: false as const, error: "missing" as const };
       const duplicate = await client.query(
         `SELECT 1 FROM vehicle_maintenance_events WHERE vehicle_id = $1 AND idempotency_key = $2`,
@@ -1007,13 +1015,13 @@ export async function editVehicleMaintenance(input: {
           RETURNING vehicle_id, partner_id, cycle_id::text, start_km, interval_km, last_service_km,
                     last_service_on::text, verified_km, verified_at, distance_m::text,
                     cursor_at, cursor_latitude, cursor_longitude, cursor_point_id, distance_source, distance_gap`,
-        [input.vehicleId, input.partnerId, input.lastServiceKm, input.lastServiceOn, input.intervalKm],
+        [input.vehicleId, row.partner_id, input.lastServiceKm, input.lastServiceOn, input.intervalKm],
       );
       const next = updated.rows[0];
       if (!next) return { ok: false as const, error: "failed" as const };
       await insertEvent(client, {
         vehicleId: input.vehicleId,
-        partnerId: input.partnerId,
+        partnerId: row.partner_id,
         cycleId: next.cycle_id,
         kind: "edit",
         odometerKm: input.lastServiceKm,

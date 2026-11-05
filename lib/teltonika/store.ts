@@ -9,7 +9,8 @@ export async function authorizeTeltonikaImei(imei: string) {
   const result = await getPool().query<{ receiver: string; status: string; tracker_model: string | null }>(
     `SELECT receiver, status, tracker_model
      FROM gps_devices
-     WHERE imei = $1`,
+     WHERE imei = $1
+       AND deleted_at IS NULL`,
     [imei],
   );
   const row = result.rows[0];
@@ -32,7 +33,8 @@ export async function storeTeltonikaPacket(imei: string, packet: TeltonikaPacket
   }>(
     `SELECT id, receiver, status, tracker_model, partner_id, vehicle_id
      FROM gps_devices
-     WHERE imei = $1`,
+     WHERE imei = $1
+       AND deleted_at IS NULL`,
     [imei],
   );
   const device = found.rows[0];
@@ -79,6 +81,7 @@ export async function storeTeltonikaPacket(imei: string, packet: TeltonikaPacket
              WHERE other.vehicle_id = device.vehicle_id
                AND device.vehicle_id IS NOT NULL
                AND other.id <> device.id
+               AND other.deleted_at IS NULL
                AND other.status = 'active'
                AND other.live_source
            ),

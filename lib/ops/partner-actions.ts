@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { actorCan, getOpsActor } from "@/lib/ops/session";
+import { replacePartnerMenuDenials } from "@/lib/partner/menu-access";
 import {
   activateOpsPartner,
   deactivateOpsPartner,
@@ -207,4 +208,28 @@ export async function deleteOpsPartnerAction(
   }
   revalidatePath(localizedPath(locale, "/ops/partners"));
   redirect(localizedPath(locale, "/ops/partners"));
+}
+
+export async function updateOpsPartnerMenuAccessAction(
+  _prev: OpsPartnerFormState,
+  formData: FormData,
+): Promise<OpsPartnerFormState> {
+  const locale = localeFromForm(formData);
+  const actor = await getOpsActor();
+  if (!actor || !actorCan(actor, "partners.manage")) {
+    return { error: "forbidden", ok: false };
+  }
+  const partnerId = String(formData.get("id") ?? "");
+  try {
+    const result = await replacePartnerMenuDenials(partnerId, formData.getAll("tab").map(String));
+    if (!result.ok) {
+      logPartnerActionFailure("menu-access", result.error, { partnerId });
+      return { error: result.error, ok: false };
+    }
+    refreshPartner(locale, partnerId);
+    return { error: null, ok: true };
+  } catch (error) {
+    logPartnerActionFailure("menu-access", error, { partnerId });
+    return { error: "failed", ok: false };
+  }
 }

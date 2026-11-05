@@ -87,8 +87,17 @@ export async function loadFaultContext(deviceId: string): Promise<FaultContext |
      LEFT JOIN partners partner ON partner.id = device.partner_id
      LEFT JOIN partner_vehicles vehicle ON vehicle.id = device.vehicle_id
      LEFT JOIN uetds_companies company ON company.id = vehicle.uetds_company_id
-     LEFT JOIN partner_fleet_defaults fleet ON fleet.vehicle_id = vehicle.id
-     LEFT JOIN partner_drivers driver ON driver.id = fleet.driver_id AND driver.deleted_at IS NULL
+     LEFT JOIN LATERAL (
+       SELECT fleet.driver_id
+         FROM partner_fleet_defaults fleet
+         JOIN partner_drivers linked
+           ON linked.id = fleet.driver_id
+          AND linked.deleted_at IS NULL
+        WHERE fleet.vehicle_id = vehicle.id
+        ORDER BY fleet.created_at, linked.last_name, linked.id
+        LIMIT 1
+     ) fleet ON TRUE
+     LEFT JOIN partner_drivers driver ON driver.id = fleet.driver_id
      LEFT JOIN gps_device_status status ON status.device_id = device.id
      WHERE device.id = $1`,
     [deviceId],

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
+import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { searchOpsDriversAction } from "@/lib/ops/driver-actions";
@@ -217,42 +218,43 @@ export function OpsDriverTable({
                       formatUetdsCompanyListLabel(driver.uetdsCompany, copy.uetdsCompanyExternal)
                     )}
                   </td>
-                  <td>
-                    <OpsFleetChoiceCell
-                      canManage={canManage}
-                      value={driver.defaultVehicleId}
-                      options={fleetChoicesForPartner(fleetChoices, driver.partnerId).vehicles}
-                      emptyLabel={copy.fleetPairNone}
-                      label={copy.defaultVehicle}
-                      saveFailedLabel={copy.driverSaveFailed}
-                      onSave={async (next) => {
-                        const result = await patchOpsDriverVehicleAction({
-                          locale,
-                          partnerId: driver.partnerId,
-                          driverId: driver.id,
-                          vehicleId: next,
-                        });
-                        if (!result.ok) return false;
-                        setItems((current) =>
-                          current.map((item) => {
-                            if (item.id === driver.id) {
-                              return { ...item, defaultVehicleId: result.vehicleId };
-                            }
-                            if (item.partnerId !== driver.partnerId) {
+                  <td className="fleet-link-cell is-single">
+                    {canManage ? (
+                      <FleetLinkMenu
+                        mode="single"
+                        values={(driver.linkedVehicleIds ?? (driver.defaultVehicleId ? [driver.defaultVehicleId] : [])).slice(0, 1)}
+                        options={fleetChoicesForPartner(fleetChoices, driver.partnerId).vehicles}
+                        emptyLabel={copy.fleetPairNone}
+                        saveLabel={copy.save}
+                        cancelLabel={copy.cancelEdit}
+                        saveFailedLabel={copy.driverSaveFailed}
+                        onSave={async (next) => {
+                          const result = await patchOpsDriverVehicleAction({
+                            locale,
+                            partnerId: driver.partnerId,
+                            driverId: driver.id,
+                            vehicleId: next[0] ?? "",
+                          });
+                          if (!result.ok) return false;
+                          const taken = result.vehicleIds[0] ?? "";
+                          setItems((current) =>
+                            current.map((item) => {
+                              if (item.id === driver.id) {
+                                return { ...item, defaultVehicleId: result.vehicleIds[0] ?? null, linkedVehicleIds: result.vehicleIds };
+                              }
+                              if (taken && (item.linkedVehicleIds ?? []).includes(taken)) {
+                                return { ...item, defaultVehicleId: null, linkedVehicleIds: [] };
+                              }
                               return item;
-                            }
-                            if (result.releasedDriverId && item.id === result.releasedDriverId) {
-                              return { ...item, defaultVehicleId: null };
-                            }
-                            if (result.vehicleId && item.defaultVehicleId === result.vehicleId) {
-                              return { ...item, defaultVehicleId: null };
-                            }
-                            return item;
-                          }),
-                        );
-                        return true;
-                      }}
-                    />
+                            }),
+                          );
+                          return true;
+                        }}
+                      />
+                    ) : (
+                      fleetChoicesForPartner(fleetChoices, driver.partnerId).vehicles
+                        .find((option) => (driver.linkedVehicleIds ?? [])[0] === option.id)?.label || copy.fleetPairNone
+                    )}
                   </td>
                   <td>
                     <OpsFleetChoiceCell

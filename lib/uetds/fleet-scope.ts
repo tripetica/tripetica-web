@@ -22,6 +22,7 @@ type DriverRow = {
   company_status: string | null;
   company_integration_status: string | null;
   service_advanced_enabled: boolean | null;
+  linked_vehicle_ids: string[] | null;
   default_vehicle_id: string | null;
   default_authority_id: string | null;
 };
@@ -62,7 +63,13 @@ function mapDriver(row: DriverRow, scope: UetdsFleetScope): UetdsFleetOption {
     company,
     hasNationalId: Boolean(row.national_id?.trim()),
     membershipStatus: row.service_advanced_enabled ? "gold" : "standard",
-    defaultVehicleId: row.default_vehicle_id,
+    vehicleIds: row.linked_vehicle_ids ?? (row.default_vehicle_id ? [row.default_vehicle_id] : []),
+    defaultVehicleId:
+      row.linked_vehicle_ids?.length === 1
+        ? row.linked_vehicle_ids[0]
+        : row.linked_vehicle_ids
+          ? null
+          : row.default_vehicle_id,
     defaultAuthorityId: row.default_authority_id,
     label: uetdsDriverOptionLabel({
       firstName: row.first_name,
@@ -90,46 +97,92 @@ function mapVehicle(row: VehicleRow, scope: UetdsFleetScope): UetdsFleetOption {
   };
 }
 
-const DRIVER_SELECT = `
-  d.id, d.partner_id, d.first_name, d.last_name, d.national_id, d.uetds_company_id,
+function driverSelect(partnerParam: "$1" | "$2") {
+  return `
+  d.id,
+  CASE WHEN ${partnerParam}::uuid IS NULL THEN d.partner_id ELSE ${partnerParam}::uuid END AS partner_id,
+  d.first_name, d.last_name, d.national_id,
+  CASE
+    WHEN ${partnerParam}::uuid IS NULL THEN d.uetds_company_id
+    WHEN access.partner_id IS NOT NULL THEN access.uetds_company_id
+    WHEN d.partner_id = ${partnerParam}::uuid THEN d.uetds_company_id
+    ELSE NULL
+  END AS uetds_company_id,
   p.name AS partner_name,
   uc.short_name AS company_short_name,
   uc.status AS company_status,
   uc.integration_status AS company_integration_status,
   d.service_advanced_enabled,
-  dv.id AS default_vehicle_id,
+  links.vehicle_ids AS linked_vehicle_ids,
   CASE
     WHEN ea.id IS NULL THEN NULL
-    WHEN d.uetds_company_id IS NOT NULL AND NOT EXISTS (
+    WHEN (CASE
+      WHEN ${partnerParam}::uuid IS NULL THEN d.uetds_company_id
+      WHEN access.partner_id IS NOT NULL THEN access.uetds_company_id
+      WHEN d.partner_id = ${partnerParam}::uuid THEN d.uetds_company_id
+      ELSE NULL
+    END) IS NOT NULL
+      AND NOT EXISTS (
       SELECT 1 FROM partner_uetds_authority_companies ac
-      WHERE ac.authority_id = ea.id AND ac.company_id = d.uetds_company_id
+      WHERE ac.authority_id = ea.id
+        AND ac.company_id = (CASE
+          WHEN ${partnerParam}::uuid IS NULL THEN d.uetds_company_id
+          WHEN access.partner_id IS NOT NULL THEN access.uetds_company_id
+          WHEN d.partner_id = ${partnerParam}::uuid THEN d.uetds_company_id
+          ELSE NULL
+        END)
     ) THEN NULL
     ELSE ea.id
   END AS default_authority_id
 `;
+}
 
-const DRIVER_JOINS = `
-  LEFT JOIN partner_fleet_defaults fd
-    ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
-  LEFT JOIN partner_vehicles dv
-    ON dv.id = fd.vehicle_id
-   AND dv.partner_id = d.partner_id
-   AND dv.deleted_at IS NULL
-   AND dv.status = 'active'
+function driverJoins(partnerParam: "$1" | "$2") {
+  return `
+  LEFT JOIN LATERAL (
+    SELECT access.partner_id, access.uetds_company_id
+      FROM partner_fleet_defaults fd
+      JOIN partner_vehicles dv
+        ON dv.id = fd.vehicle_id
+       AND dv.deleted_at IS NULL
+       AND dv.status = 'active'
+      JOIN partner_vehicle_access access
+        ON access.vehicle_id = dv.id
+       AND access.partner_id = ${partnerParam}::uuid
+     WHERE fd.driver_id = d.id
+     ORDER BY fd.created_at, dv.id
+     LIMIT 1
+  ) access ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT COALESCE(array_agg(v.id ORDER BY fd.created_at, v.plate), '{}') AS vehicle_ids
+      FROM partner_fleet_defaults fd
+      JOIN partner_vehicles v
+        ON v.id = fd.vehicle_id
+       AND v.deleted_at IS NULL
+       AND v.status = 'active'
+     WHERE fd.driver_id = d.id
+       AND (${partnerParam}::uuid IS NULL OR partner_can_access_vehicle(${partnerParam}::uuid, v.id))
+  ) links ON TRUE
   LEFT JOIN partner_uetds_authorities ea
     ON ea.id = d.default_edevlet_authority_id
-   AND ea.partner_id = d.partner_id
+   AND ea.partner_id = CASE WHEN ${partnerParam}::uuid IS NULL THEN d.partner_id ELSE ${partnerParam}::uuid END
    AND ea.deleted_at IS NULL
    AND ea.status = 'active'
 `;
+}
 
-const VEHICLE_SELECT = `
-  v.id, v.partner_id, v.plate, v.brand, v.model, v.uetds_company_id,
+function vehicleSelect(partnerParam: "$1" | "$2") {
+  return `
+  v.id,
+  CASE WHEN ${partnerParam}::uuid IS NULL THEN v.partner_id ELSE ${partnerParam}::uuid END AS partner_id,
+  v.plate, v.brand, v.model,
+  CASE WHEN ${partnerParam}::uuid IS NULL THEN v.uetds_company_id ELSE access.uetds_company_id END AS uetds_company_id,
   p.name AS partner_name,
   uc.short_name AS company_short_name,
   uc.status AS company_status,
   uc.integration_status AS company_integration_status
 `;
+}
 
 export async function listUetdsDriverOptions(input: {
   scope: UetdsFleetScope;
@@ -139,14 +192,20 @@ export async function listUetdsDriverOptions(input: {
     return [];
   }
   const result = await query<DriverRow>(
-    `SELECT ${DRIVER_SELECT}
+    `SELECT ${driverSelect("$1")}
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id AND p.deleted_at IS NULL
-     LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
-     ${DRIVER_JOINS}
+     ${driverJoins("$1")}
+     LEFT JOIN uetds_companies uc
+       ON uc.id = CASE
+         WHEN $1::uuid IS NULL THEN d.uetds_company_id
+         WHEN access.partner_id IS NOT NULL THEN access.uetds_company_id
+         WHEN d.partner_id = $1 THEN d.uetds_company_id
+         ELSE NULL
+       END
      WHERE d.deleted_at IS NULL
        AND d.status = 'active'
-       AND ($1::uuid IS NULL OR d.partner_id = $1)
+       AND ($1::uuid IS NULL OR partner_can_access_driver($1, d.id))
      ORDER BY d.first_name ASC, d.last_name ASC, d.id ASC`,
     [input.scope === "partner" ? input.partnerId : null],
   );
@@ -161,13 +220,16 @@ export async function listUetdsVehicleOptions(input: {
     return [];
   }
   const result = await query<VehicleRow>(
-    `SELECT ${VEHICLE_SELECT}
+    `SELECT ${vehicleSelect("$1")}
      FROM partner_vehicles v
      JOIN partners p ON p.id = v.partner_id AND p.deleted_at IS NULL
-     LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
+     LEFT JOIN partner_vehicle_access access
+       ON access.vehicle_id = v.id AND access.partner_id = $1
+     LEFT JOIN uetds_companies uc
+       ON uc.id = CASE WHEN $1::uuid IS NULL THEN v.uetds_company_id ELSE access.uetds_company_id END
      WHERE v.deleted_at IS NULL
        AND v.status = 'active'
-       AND ($1::uuid IS NULL OR v.partner_id = $1)
+       AND ($1::uuid IS NULL OR partner_can_access_vehicle($1, v.id))
      ORDER BY v.plate ASC, v.id ASC`,
     [input.scope === "partner" ? input.partnerId : null],
   );
@@ -183,14 +245,21 @@ export async function getUetdsDriverOption(input: {
     return null;
   }
   const result = await query<DriverRow>(
-    `SELECT ${DRIVER_SELECT}
+    `SELECT ${driverSelect("$2")}
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id AND p.deleted_at IS NULL
-     LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
-     ${DRIVER_JOINS}
+     ${driverJoins("$2")}
+     LEFT JOIN uetds_companies uc
+       ON uc.id = CASE
+         WHEN $2::uuid IS NULL THEN d.uetds_company_id
+         WHEN access.partner_id IS NOT NULL THEN access.uetds_company_id
+         WHEN d.partner_id = $2 THEN d.uetds_company_id
+         ELSE NULL
+       END
      WHERE d.id = $1
        AND d.deleted_at IS NULL
-       AND ($2::uuid IS NULL OR d.partner_id = $2)
+       AND d.status = 'active'
+       AND ($2::uuid IS NULL OR partner_can_access_driver($2, d.id))
      LIMIT 1`,
     [input.driverId, input.scope === "partner" ? input.partnerId : null],
   );
@@ -244,13 +313,17 @@ export async function getUetdsVehicleOption(input: {
     return null;
   }
   const result = await query<VehicleRow>(
-    `SELECT ${VEHICLE_SELECT}
+    `SELECT ${vehicleSelect("$2")}
      FROM partner_vehicles v
      JOIN partners p ON p.id = v.partner_id AND p.deleted_at IS NULL
-     LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
+     LEFT JOIN partner_vehicle_access access
+       ON access.vehicle_id = v.id AND access.partner_id = $2
+     LEFT JOIN uetds_companies uc
+       ON uc.id = CASE WHEN $2::uuid IS NULL THEN v.uetds_company_id ELSE access.uetds_company_id END
      WHERE v.id = $1
        AND v.deleted_at IS NULL
-       AND ($2::uuid IS NULL OR v.partner_id = $2)
+       AND v.status = 'active'
+       AND ($2::uuid IS NULL OR partner_can_access_vehicle($2, v.id))
      LIMIT 1`,
     [input.vehicleId, input.scope === "partner" ? input.partnerId : null],
   );

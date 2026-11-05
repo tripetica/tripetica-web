@@ -239,12 +239,12 @@ export function GpsImmobilizerSwitch({
       {partner ? null : switchControl}
       {confirmOpen && mounted ? createPortal(
         <div className="ops-modal-backdrop" role="presentation" onClick={closeConfirm}>
-          <div className="ops-modal gps-wifi-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
+          <div className="ops-modal gps-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
             <h2 id={titleId}>{copy.immobilizerConfirmOnTitle}</h2>
             <p>{copy.immobilizerConfirmOnQuestion}</p>
             <p>{copy.immobilizerConfirmOnBody}</p>
             <div className="ops-modal-actions">
-              <button type="button" className="ops-btn-secondary" onClick={closeConfirm}>{copy.wifiShareCancel}</button>
+              <button type="button" className="ops-btn-secondary" onClick={closeConfirm}>{copy.confirmCancel}</button>
               <button type="button" className="ops-btn-danger" disabled={!confirmationId || busy} onClick={() => void send("on")}>
                 {copy.immobilizerConfirmEnable}
               </button>

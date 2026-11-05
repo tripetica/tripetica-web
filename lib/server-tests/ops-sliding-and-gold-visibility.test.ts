@@ -5,18 +5,18 @@ import { notificationHasGoldDriver } from "../uetds/ai-edit-visibility";
 import { createOpsSession, deleteOpsSessionByToken, renewOpsSessionIfNeeded, hashSessionToken } from "../ops/session";
 import { OPS_SESSION_MAX_AGE_SECONDS } from "../ops/constants";
 
-test("Gold visibility uses assigned DB driver; standard, missing and lookup failure are hidden", async () => {
+test("Gold visibility uses the assigned vehicle subscription; standard, missing and lookup failure are hidden", async () => {
   const globals = globalThis as typeof globalThis & { tripeticaPgPool?: unknown };
   const original = globals.tripeticaPgPool;
-  let membership: string | null = "gold";
+  let advanced: boolean | null = true;
   globals.tripeticaPgPool = { query: async (sql: string, values: string[]) => {
-    assert.match(sql, /d.id = n.driver_id/);
+    assert.match(sql, /v.id = n.vehicle_id/);
     assert.deepEqual(values, ["notification", "partner"]);
-    return { rows: membership ? [{ membership_status: membership }] : [] };
+    return { rows: advanced === null ? [] : [{ service_advanced_enabled: advanced }] };
   } };
   try {
     assert.equal(await notificationHasGoldDriver("notification", "partner"), true);
-    for (membership of ["standard", "unknown", null]) assert.equal(await notificationHasGoldDriver("notification", "partner"), false);
+    for (advanced of [false, null]) assert.equal(await notificationHasGoldDriver("notification", "partner"), false);
     globals.tripeticaPgPool = { query: async () => { throw new Error("unavailable"); } };
     assert.equal(await notificationHasGoldDriver("notification", "partner"), false);
     const modal = readFileSync("components/uetds/uetds-edit-method-modal.tsx", "utf8");

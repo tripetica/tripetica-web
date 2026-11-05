@@ -6,14 +6,6 @@ export const TELTONIKA_DIN1_IO = 1;
 /** Flash backlog from a previous install is dropped. Live records stay. */
 export const TELTONIKA_MAX_AGE_MS = 30 * 60 * 1000;
 
-export type GpsReceiver = "esp32" | "teltonika";
-
-export function gpsReceiver(value: unknown): GpsReceiver | null {
-  if (value === undefined || value === null || value === "" || value === "esp32") return "esp32";
-  if (value === "teltonika") return "teltonika";
-  return null;
-}
-
 export function teltonikaSeq(timestampMs: number, occurrence: number) {
   if (!Number.isSafeInteger(timestampMs) || timestampMs < 1) return 0;
   if (!Number.isSafeInteger(occurrence) || occurrence < 0 || occurrence > 9) return 0;

@@ -28,17 +28,20 @@ test("an empty or Diğer group description becomes Transfer", () => {
 });
 
 test("an explicit description overrides only the fields it names", () => {
+  const nowUtcMs = Date.parse("2026-09-30T12:00:00Z");
   const time = mapAiUetdsExtraction(
-    { ...empty, startDate: "2026-10-01", startTime: "18:00", destination: "Taksim" },
+    { ...empty, startDate: "2026-09-30", startTime: "18:00", destination: "Taksim" },
     "Alış saati 17:00 olarak değişti.",
+    nowUtcMs,
   );
   assert.equal(time.startTime, "17:00");
-  assert.equal(time.startDate, "2026-10-01");
+  assert.equal(time.startDate, "2026-09-30");
   assert.equal(time.destination, "Taksim");
 
   const place = mapAiUetdsExtraction(
-    { ...empty, origin: "Havalimanı", destination: "Taksim", startDate: "2026-10-01", startTime: "18:00" },
+    { ...empty, origin: "Havalimanı", destination: "Taksim", startDate: "2026-09-30", startTime: "18:00" },
     "Bırakma yeri Bakırköy olacak.",
+    nowUtcMs,
   );
   assert.equal(place.destination, "Bakırköy");
   assert.equal(place.origin, "Havalimanı");

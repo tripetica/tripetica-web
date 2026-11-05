@@ -78,6 +78,25 @@ export function initialVehicleForSelectedDriver<T extends { driverId: string; ve
   );
 }
 
+export function singleLinkedVehicleId(
+  linkedVehicleIds: readonly string[] | null | undefined,
+  availableVehicleIds: readonly string[],
+) {
+  const available = new Set(availableVehicleIds);
+  const linked = (linkedVehicleIds ?? []).filter((id) => available.has(id));
+  return linked.length === 1 ? linked[0] ?? "" : "";
+}
+
+export function driversLinkedToVehicle<T extends { id: string; vehicleIds?: readonly string[] | null }>(
+  drivers: readonly T[],
+  vehicleId: string,
+) {
+  if (!vehicleId) {
+    return [...drivers];
+  }
+  return drivers.filter((driver) => (driver.vehicleIds ?? []).includes(vehicleId));
+}
+
 export function applyDriverVehicleDefault<T extends { driverId: string; vehicleId: string }>(
   current: T,
   nextDriverId: string,
@@ -91,7 +110,7 @@ export function applyDriverVehicleDefault<T extends { driverId: string; vehicleI
   return {
     ...current,
     driverId: nextDriverId,
-    vehicleId: preferred && vehicleIds.includes(preferred) ? preferred : current.vehicleId,
+    vehicleId: preferred && vehicleIds.includes(preferred) ? preferred : "",
   };
 }
 

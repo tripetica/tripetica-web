@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { deleteGpsDeviceAction } from "@/lib/gps/actions";
 import { type GpsCopy } from "@/lib/gps/copy";
@@ -11,25 +11,27 @@ export function GpsDeviceDelete({
   locale,
   copy,
   device,
-  used,
 }: {
   locale: Locale;
   copy: GpsCopy;
   device: GpsDeviceListItem;
-  used: boolean;
 }) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pending, setPending] = useState(false);
-  const company = device.plate ? (device.uetdsCompany || copy.companyMissing) : "—";
+  const submitting = useRef(false);
+  const makeAndModel = [
+    "Teltonika",
+    device.trackerModel?.toUpperCase(),
+  ].filter(Boolean).join(" / ");
   const rows = [
     [copy.deviceId, device.deviceCode],
     [copy.imei, device.imei ?? "—"],
+    [copy.simPhone, device.simPhone ?? copy.simPhoneMissing],
+    [`${copy.manufacturer} / ${copy.trackerModel}`, makeAndModel],
     [copy.partner, device.partnerName || copy.stock],
     [copy.vehicle, device.plate ?? copy.unassigned],
-    [copy.company, company],
-    [copy.status, device.status === "active" ? copy.active : copy.disabled],
   ];
 
   useEffect(() => {
@@ -51,7 +53,6 @@ export function GpsDeviceDelete({
 
   return (
     <section className="gps-delete-bar">
-      {used ? <p className="ops-form-error">{copy.deleteUsed}</p> : null}
       <button type="button" className="ops-btn-danger" onClick={() => setOpen(true)}>
         {copy.deleteDevice}
       </button>
@@ -79,9 +80,18 @@ export function GpsDeviceDelete({
                 </div>
               ))}
             </dl>
-            <p>{copy.deleteQuestion}</p>
-            <p className="gps-delete-warning">{copy.deleteIrreversible}</p>
-            <form action={deleteGpsDeviceAction} onSubmit={() => setPending(true)}>
+            <p className="gps-delete-warning">{copy.deleteQuestion}</p>
+            <form
+              action={deleteGpsDeviceAction}
+              onSubmit={(event) => {
+                if (submitting.current) {
+                  event.preventDefault();
+                  return;
+                }
+                submitting.current = true;
+                setPending(true);
+              }}
+            >
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="deviceId" value={device.id} />
               <div className="ops-modal-actions">
@@ -89,7 +99,7 @@ export function GpsDeviceDelete({
                   {copy.deleteCancel}
                 </button>
                 <button type="submit" className="ops-btn-danger" disabled={pending}>
-                  {copy.deleteDevice}
+                  {copy.deleteConfirm}
                 </button>
               </div>
             </form>

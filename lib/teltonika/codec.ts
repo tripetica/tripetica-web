@@ -190,7 +190,7 @@ function readVariableIo(data: Buffer, offset: number, io: TeltonikaIo[]) {
     offset += 2;
     const length = readUInt16(data, offset);
     offset += 2;
-    if (length > 64 || offset + length > data.length) throw new Error("truncated");
+    if (offset + length > data.length) throw new Error("truncated");
     io.push({ id, value: length > 0 && length <= 6 ? readWidth(data, offset, length) : null });
     offset += length;
   }

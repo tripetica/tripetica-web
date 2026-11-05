@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { connect, type AddressInfo } from "node:net";
 import test from "node:test";
 import { pointError } from "@/lib/gps/contract";
 import {
-  gpsReceiver,
   TELTONIKA_MAX_AGE_MS,
   teltonikaImeiAllowed,
   teltonikaIgnition,
@@ -20,6 +19,7 @@ import {
   imeiResponse,
   parseAvlFrame,
   parseImeiFrame,
+  TELTONIKA_CODEC8E,
   type TeltonikaPacket,
   type TeltonikaRecord,
 } from "@/lib/teltonika/codec";
@@ -41,6 +41,44 @@ function record(override: Partial<TeltonikaRecord> = {}): TeltonikaRecord {
     io: [{ id: 239, value: 1 }],
     ...override,
   };
+}
+
+function codec8eVariableIoFrame(valueLength: number, declaredLength = valueLength) {
+  const fixed = Buffer.alloc(24);
+  fixed.writeBigUInt64BE(BigInt(record().timestampMs), 0);
+  fixed.writeUInt8(1, 8);
+  fixed.writeInt32BE(Math.round(record().longitude * 10_000_000), 9);
+  fixed.writeInt32BE(Math.round(record().latitude * 10_000_000), 13);
+  fixed.writeInt16BE(record().altitudeM, 17);
+  fixed.writeUInt16BE(record().headingDeg, 19);
+  fixed.writeUInt8(record().satellites, 21);
+  fixed.writeUInt16BE(record().speedKmh, 22);
+
+  const variableHeader = Buffer.alloc(6);
+  variableHeader.writeUInt16BE(1, 0);
+  variableHeader.writeUInt16BE(257, 2);
+  variableHeader.writeUInt16BE(declaredLength, 4);
+  const data = Buffer.concat([
+    Buffer.from([TELTONIKA_CODEC8E, 1]),
+    fixed,
+    Buffer.from([
+      0x01, 0x01, // Event IO ID 257
+      0x00, 0x02, // Two IO elements total
+      0x00, 0x01, // One one-byte IO element
+      0x00, 0xef, 0x01, // Ignition, on
+      0x00, 0x00, // No two-byte IO elements
+      0x00, 0x00, // No four-byte IO elements
+      0x00, 0x00, // No eight-byte IO elements
+    ]),
+    variableHeader,
+    Buffer.alloc(valueLength, 0x5a),
+    Buffer.from([1]),
+  ]);
+  const frame = Buffer.alloc(8 + data.length + 4);
+  frame.writeUInt32BE(data.length, 4);
+  data.copy(frame, 8);
+  frame.writeUInt32BE(crc16Ibm(data), 8 + data.length);
+  return frame;
 }
 
 test("CRC-16/IBM matches the standard check value", () => {
@@ -77,6 +115,25 @@ test("Codec 8 and Codec 8 Extended round-trip coordinates, ignition, and CRC", (
   assert.equal(extended.value.codec, "codec8e");
   assert.equal(extended.value.records[0]?.io.find((item) => item.id === 66)?.value, 12_600);
   assert.equal(teltonikaIgnition(extended.value.records[0]!), "on");
+});
+
+test("Codec 8 Extended accepts AVL ID 257 crash trace values larger than 64 bytes", () => {
+  for (const length of [120, 222, 258]) {
+    const parsed = parseAvlFrame(codec8eVariableIoFrame(length));
+    assert.equal(parsed.ok, true, `expected ${length}-byte crash trace to parse`);
+    if (!parsed.ok) continue;
+    assert.equal(parsed.value.codec, "codec8e");
+    assert.equal(parsed.value.records.length, 1);
+    assert.deepEqual(parsed.value.records[0]?.io, [
+      { id: 239, value: 1 },
+      { id: 257, value: null },
+    ]);
+  }
+});
+
+test("Codec 8 Extended still rejects variable IO lengths outside the bounded frame", () => {
+  const parsed = parseAvlFrame(codec8eVariableIoFrame(258, 16_000));
+  assert.deepEqual(parsed, { ok: false, error: "truncated" });
 });
 
 test("a broken CRC is rejected and a repeated packet keeps the same sequence", () => {
@@ -129,15 +186,12 @@ test("IMEI handshake accepts only an active Teltonika row", () => {
   assert.equal(teltonikaImeiAllowed({ imei, receiver: "esp32", status: "active", trackerModel: null }), false);
   assert.equal(teltonikaImeiAllowed({ imei, receiver: "teltonika", status: "disabled", trackerModel: "fmb920" }), false);
   assert.equal(teltonikaImeiAllowed({ imei, receiver: "teltonika", status: "active", trackerModel: null }), false);
-  assert.equal(gpsReceiver(undefined), "esp32");
-  assert.equal(gpsReceiver("teltonika"), "teltonika");
-  assert.equal(gpsReceiver("other"), null);
   const partial = parseImeiFrame(encodeImei(imei).subarray(0, 4));
   assert.equal(partial.ok, false);
   if (!partial.ok && "need" in partial) assert.ok(partial.need > 4);
 });
 
-test("TCP listener answers the handshake, ACKs AVL, and rejects a second socket for the same IMEI", async () => {
+test("TCP listener ACKs Codec 8 Extended crash trace AVL and rejects a second socket for the same IMEI", async () => {
   const imei = "356307042441013";
   const stored: number[] = [];
   const server = await startTeltonikaServer({
@@ -150,7 +204,7 @@ test("TCP listener answers the handshake, ACKs AVL, and rejects a second socket 
     },
   });
   const address = server.address() as AddressInfo;
-  const packet = encodeAvl({ codec: "codec8", records: [record()] });
+  const packet = codec8eVariableIoFrame(258);
   const first = connect(address.port, "127.0.0.1");
   const greeting = encodeImei(imei);
   const accepted = await new Promise<Buffer>((resolve, reject) => {
@@ -184,19 +238,17 @@ test("TCP listener answers the handshake, ACKs AVL, and rejects a second socket 
   assert.deepEqual(stored, [1]);
 });
 
-test("ESP32 device API and ATS source selection stay outside the Teltonika listener", () => {
+test("legacy HTTP device APIs are removed and ATS stays outside the Teltonika listener", () => {
   const routes = [
     "app/api/device/v1/telemetry/route.ts",
     "app/api/device/v1/heartbeat/route.ts",
     "app/api/device/v1/commands/route.ts",
   ];
   for (const route of routes) {
-    assert.doesNotMatch(readFileSync(new URL(`../../${route}`, import.meta.url), "utf8"), /teltonika/);
+    assert.equal(existsSync(new URL(`../../${route}`, import.meta.url)), false);
   }
   const ats = readFileSync(new URL("../gps/ats-run.ts", import.meta.url), "utf8");
-  assert.match(ats, /settings\.source_device_id/);
-  assert.match(ats, /WHERE device_id = \$1 AND vehicle_id = \$2/);
-  assert.doesNotMatch(ats, /teltonika|receiver/);
+  assert.doesNotMatch(ats, /api\/device\/v1|gps_commands/);
   const store = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
   assert.doesNotMatch(store, /gps_ats_settings|UPDATE gps_positions|DELETE FROM gps/);
   assert.match(store, /receiver/);

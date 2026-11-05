@@ -78,6 +78,7 @@ type DriverRow = {
   service_mobile_gps_enabled?: boolean | null;
   service_mobile_gps_fee?: string | null;
   default_vehicle_id?: string | null;
+  linked_vehicle_ids?: string[] | null;
   default_authority_id?: string | null;
 };
 
@@ -107,6 +108,7 @@ type VehicleRow = {
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
   default_driver_id?: string | null;
+  linked_driver_ids?: string[] | null;
   service_standard_enabled?: boolean | null;
   service_standard_fee?: string | null;
   service_advanced_enabled?: boolean | null;
@@ -159,9 +161,10 @@ function mapDriver(row: DriverRow): PartnerDriverRecord {
     deletedAt: row.deleted_at?.toISOString() ?? null,
     updatedAt: row.updated_at.toISOString(),
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
-    ...(row.default_vehicle_id !== undefined || row.default_authority_id !== undefined
+    ...(row.default_vehicle_id !== undefined || row.linked_vehicle_ids !== undefined || row.default_authority_id !== undefined
       ? {
-          defaultVehicleId: row.default_vehicle_id ?? null,
+          defaultVehicleId: row.linked_vehicle_ids?.[0] ?? row.default_vehicle_id ?? null,
+          linkedVehicleIds: row.linked_vehicle_ids ?? (row.default_vehicle_id ? [row.default_vehicle_id] : []),
           defaultAuthorityId: row.default_authority_id ?? null,
         }
       : {}),
@@ -221,7 +224,12 @@ function mapVehicle(row: VehicleRow): PartnerVehicleRecord {
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
-    ...(row.default_driver_id !== undefined ? { defaultDriverId: row.default_driver_id } : {}),
+    ...(row.default_driver_id !== undefined || row.linked_driver_ids !== undefined
+      ? {
+          defaultDriverId: row.linked_driver_ids?.[0] ?? row.default_driver_id ?? null,
+          linkedDriverIds: row.linked_driver_ids ?? (row.default_driver_id ? [row.default_driver_id] : []),
+        }
+      : {}),
     ...(row.service_standard_enabled !== undefined
       ? {
           services: {
@@ -286,6 +294,12 @@ export async function listPartnerDrivers(
   const nextPeriod = addSubscriptionMonths(period, 1);
   const result = await query<DriverRow>(
     `SELECT ${DRIVER_SELECT},
+            CASE WHEN driver_access.partner_id IS NOT NULL
+              THEN driver_access.uetds_company_id ELSE d.uetds_company_id
+            END AS uetds_company_id,
+            CASE WHEN driver_access.partner_id IS NOT NULL
+              THEN driver_access_company.short_name ELSE uc.short_name
+            END AS uetds_company_short_name,
             d.membership_status,
             d.service_standard_enabled,
             d.service_standard_fee,
@@ -298,7 +312,7 @@ export async function listPartnerDrivers(
             d.uetds_subscription_currency,
             per.status AS current_period_status,
             next_per.status AS next_period_status,
-            dv.id AS default_vehicle_id,
+            links.vehicle_ids AS linked_vehicle_ids,
             CASE
               WHEN ea.id IS NULL THEN NULL
               WHEN d.uetds_company_id IS NOT NULL AND NOT EXISTS (
@@ -308,13 +322,26 @@ export async function listPartnerDrivers(
               ELSE ea.id
             END AS default_authority_id
      ${DRIVER_FROM}
-     LEFT JOIN partner_fleet_defaults fd
-       ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
-     LEFT JOIN partner_vehicles dv
-       ON dv.id = fd.vehicle_id AND dv.partner_id = d.partner_id AND dv.deleted_at IS NULL
+     LEFT JOIN LATERAL (
+       SELECT access.partner_id, access.uetds_company_id
+         FROM partner_fleet_defaults fd
+         JOIN partner_vehicle_access access
+           ON access.vehicle_id = fd.vehicle_id AND access.partner_id = $1
+        WHERE fd.driver_id = d.id
+        ORDER BY fd.created_at, fd.vehicle_id
+        LIMIT 1
+     ) driver_access ON TRUE
+     LEFT JOIN uetds_companies driver_access_company
+       ON driver_access_company.id = driver_access.uetds_company_id
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(array_agg(v.id ORDER BY fd.created_at, v.plate), '{}') AS vehicle_ids
+         FROM partner_fleet_defaults fd
+         JOIN partner_vehicles v ON v.id = fd.vehicle_id AND v.deleted_at IS NULL
+        WHERE fd.driver_id = d.id
+     ) links ON TRUE
      LEFT JOIN partner_uetds_authorities ea
        ON ea.id = d.default_edevlet_authority_id
-      AND ea.partner_id = d.partner_id
+      AND ea.partner_id = $1
       AND ea.deleted_at IS NULL
       AND ea.status = 'active'
      LEFT JOIN partner_driver_uetds_subscription_periods per
@@ -325,7 +352,7 @@ export async function listPartnerDrivers(
        ON next_per.driver_id = d.id
       AND next_per.period_year = $4
       AND next_per.period_month = $5
-     WHERE d.partner_id = $1
+     WHERE partner_can_access_driver($1, d.id)
        AND d.deleted_at IS NULL
      ORDER BY d.last_name ASC, d.first_name ASC, d.created_at ASC`,
     [partnerId, period.year, period.month, nextPeriod.year, nextPeriod.month],
@@ -340,7 +367,14 @@ export async function listPartnerVehicles(
   const nextPeriod = addSubscriptionMonths(period, 1);
   const result = await query<VehicleRow>(
     `SELECT ${VEHICLE_SELECT},
-            dd.id AS default_driver_id,
+            access.uetds_company_id,
+            access_company.short_name AS uetds_company_short_name,
+            COALESCE((
+              SELECT array_agg(dd.id ORDER BY fd.created_at, dd.last_name, dd.id)
+                FROM partner_fleet_defaults fd
+                JOIN partner_drivers dd ON dd.id = fd.driver_id AND dd.deleted_at IS NULL
+               WHERE fd.vehicle_id = v.id
+            ), '{}') AS linked_driver_ids,
             v.service_standard_enabled,
             v.service_standard_fee,
             v.service_advanced_enabled,
@@ -355,15 +389,14 @@ export async function listPartnerVehicles(
             per.status AS current_period_status,
             next_per.status AS next_period_status
      ${VEHICLE_FROM}
-     LEFT JOIN partner_fleet_defaults fd
-       ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
-     LEFT JOIN partner_drivers dd
-       ON dd.id = fd.driver_id AND dd.partner_id = v.partner_id AND dd.deleted_at IS NULL
+     JOIN partner_vehicle_access access
+       ON access.vehicle_id = v.id AND access.partner_id = $1
+     LEFT JOIN uetds_companies access_company ON access_company.id = access.uetds_company_id
      LEFT JOIN partner_vehicle_uetds_subscription_periods per
        ON per.vehicle_id = v.id AND per.period_year = $2 AND per.period_month = $3
      LEFT JOIN partner_vehicle_uetds_subscription_periods next_per
        ON next_per.vehicle_id = v.id AND next_per.period_year = $4 AND next_per.period_month = $5
-     WHERE v.partner_id = $1
+     WHERE partner_can_access_vehicle($1, v.id)
        AND v.deleted_at IS NULL
      ORDER BY v.created_at DESC, v.id DESC`,
     [partnerId, period.year, period.month, nextPeriod.year, nextPeriod.month],
@@ -388,10 +421,27 @@ export async function getPartnerDriver(
   driverId: string,
 ): Promise<PartnerDriverRecord | null> {
   const result = await query<DriverRow>(
-    `SELECT ${DRIVER_SELECT}
+    `SELECT ${DRIVER_SELECT},
+            CASE WHEN driver_access.partner_id IS NOT NULL
+              THEN driver_access.uetds_company_id ELSE d.uetds_company_id
+            END AS uetds_company_id,
+            CASE WHEN driver_access.partner_id IS NOT NULL
+              THEN driver_access_company.short_name ELSE uc.short_name
+            END AS uetds_company_short_name
      ${DRIVER_FROM}
+     LEFT JOIN LATERAL (
+       SELECT access.partner_id, access.uetds_company_id
+         FROM partner_fleet_defaults fd
+         JOIN partner_vehicle_access access
+           ON access.vehicle_id = fd.vehicle_id AND access.partner_id = $2
+        WHERE fd.driver_id = d.id
+        ORDER BY fd.created_at, fd.vehicle_id
+        LIMIT 1
+     ) driver_access ON TRUE
+     LEFT JOIN uetds_companies driver_access_company
+       ON driver_access_company.id = driver_access.uetds_company_id
      WHERE d.id = $1
-       AND d.partner_id = $2
+       AND partner_can_access_driver($2, d.id)
        AND d.deleted_at IS NULL
      LIMIT 1`,
     [driverId, partnerId],
@@ -404,15 +454,52 @@ export async function getPartnerVehicle(
   vehicleId: string,
 ): Promise<PartnerVehicleRecord | null> {
   const result = await query<VehicleRow>(
-    `SELECT ${VEHICLE_SELECT}
+    `SELECT ${VEHICLE_SELECT},
+            access.uetds_company_id,
+            access_company.short_name AS uetds_company_short_name
      ${VEHICLE_FROM}
+     JOIN partner_vehicle_access access
+       ON access.vehicle_id = v.id AND access.partner_id = $2
+     LEFT JOIN uetds_companies access_company ON access_company.id = access.uetds_company_id
      WHERE v.id = $1
-       AND v.partner_id = $2
+       AND partner_can_access_vehicle($2, v.id)
        AND v.deleted_at IS NULL
      LIMIT 1`,
     [vehicleId, partnerId],
   );
   return result.rows[0] ? mapVehicle(result.rows[0]) : null;
+}
+
+async function getVehicleForEditor(
+  partnerId: string,
+  vehicleId: string,
+  editor: PartnerFleetEditor,
+) {
+  if (editor.source === "partner") return getPartnerVehicle(partnerId, vehicleId);
+  const result = await query<VehicleRow>(
+    `SELECT ${VEHICLE_SELECT}
+       ${VEHICLE_FROM}
+      WHERE v.id = $1 AND v.deleted_at IS NULL
+      LIMIT 1`,
+    [vehicleId],
+  );
+  return result.rows[0] ? mapVehicle(result.rows[0]) : null;
+}
+
+async function getDriverForEditor(
+  partnerId: string,
+  driverId: string,
+  editor: PartnerFleetEditor,
+) {
+  if (editor.source === "partner") return getPartnerDriver(partnerId, driverId);
+  const result = await query<DriverRow>(
+    `SELECT ${DRIVER_SELECT}
+       ${DRIVER_FROM}
+      WHERE d.id = $1 AND d.deleted_at IS NULL
+      LIMIT 1`,
+    [driverId],
+  );
+  return result.rows[0] ? mapDriver(result.rows[0]) : null;
 }
 
 function editorColumns(editor: PartnerFleetEditor) {
@@ -604,7 +691,7 @@ export async function updatePartnerDriver(input: {
   email?: string;
   uetdsCompanyId: string | null;
 }) {
-  const current = await getPartnerDriver(input.partnerId, input.driverId);
+  const current = await getDriverForEditor(input.partnerId, input.driverId, input.editor);
   if (!current) {
     return { ok: false as const, error: "not-found" as const };
   }
@@ -633,11 +720,11 @@ export async function updatePartnerDriver(input: {
            phone_country_code = $7,
            email = $8,
            languages = $9,
-           uetds_company_id = $10,
+           uetds_company_id = CASE WHEN $13::boolean THEN $10 ELSE uetds_company_id END,
            last_edited_by_ops_user_id = COALESCE($11, last_edited_by_ops_user_id),
            last_edited_by_partner_user_id = COALESCE($12, last_edited_by_partner_user_id)
        WHERE id = $1
-         AND partner_id = $2
+         AND ($13::boolean OR partner_can_access_driver($2, id))
          AND deleted_at IS NULL`,
       [
         input.driverId,
@@ -652,10 +739,34 @@ export async function updatePartnerDriver(input: {
         input.uetdsCompanyId,
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
+        input.editor.source === "ops",
       ],
     );
     if (updated.rowCount !== 1) {
       return { ok: false as const, error: "failed" as const };
+    }
+    if (input.editor.source === "partner") {
+      await query(
+        `WITH paired AS (
+           SELECT vehicle_id FROM partner_fleet_defaults WHERE driver_id = $1
+         ), single AS (
+           SELECT vehicle_id FROM paired
+            WHERE (SELECT count(*) FROM paired) = 1
+         ), updated_access AS (
+           UPDATE partner_vehicle_access access
+              SET uetds_company_id = $3, updated_at = NOW()
+             FROM single
+            WHERE access.vehicle_id = single.vehicle_id
+              AND access.partner_id = $2
+           RETURNING access.vehicle_id
+         )
+         UPDATE partner_drivers driver
+            SET uetds_company_id = $3, updated_at = NOW()
+          WHERE driver.id = $1
+            AND driver.partner_id = $2
+            AND NOT EXISTS (SELECT 1 FROM paired)`,
+        [input.driverId, input.partnerId, input.uetdsCompanyId],
+      );
     }
     return { ok: true as const };
   } catch (error) {
@@ -708,7 +819,8 @@ export async function createPartnerVehicle(
   const status = partnerCreateVehicleStatus(parsed.value.vehicleClassCode);
   try {
     const created = await query<{ id: string }>(
-      `INSERT INTO partner_vehicles (
+      `WITH created AS (
+       INSERT INTO partner_vehicles (
           partner_id, plate, brand_code, model_code, brand, model, model_year,
           color_code, color_other, color, passenger_capacity, luggage_capacity,
           vehicle_class_code, feature_codes, feature_other, features, status,
@@ -717,7 +829,19 @@ export async function createPartnerVehicle(
        VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
        )
-       RETURNING id`,
+       RETURNING id
+       ), granted AS (
+         INSERT INTO partner_vehicle_access (
+           vehicle_id, partner_id, uetds_company_id, granted_by_ops_user_id
+         )
+         SELECT id, $1, $20, $18 FROM created
+         RETURNING vehicle_id
+       )
+       INSERT INTO partner_vehicle_access_audit (
+         vehicle_id, partner_id, action, new_uetds_company_id, actor_ops_user_id
+       )
+       SELECT vehicle_id, $1, 'grant', $20, $18 FROM granted
+       RETURNING vehicle_id AS id`,
       [
         input.partnerId,
         parsed.value.plate,
@@ -762,7 +886,7 @@ export async function updatePartnerVehicle(
     uetdsCompanyId: string | null;
   },
 ) {
-  const current = await getPartnerVehicle(input.partnerId, input.vehicleId);
+  const current = await getVehicleForEditor(input.partnerId, input.vehicleId, input.editor);
   if (!current) {
     return { ok: false as const, error: "not-found" as const };
   }
@@ -803,9 +927,9 @@ export async function updatePartnerVehicle(
            approved_by_ops_user_id = CASE WHEN $19 THEN NULL ELSE approved_by_ops_user_id END,
            last_edited_by_ops_user_id = COALESCE($20, last_edited_by_ops_user_id),
            last_edited_by_partner_user_id = COALESCE($21, last_edited_by_partner_user_id),
-           uetds_company_id = $22
+           uetds_company_id = CASE WHEN $23::boolean THEN $22 ELSE uetds_company_id END
        WHERE id = $1
-         AND partner_id = $2
+         AND ($23::boolean OR partner_can_access_vehicle($2, id))
          AND deleted_at IS NULL`,
       [
         input.vehicleId,
@@ -830,9 +954,18 @@ export async function updatePartnerVehicle(
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
         input.uetdsCompanyId,
+        input.editor.source === "ops",
       ],
     );
-    void updated;
+    if (updated.rowCount !== 1) {
+      return { ok: false as const, error: "not-found" as const };
+    }
+    await query(
+      `UPDATE partner_vehicle_access
+          SET uetds_company_id = $3, updated_at = NOW()
+        WHERE vehicle_id = $1 AND partner_id = $2`,
+      [input.vehicleId, input.partnerId, input.uetdsCompanyId],
+    );
     return {
       ok: true as const,
       status,
@@ -860,7 +993,7 @@ async function setDriverStatus(input: {
          last_edited_by_ops_user_id = COALESCE($5, last_edited_by_ops_user_id),
          last_edited_by_partner_user_id = COALESCE($6, last_edited_by_partner_user_id)
      WHERE id = $1
-       AND partner_id = $2
+       AND ($7::boolean OR partner_can_access_driver($2, id))
        AND deleted_at IS NULL
        AND status = $3
      RETURNING id`,
@@ -871,6 +1004,7 @@ async function setDriverStatus(input: {
       input.toStatus,
       edited.lastEditedByOpsUserId,
       edited.lastEditedByPartnerUserId,
+      input.editor.source === "ops",
     ],
   );
   if (!updated.rows[0]) {
@@ -885,7 +1019,7 @@ async function setDriverStatus(input: {
     editor: input.editor,
   });
   if (input.toStatus === "inactive") {
-    await stopMobileShareAccess(input.partnerId, input.driverId);
+    await stopMobileShareAccess(input.driverId);
   }
   return { ok: true as const };
 }
@@ -927,7 +1061,7 @@ async function setVehicleStatus(input: {
   approve?: boolean;
   reject?: boolean;
 }) {
-  const current = await getPartnerVehicle(input.partnerId, input.vehicleId);
+  const current = await getVehicleForEditor(input.partnerId, input.vehicleId, input.editor);
   if (!current) {
     return { ok: false as const, error: "not-found" as const };
   }
@@ -954,7 +1088,7 @@ async function setVehicleStatus(input: {
          last_edited_by_ops_user_id = COALESCE($8, last_edited_by_ops_user_id),
          last_edited_by_partner_user_id = COALESCE($9, last_edited_by_partner_user_id)
      WHERE id = $1
-       AND partner_id = $2
+       AND ($10::boolean OR partner_can_access_vehicle($2, id))
        AND deleted_at IS NULL
        AND status = $3
      RETURNING id`,
@@ -968,6 +1102,7 @@ async function setVehicleStatus(input: {
       Boolean(input.reject),
       edited.lastEditedByOpsUserId,
       edited.lastEditedByPartnerUserId,
+      input.editor.source === "ops",
     ],
   );
   if (!updated.rows[0]) {
@@ -1078,7 +1213,7 @@ export async function deletePartnerDriver(input: {
          last_edited_by_ops_user_id = COALESCE($3, last_edited_by_ops_user_id),
          last_edited_by_partner_user_id = COALESCE($4, last_edited_by_partner_user_id)
      WHERE id = $1
-       AND partner_id = $2
+       AND ($5::boolean OR partner_can_access_driver($2, id))
        AND deleted_at IS NULL
      RETURNING id`,
     [
@@ -1086,29 +1221,28 @@ export async function deletePartnerDriver(input: {
       input.partnerId,
       edited.deletedByOpsUserId,
       edited.deletedByPartnerUserId,
+      input.editor.source === "ops",
     ],
   );
   if (!updated.rows[0]) {
     return { ok: false as const, error: "not-found" as const };
   }
   await releaseFleetPair({ partnerId: input.partnerId, driverId: input.driverId });
-  await stopMobileShareAccess(input.partnerId, input.driverId);
+  await stopMobileShareAccess(input.driverId);
   return { ok: true as const };
 }
 
-async function stopMobileShareAccess(partnerId: string, driverId: string) {
-  const stopped = await query<{ id: string }>(
-    `UPDATE gps_mobile_sessions
-        SET status = 'stopped', stopped_at = NOW(), stop_reason = 'access_revoked'
-      WHERE partner_id = $1 AND driver_id = $2 AND status = 'active'
-      RETURNING id`,
-    [partnerId, driverId],
-  );
-  if (!stopped.rows[0]) return;
+async function stopMobileShareAccess(driverId: string) {
   await query(
-    `INSERT INTO gps_mobile_events (partner_id, driver_id, session_id, kind)
-     VALUES ($1, $2, $3, 'access_revoked')`,
-    [partnerId, driverId, stopped.rows[0].id],
+    `WITH stopped AS (
+       UPDATE gps_mobile_sessions
+          SET status = 'stopped', stopped_at = NOW(), stop_reason = 'access_revoked'
+        WHERE driver_id = $1 AND status = 'active'
+       RETURNING id, partner_id, driver_id, vehicle_id
+     )
+     INSERT INTO gps_mobile_events (partner_id, driver_id, vehicle_id, session_id, kind)
+     SELECT partner_id, driver_id, vehicle_id, id, 'access_revoked' FROM stopped`,
+    [driverId],
   );
 }
 
@@ -1130,7 +1264,7 @@ export async function deletePartnerVehicle(input: {
          last_edited_by_ops_user_id = COALESCE($3, last_edited_by_ops_user_id),
          last_edited_by_partner_user_id = COALESCE($4, last_edited_by_partner_user_id)
      WHERE id = $1
-       AND partner_id = $2
+       AND ($5::boolean OR partner_can_access_vehicle($2, id))
        AND deleted_at IS NULL
      RETURNING id`,
     [
@@ -1138,6 +1272,7 @@ export async function deletePartnerVehicle(input: {
       input.partnerId,
       edited.deletedByOpsUserId,
       edited.deletedByPartnerUserId,
+      input.editor.source === "ops",
     ],
   );
   if (!updated.rows[0]) {

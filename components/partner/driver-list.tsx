@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DriverPermissionsEditor } from "@/components/partner/driver-permissions";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
+import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
 import { emptyDriverPermissions, type DriverPermissions } from "@/lib/driver-portal/permissions";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
@@ -52,7 +53,7 @@ export function PartnerDriverList({
   const [rows, setRows] = useState(drivers);
   const rowSignature = drivers
     .map((driver) =>
-      [driver.id, driver.uetdsCompanyId ?? "", driver.defaultVehicleId ?? "", driver.defaultAuthorityId ?? ""].join(":"),
+      [driver.id, driver.uetdsCompanyId ?? "", (driver.linkedVehicleIds ?? []).join(","), driver.defaultAuthorityId ?? ""].join(":"),
     )
     .join("|");
   const [seenRows, setSeenRows] = useState(rowSignature);
@@ -188,30 +189,30 @@ export function PartnerDriverList({
                       }}
                     />
                   </td>
-                  <td>
-                    <FleetInlineSelect
-                      value={driver.defaultVehicleId ?? ""}
+                  <td className="fleet-link-cell is-single">
+                    <FleetLinkMenu
+                      mode="single"
+                      values={(driver.linkedVehicleIds ?? (driver.defaultVehicleId ? [driver.defaultVehicleId] : [])).slice(0, 1)}
                       options={fleetChoicesForPartner(fleetChoices, driver.partnerId).vehicles}
                       emptyLabel={copy.fleetPairNone}
-                      label={copy.defaultVehicle}
+                      saveLabel={copy.driverSave}
+                      cancelLabel={copy.cancelEdit}
                       saveFailedLabel={copy.driverSaveFailed}
                       onSave={async (next) => {
                         const result = await patchPartnerDriverVehicleAction({
                           locale,
                           driverId: driver.id,
-                          vehicleId: next,
+                          vehicleId: next[0] ?? "",
                         });
                         if (!result.ok) return false;
+                        const taken = result.vehicleIds[0] ?? "";
                         setRows((current) =>
                           current.map((item) => {
                             if (item.id === driver.id) {
-                              return { ...item, defaultVehicleId: result.vehicleId };
+                              return { ...item, defaultVehicleId: result.vehicleIds[0] ?? null, linkedVehicleIds: result.vehicleIds };
                             }
-                            if (result.releasedDriverId && item.id === result.releasedDriverId) {
-                              return { ...item, defaultVehicleId: null };
-                            }
-                            if (result.vehicleId && item.defaultVehicleId === result.vehicleId) {
-                              return { ...item, defaultVehicleId: null };
+                            if (taken && (item.linkedVehicleIds ?? []).includes(taken)) {
+                              return { ...item, defaultVehicleId: null, linkedVehicleIds: [] };
                             }
                             return item;
                           }),

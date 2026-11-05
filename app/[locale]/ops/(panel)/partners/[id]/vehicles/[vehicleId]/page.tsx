@@ -9,6 +9,10 @@ import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getPartnerVehicle } from "@/lib/partner/fleet";
 import { getVehicleUetdsSubscription, vehicleHasActivePhysicalGps } from "@/lib/uetds/vehicle-subscription-store";
 import { getVehicleAtsMinistrySource, listVehicleAtsSourceAudits, vehicleHasOpenAtsTrip } from "@/lib/gps/ats-source-store";
+import {
+  listVehiclePartnerAccess,
+  listVehiclePartnerOptions,
+} from "@/lib/partner/vehicle-access";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +28,7 @@ export default async function OpsPartnerVehiclePage({
   if (!partner) {
     notFound();
   }
-  const [vehicle, activeUetdsCompanies, subscription, atsSource, atsAudits, hasActiveAtsTrip, gpsAtsSelectable] = await Promise.all([
+  const [vehicle, activeUetdsCompanies, subscription, atsSource, atsAudits, hasActiveAtsTrip, gpsAtsSelectable, partnerOptions, partnerAccess] = await Promise.all([
     getPartnerVehicle(partner.id, vehicleId),
     listActiveUetdsCompanyOptions(),
     getVehicleUetdsSubscription(vehicleId),
@@ -32,6 +36,8 @@ export default async function OpsPartnerVehiclePage({
     listVehicleAtsSourceAudits(vehicleId),
     vehicleHasOpenAtsTrip(vehicleId),
     vehicleHasActivePhysicalGps(vehicleId),
+    listVehiclePartnerOptions(),
+    listVehiclePartnerAccess(vehicleId),
   ]);
   if (!vehicle) {
     notFound();
@@ -54,6 +60,8 @@ export default async function OpsPartnerVehiclePage({
       atsAudits={atsAudits}
       hasActiveAtsTrip={hasActiveAtsTrip}
       gpsAtsSelectable={gpsAtsSelectable}
+      partnerOptions={partnerOptions}
+      partnerAccess={partnerAccess}
     />
   );
 }

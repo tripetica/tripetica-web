@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { LayerGroup, Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { mountGoogleMap, type GpsMapHandle, type GpsMapLayer, type GpsMapMarker } from "@/components/gps/google-map";
 import { vehicleIcon } from "@/components/gps/live-map";
 import { gpsPlaybackClock, gpsSpeed } from "@/lib/gps/format";
 import { type GpsCopy } from "@/lib/gps/copy";
@@ -88,10 +87,9 @@ export function GpsHistoryPlayback({
   const [readout, setReadout] = useState(() => playbackReadout(fixes, start, gapLimit, copy.playbackGap, formatSpeed));
   const readoutKeyRef = useRef("");
   const host = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
-  const markerRef = useRef<LeafletMarker | null>(null);
-  const pointsRef = useRef<LayerGroup | null>(null);
-  const leafletRef = useRef<typeof import("leaflet") | null>(null);
+  const mapRef = useRef<GpsMapHandle | null>(null);
+  const markerRef = useRef<GpsMapMarker | null>(null);
+  const pointsRef = useRef<GpsMapLayer | null>(null);
   const cursorRef = useRef(start);
   const playingRef = useRef(false);
   const rateRef = useRef<GpsPlaybackRate>(1);
@@ -105,6 +103,7 @@ export function GpsHistoryPlayback({
   const paintRef = useRef<(at: number) => void>(() => {});
   const tickRef = useRef<(now: number) => void>(() => {});
   const [playing, setPlaying] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const [rate, setRate] = useState<GpsPlaybackRate>(1);
   const [showPoints, setShowPoints] = useState(true);
   const [mapEpoch, setMapEpoch] = useState(0);
@@ -125,9 +124,8 @@ export function GpsHistoryPlayback({
       setReadout(nextReadout);
     }
     if (rangeRef.current && !seekingRef.current) rangeRef.current.value = String(Math.round(at));
-    const leaflet = leafletRef.current;
     const map = mapRef.current;
-    if (!leaflet || !map || !map.getPane(PLAYBACK_PANE)) return;
+    if (!map || !map.getPane(PLAYBACK_PANE)) return;
     const view = gpsMotionView(fixesRef.current, at);
     const latitude = view?.latitude ?? frame.latitude;
     const longitude = view?.longitude ?? frame.longitude;
@@ -139,11 +137,9 @@ export function GpsHistoryPlayback({
     const iconKey = state;
     let marker = markerRef.current;
     if (!marker) {
-      marker = leaflet.marker([latitude, longitude], {
-        pane: PLAYBACK_PANE,
-        icon: vehicleIcon(leaflet, state, "gps-playback-vehicle"),
+      marker = map.addMarker([latitude, longitude], {
+        icon: vehicleIcon(state, "gps-playback-vehicle"),
         interactive: false,
-        keyboard: false,
         zIndexOffset: 1000,
       }).addTo(map);
       markerRef.current = marker;
@@ -153,7 +149,7 @@ export function GpsHistoryPlayback({
     marker.setOpacity(1);
     marker.setLatLng([latitude, longitude]);
     if (iconKeyRef.current !== iconKey) {
-      marker.setIcon(vehicleIcon(leaflet, state, "gps-playback-vehicle"));
+      marker.setIcon(vehicleIcon(state, "gps-playback-vehicle"));
       iconKeyRef.current = iconKey;
     }
     marker.setZIndexOffset(1000);
@@ -178,20 +174,26 @@ export function GpsHistoryPlayback({
     const node = host.current;
     if (!node) return;
     let cancelled = false;
+    const observed = new ResizeObserver(() => {
+      mapRef.current?.invalidateSize();
+    });
+    observed.observe(node);
+    const timer = window.setTimeout(() => {
     void (async () => {
-      const leaflet = await import("leaflet");
-      const L = leaflet.default ?? leaflet;
-      if (cancelled || !host.current) return;
-      leafletRef.current = L;
-      const map = L.map(node, { zoomControl: true });
-      const playbackPane = map.createPane(PLAYBACK_PANE);
-      playbackPane.classList.add("gps-playback-pane");
-      playbackPane.style.zIndex = "650";
+      let map: GpsMapHandle;
+      try {
+        map = await mountGoogleMap(node, () => {
+          if (!cancelled) setUnavailable(true);
+        });
+      } catch {
+        if (!cancelled) setUnavailable(true);
+        return;
+      }
+      if (cancelled || !host.current) {
+        map.remove();
+        return;
+      }
       mapRef.current = map;
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap",
-        maxZoom: 19,
-      }).addTo(map);
       const track = playbackFixes(JSON.parse(trackKey).map((row: [number, number, number, number | null]) => ({
         recordedAt: new Date(row[0]).toISOString(),
         latitude: row[1],
@@ -202,17 +204,17 @@ export function GpsHistoryPlayback({
       const bounds: [number, number][] = [];
       playbackSegments(track, playbackGapLimit(track)).forEach((segment) => {
         if (segment.length > 1) {
-          L.polyline(segment.map((point) => [point.latitude, point.longitude] as [number, number]), {
+          map.addPolyline(segment.map((point) => [point.latitude, point.longitude] as [number, number]), {
             color: "#1d4ed8",
             weight: 4,
-          }).addTo(map);
+          });
         }
       });
-      const dots = L.layerGroup();
+      const dots = map.layerGroup();
       track.forEach((point, index) => {
         const role = index === 0 ? "start" : index === track.length - 1 ? "end" : "point";
         const color = role === "start" ? "#15803d" : role === "end" ? "#b91c1c" : "#64748b";
-        const dot = L.circleMarker([point.latitude, point.longitude], {
+        const dot = map.addCircle([point.latitude, point.longitude], {
           radius: role === "point" ? 3 : 7,
           color,
           fillColor: color,
@@ -220,7 +222,7 @@ export function GpsHistoryPlayback({
           weight: 1,
         }).addTo(dots);
         if (role !== "point") {
-          dot.bindTooltip(role === "start" ? copy.routeStart : copy.routeEnd, { permanent: true, direction: "top", className: "gps-playback-end" });
+          dot.bindTooltip(role === "start" ? copy.routeStart : copy.routeEnd, { permanent: true, direction: "top", className: "gps-playback-end", interactive: false });
         }
         dot.on("click", () => {
           playingRef.current = false;
@@ -241,22 +243,28 @@ export function GpsHistoryPlayback({
       });
       pointsRef.current = dots;
       if (showPointsRef.current) dots.addTo(map);
-      if (bounds.length === 0) map.setView([41.015, 28.979], 10);
-      else if (bounds.length === 1) map.setView(bounds[0], 15);
-      else map.fitBounds(bounds, { padding: [24, 24] });
+      if (bounds.length === 0) map.setView([41.015, 28.979], 10, { animate: false });
+      else if (bounds.length === 1) map.setView(bounds[0], 15, { animate: false });
+      else map.fitBounds(bounds, { padding: [24, 24], animate: false });
       window.setTimeout(() => map.invalidateSize(), 0);
       window.requestAnimationFrame(() => map.invalidateSize());
-      if (!cancelled) setMapEpoch((value) => value + 1);
+      if (!cancelled) {
+        setUnavailable(false);
+        setMapEpoch((value) => value + 1);
+      }
     })();
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      observed.disconnect();
       playingRef.current = false;
       window.cancelAnimationFrame(rafRef.current);
+      markerRef.current?.remove();
       markerRef.current = null;
       pointsRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
-      leafletRef.current = null;
     };
   }, [copy.routeEnd, copy.routeStart, formatSpeed, plate, trackKey]);
 
@@ -308,7 +316,10 @@ export function GpsHistoryPlayback({
 
   return (
     <div data-gps-playback={deviceId}>
-      <div ref={host} className="gps-map" />
+      <div className="gps-map" data-map-engine={unavailable ? "unavailable" : "google"}>
+        <div ref={host} className="gps-map-canvas" />
+        {unavailable ? <p className="gps-map-unavailable">{copy.mapUnavailable}</p> : null}
+      </div>
       <div className="gps-playback">
         <div className="gps-playback-readout">
           <strong className="gps-playback-plate">{plate}</strong>

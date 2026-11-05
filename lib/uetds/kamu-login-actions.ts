@@ -1,12 +1,10 @@
 "use server";
 
-import { getOpsActor, actorCan } from "@/lib/ops/session";
-import { partnerHasTab } from "@/lib/partner/access";
-import { getPartnerActor } from "@/lib/partner/session";
+import { getDriverPortalActor } from "@/lib/driver-portal/session";
 import { query } from "@/lib/db/postgres";
 import { isUuid } from "@/lib/ops/process-filters";
 import { unsealSecret } from "@/lib/security/sealed-secret";
-import { getUetdsNotification } from "@/lib/uetds/notifications";
+import { driverMayUseKamuAuthority, kamuLoginOwnerKey, loadKamuLoginNotification } from "@/lib/uetds/kamu-login-access";
 import { runObservedKamuLogin, type KamuPortalCompany } from "@/lib/uetds/kamu-login-flow";
 import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
 import { type PortalLocation, type PortalTripTarget } from "@/lib/uetds/kamu-portal/edit-plan";
@@ -96,15 +94,6 @@ function tripTargetFromSnapshot(snapshotJson: string): PortalTripTarget | null {
   }
 }
 
-async function ownerKey() {
-  if (!kamuAssistedLoginAllowed()) return null;
-  const partner = await getPartnerActor();
-  if (partner && partnerHasTab(partner, "uetds")) return `partner:${partner.partnerId}:${partner.userId}`;
-  const ops = await getOpsActor();
-  if (ops && actorCan(ops, "uetds.manage")) return `ops:${ops.id}`;
-  return null;
-}
-
 async function authoritySecrets(input: { authorityId: string; partnerId: string; companyId: string | null }) {
   const result = await query<{
     partner_id: string;
@@ -165,14 +154,24 @@ export async function startUetdsLoginSessionAction(input: {
   viewport?: KamuLoginViewport;
   nextDraft?: PortalNextDraft | null;
 }): Promise<KamuLoginActionResult> {
-  const owner = await ownerKey();
+  const owner = await kamuLoginOwnerKey();
   if (!owner) return { ok: false, error: kamuAssistedLoginAllowed() ? "forbidden" : "unavailable", reason: "session_rejected" };
   if (!isUuid(input.notificationId) || !isUuid(input.authorityId)) return { ok: false, error: "invalid", reason: "session_rejected" };
-  const partner = await getPartnerActor();
-  const notification = await getUetdsNotification(
-    partner ? { id: input.notificationId, partnerId: partner.partnerId } : { id: input.notificationId },
-  );
+  const notification = await loadKamuLoginNotification(owner, input.notificationId);
   if (!notification) return { ok: false, error: "forbidden", reason: "session_rejected" };
+  const driver = owner.startsWith("driver:") ? await getDriverPortalActor() : null;
+  if (owner.startsWith("driver:") && (!driver || owner !== `driver:${driver.partnerId}:${driver.driverId}`)) {
+    return { ok: false, error: "forbidden", reason: "session_rejected" };
+  }
+  if (driver && !(await driverMayUseKamuAuthority({
+    driverId: driver.driverId,
+    partnerId: driver.partnerId,
+    authorityId: input.authorityId,
+    companyId: notification.companyId,
+  }))) {
+    logKamuLoginFailure("credential_resolution_failed");
+    return { ok: false, error: "invalid", reason: "credential_resolution_failed" };
+  }
   const live = await openLiveBridgeControls();
   if (
     live &&
@@ -195,7 +194,7 @@ export async function startUetdsLoginSessionAction(input: {
   }
   const secrets = await authoritySecrets({
     authorityId: input.authorityId,
-    partnerId: notification.partnerId,
+    partnerId: driver?.partnerId ?? notification.partnerId,
     companyId: notification.companyId,
   });
   if (!secrets) {
@@ -315,16 +314,13 @@ function editPlanFromSnapshot(snapshotJson: string): PortalEditPlan | null {
 }
 
 export async function readUetdsLoginSessionAction(sessionId: string): Promise<KamuLoginActionResult> {
-  const owner = await ownerKey();
+  const owner = await kamuLoginOwnerKey();
   if (!owner || !isUuid(sessionId)) return { ok: false, error: "forbidden" };
   const notificationId = kamuLoginNotificationId(sessionId, owner);
   let plan: PortalEditPlan | null = null;
-  let notification: Awaited<ReturnType<typeof getUetdsNotification>> = null;
+  let notification: Awaited<ReturnType<typeof loadKamuLoginNotification>> = null;
   if (notificationId) {
-    const partner = await getPartnerActor();
-    notification = await getUetdsNotification(
-      partner ? { id: notificationId, partnerId: partner.partnerId } : { id: notificationId },
-    );
+    notification = await loadKamuLoginNotification(owner, notificationId);
     if (notification) plan = editPlanFromSnapshot(notification.snapshotJson);
   }
   const state = await progressKamuPortalUpdate(sessionId, owner, plan);
@@ -343,7 +339,7 @@ export async function controlUetdsLoginSessionAction(input: {
   sessionId: string;
   control: KamuLoginControlMode;
 }): Promise<KamuLoginActionResult> {
-  const owner = await ownerKey();
+  const owner = await kamuLoginOwnerKey();
   if (!owner || !isUuid(input.sessionId)) return { ok: false, error: "forbidden" };
   const state = await setKamuLoginControl({ sessionId: input.sessionId, ownerKey: owner, control: input.control });
   if (!state) return { ok: false, error: "invalid" };
@@ -358,7 +354,7 @@ export async function inputUetdsLoginSessionAction(input: {
   viewport?: KamuLoginViewport;
   captcha?: string;
 }): Promise<KamuLoginActionResult> {
-  const owner = await ownerKey();
+  const owner = await kamuLoginOwnerKey();
   if (!owner || !isUuid(input.sessionId)) return { ok: false, error: "forbidden" };
   const allowedKeys = new Set(["Tab", "Enter", "Backspace"]);
   if (input.kind === "key" && (!input.key || (!allowedKeys.has(input.key) && !/^[0-9A-Za-z]$/.test(input.key)))) {
@@ -373,7 +369,7 @@ export async function inputUetdsLoginSessionAction(input: {
 }
 
 export async function closeUetdsLoginSessionAction(sessionId: string): Promise<KamuLoginActionResult> {
-  const owner = await ownerKey();
+  const owner = await kamuLoginOwnerKey();
   if (!owner || !isUuid(sessionId)) return { ok: false, error: "forbidden" };
   const existing = readKamuLoginSession(sessionId, owner);
   await closeKamuLoginSession(sessionId, owner);

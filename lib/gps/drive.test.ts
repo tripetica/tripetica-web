@@ -145,6 +145,28 @@ test("short stops stay in the trip and a 15 minute stop starts another", () => {
   assert.equal(split.totalMs, 2 * 60_000);
 });
 
+function unusedSqlParameters(source: string) {
+  const unused: string[] = [];
+  const pattern = /query(?:<[^>]*>)?\(\s*`([^`]*)`\s*,\s*\[([^[\]]*)\]/g;
+  for (const match of source.matchAll(pattern)) {
+    const sql = match[1] ?? "";
+    const values = (match[2] ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+    const used = new Set([...sql.matchAll(/\$(\d+)/g)].map((item) => Number(item[1])));
+    for (let index = 1; index <= values.length; index += 1) {
+      if (!used.has(index)) unused.push(`$${index}`);
+    }
+  }
+  return unused;
+}
+
+test("partner GPS drive queries reference every bound parameter", () => {
+  const store = readFileSync(new URL("./drive-store.ts", import.meta.url), "utf8");
+  assert.deepEqual(unusedSqlParameters(store), []);
+  assert.match(store, /FROM gps_positions[\s\S]*?WHERE vehicle_id = \$1[\s\S]*?LIMIT \$4/);
+  assert.match(store, /FROM gps_green_driving_events[\s\S]*?WHERE vehicle_id = \$1[\s\S]*?LIMIT 200/);
+  assert.match(store, /partner_can_access_vehicle\(\$1, \$2\)/);
+});
+
 test("drive analysis reads physical points and does not invent event rows", () => {
   const store = readFileSync(new URL("./drive-store.ts", import.meta.url), "utf8");
   const live = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
@@ -155,6 +177,7 @@ test("drive analysis reads physical points and does not invent event rows", () =
   assert.match(store, /FROM gps_positions/);
   assert.match(store, /gps_green_driving_events/);
   assert.match(store, /ignition/);
+  assert.equal(unusedSqlParameters(store).length, 0);
   assert.doesNotMatch(store, /gps_mobile_positions|setdigout|ats-run/);
   assert.doesNotMatch(live, /harshBrakeCount|driveScoreValue|greenDrivingValue/);
   const historyAt = live.indexOf("copy.showHistory");

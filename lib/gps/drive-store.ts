@@ -19,7 +19,7 @@ export async function listPartnerVehicleIdentity(partnerId: string) {
   const result = await query<{ id: string; brand: string | null; model: string | null }>(
     `SELECT id, brand, model
        FROM partner_vehicles
-      WHERE partner_id = $1
+      WHERE partner_can_access_vehicle($1, id)
         AND deleted_at IS NULL`,
     [partnerId],
   );
@@ -31,7 +31,7 @@ export async function readDriveVehicle(partnerId: string, vehicleId: string) {
     `SELECT brand, model
        FROM partner_vehicles
       WHERE id = $1
-        AND partner_id = $2`,
+        AND partner_can_access_vehicle($2, id)`,
     [vehicleId, partnerId],
   );
   return {
@@ -46,12 +46,15 @@ export async function listVehicleGreenDriving(input: {
   from: Date;
   to: Date;
 }): Promise<VehicleGreenDriving> {
+  if (!(await canAccessVehicle(input.partnerId, input.vehicleId))) {
+    return { parserReady: false, events: [] };
+  }
   const ready = await query(
     `SELECT 1
        FROM gps_device_status status
        JOIN gps_devices device ON device.id = status.device_id
-      WHERE device.partner_id = $1
-        AND device.vehicle_id = $2
+      WHERE device.vehicle_id = $2
+        AND partner_can_access_gps_device($1, device.id)
         AND device.receiver = 'teltonika'
         AND status.green_driving_parser_at IS NOT NULL
       LIMIT 1`,
@@ -66,13 +69,12 @@ export async function listVehicleGreenDriving(input: {
   }>(
     `SELECT recorded_at, kind, raw_value, latitude::text AS latitude, longitude::text AS longitude
        FROM gps_green_driving_events
-      WHERE partner_id = $1
-        AND vehicle_id = $2
-        AND recorded_at >= $3
-        AND recorded_at < $4
+      WHERE vehicle_id = $1
+        AND recorded_at >= $2
+        AND recorded_at < $3
       ORDER BY recorded_at ASC
       LIMIT 200`,
-    [input.partnerId, input.vehicleId, input.from.toISOString(), input.to.toISOString()],
+    [input.vehicleId, input.from.toISOString(), input.to.toISOString()],
   );
   return {
     parserReady: (ready.rowCount ?? 0) > 0,
@@ -98,6 +100,9 @@ export async function listPhysicalDrivePoints(input: {
   from: Date;
   to: Date;
 }): Promise<{ points: DriveTrackPoint[]; truncated: boolean }> {
+  if (!(await canAccessVehicle(input.partnerId, input.vehicleId))) {
+    return { points: [], truncated: false };
+  }
   const result = await query<{
     id: string;
     recorded_at: Date;
@@ -109,13 +114,12 @@ export async function listPhysicalDrivePoints(input: {
     `SELECT id::text AS id, recorded_at, latitude::text AS latitude, longitude::text AS longitude,
             speed_mps::text AS speed_mps, ignition
        FROM gps_positions
-      WHERE partner_id = $1
-        AND vehicle_id = $2
-        AND recorded_at >= $3
-        AND recorded_at < $4
+      WHERE vehicle_id = $1
+        AND recorded_at >= $2
+        AND recorded_at < $3
       ORDER BY recorded_at ASC, seq ASC
-      LIMIT $5`,
-    [input.partnerId, input.vehicleId, input.from.toISOString(), input.to.toISOString(), DRIVE_POINT_LIMIT + 1],
+      LIMIT $4`,
+    [input.vehicleId, input.from.toISOString(), input.to.toISOString(), DRIVE_POINT_LIMIT + 1],
   );
   const truncated = result.rows.length > DRIVE_POINT_LIMIT;
   const rows = truncated ? result.rows.slice(0, DRIVE_POINT_LIMIT) : result.rows;
@@ -136,4 +140,12 @@ export async function listPhysicalDrivePoints(input: {
       }];
     }),
   };
+}
+
+async function canAccessVehicle(partnerId: string, vehicleId: string) {
+  const result = await query<{ allowed: boolean }>(
+    `SELECT partner_can_access_vehicle($1, $2) AS allowed`,
+    [partnerId, vehicleId],
+  );
+  return Boolean(result.rows[0]?.allowed);
 }

@@ -35,6 +35,7 @@ export type OpsVehicleListItem = {
   uetdsCompanyId: string | null;
   uetdsCompany: UetdsCompanyRef | null;
   defaultDriverId: string | null;
+  linkedDriverIds: string[];
   services: DriverServiceSelection;
   uetdsSubscription: UetdsDriverSubscriptionListSummary;
 };
@@ -59,7 +60,7 @@ type VehicleListRow = {
   partner_code: string;
   uetds_company_id: string | null;
   uetds_company_short_name: string | null;
-  default_driver_id: string | null;
+  linked_driver_ids: string[] | null;
   service_standard_enabled: boolean;
   service_standard_fee: string | null;
   service_advanced_enabled: boolean;
@@ -158,7 +159,12 @@ export async function listOpsVehicles(input: {
         v.status,
         v.uetds_company_id,
         uc.short_name AS uetds_company_short_name,
-        dd.id AS default_driver_id,
+        COALESCE((
+          SELECT array_agg(dd.id ORDER BY fd.created_at, dd.last_name, dd.id)
+            FROM partner_fleet_defaults fd
+            JOIN partner_drivers dd ON dd.id = fd.driver_id AND dd.deleted_at IS NULL
+           WHERE fd.vehicle_id = v.id
+        ), '{}') AS linked_driver_ids,
         v.service_standard_enabled,
         v.service_standard_fee,
         v.service_advanced_enabled,
@@ -177,10 +183,6 @@ export async function listOpsVehicles(input: {
      FROM partner_vehicles v
      JOIN partners p ON p.id = v.partner_id
      LEFT JOIN uetds_companies uc ON uc.id = v.uetds_company_id
-     LEFT JOIN partner_fleet_defaults fd
-       ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
-     LEFT JOIN partner_drivers dd
-       ON dd.id = fd.driver_id AND dd.partner_id = v.partner_id AND dd.deleted_at IS NULL
      LEFT JOIN partner_vehicle_uetds_subscription_periods per
        ON per.vehicle_id = v.id AND per.period_year = $${periodYear} AND per.period_month = $${periodYear + 1}
      LEFT JOIN partner_vehicle_uetds_subscription_periods next_per
@@ -204,7 +206,8 @@ export async function listOpsVehicles(input: {
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
-    defaultDriverId: row.default_driver_id,
+    defaultDriverId: row.linked_driver_ids?.[0] ?? null,
+    linkedDriverIds: row.linked_driver_ids ?? [],
     services: {
       standardEnabled: row.service_standard_enabled,
       standardFee: row.service_standard_fee == null ? null : Number(row.service_standard_fee),

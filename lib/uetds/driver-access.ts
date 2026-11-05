@@ -18,11 +18,13 @@ export async function driverAuthorizedVehicleIds(partnerId: string, driverId: st
     `SELECT v.id
        FROM partner_fleet_defaults fd
        JOIN partner_vehicles v ON v.id = fd.vehicle_id
-      WHERE fd.partner_id = $1
-        AND fd.driver_id = $2
-        AND v.partner_id = $1
+       JOIN partner_drivers d ON d.id = fd.driver_id
+      WHERE fd.driver_id = $2
+        AND d.partner_id = $1
+        AND partner_can_access_vehicle($1, v.id)
         AND v.deleted_at IS NULL
-        AND v.status = 'active'`,
+        AND v.status = 'active'
+      ORDER BY fd.created_at, v.plate, v.id`,
     [partnerId, driverId],
   );
   return result.rows.map((row) => row.id);

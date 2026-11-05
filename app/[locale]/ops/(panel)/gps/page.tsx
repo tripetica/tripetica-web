@@ -95,8 +95,6 @@ export default async function OpsGpsPage({
           status={device?.status ?? "active"}
           company={device?.uetdsCompany ?? null}
           partnerLabel={device ? (device.partnerCode ? `${device.partnerCode} · ${device.partnerName}` : null) : (mobile?.partnerName ?? null)}
-          wifiMode="off"
-          canToggleWifi={false}
           showDeviceList={false}
           viewerId={actor.id}
           historyQuery={`${"error" in range ? "" : range.from.toISOString()}|${"error" in range ? "" : range.to.toISOString()}`}
@@ -104,7 +102,6 @@ export default async function OpsGpsPage({
           fleetVehicles={fleet}
           selectedVehicleId={device?.id ?? mobile?.id ?? null}
           rangeSearch={rangeParams.toString()}
-          deviceControls={false}
           fleetUrl="/api/ops/gps/fleet"
           opsFilter
           shareEvents={mobileHistory.events}
@@ -138,8 +135,6 @@ export default async function OpsGpsPage({
             toIso: "error" in range ? "" : range.to.toISOString(),
             historyPath: listPath,
           } : null}
-          wifi={null}
-          camera={null}
         />
       )}
       devices={(
@@ -149,15 +144,20 @@ export default async function OpsGpsPage({
           faultsLabel={faultCopy.faults}
           historyLabel={faultCopy.history}
           devices={(
-            <GpsDeviceBoard
-              locale={locale}
-              copy={copy}
-              surface="ops"
-              devices={devices}
-              canManage={actorCan(actor, "gps.manage")}
-              partners={partners}
-              vehicles={vehicles}
-            />
+            <>
+              {one(query.deleted) === "1" ? (
+                <p className="ops-form-success" role="status">{copy.deleteSuccess}</p>
+              ) : null}
+              <GpsDeviceBoard
+                locale={locale}
+                copy={copy}
+                surface="ops"
+                devices={devices}
+                canManage={actorCan(actor, "gps.manage")}
+                partners={partners}
+                vehicles={vehicles}
+              />
+            </>
           )}
           faults={<AtsFaultLists locale={locale} mode="faults" />}
           history={<AtsFaultLists locale={locale} mode="history" />}
@@ -183,29 +183,7 @@ function deviceSnapshot(device: GpsDeviceListItem, recent: GpsLiveSnapshot["rece
     rssi: device.rssi,
     operatorName: device.operatorName,
     network: device.network,
-    uptimeSeconds: device.uptimeSeconds,
-    simStatus: device.simStatus,
-    lteRegistration: device.lteRegistration,
-    pppStatus: device.pppStatus,
-    naptStatus: device.naptStatus,
-    ipAddress: device.ipAddress,
-    gnssResponse: device.gnssResponse,
-    wifiPolicy: device.wifiPolicy,
-    apStatus: device.apStatus,
-    wifiClients: device.wifiClients,
-    reportedMaxClients: device.reportedMaxClients,
-    lastRecoveryReason: device.lastRecoveryReason,
-    lastModemRecoveryAt: device.lastModemRecoveryAt,
-    lastGnssRecoveryAt: device.lastGnssRecoveryAt,
-    resetReason: device.resetReason,
-    powerSource: device.powerSource,
-    vehicleBatteryVoltage: device.vehicleBatteryVoltage,
     accState: device.accState,
-    powerMode: device.powerMode,
-    batteryPercent: device.batteryPercent,
-    wifiEnabled: device.reportedWifiEnabled,
-    lowBatteryState: device.lowBatteryState,
-    lowBatteryGraceRemainingSeconds: device.lowBatteryGraceRemainingSeconds,
     recent,
   };
 }
@@ -239,32 +217,9 @@ function emptySnapshot(): GpsLiveSnapshot {
     rssi: null,
     operatorName: null,
     network: null,
-    uptimeSeconds: null,
-    simStatus: null,
-    lteRegistration: null,
-    pppStatus: null,
-    naptStatus: null,
-    ipAddress: null,
-    gnssResponse: null,
-    wifiPolicy: null,
-    apStatus: null,
-    wifiClients: null,
-    reportedMaxClients: null,
-    lastRecoveryReason: null,
-    lastModemRecoveryAt: null,
-    lastGnssRecoveryAt: null,
-    resetReason: null,
-    powerSource: null,
-    vehicleBatteryVoltage: null,
     accState: null,
     din1State: null,
-    manufacturer: "esp32",
-    powerMode: null,
-    batteryPercent: null,
-    wifiEnabled: null,
-    wifiShareCommand: null,
-    lowBatteryState: null,
-    lowBatteryGraceRemainingSeconds: null,
+    manufacturer: "teltonika",
   };
 }
 

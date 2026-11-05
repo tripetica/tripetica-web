@@ -40,7 +40,7 @@ export default async function PartnerVehicleDetailPage({
         vehicle={vehicle}
         activeUetdsCompanies={activeUetdsCompanies}
         drivers={drivers}
-        defaultDriverId={link.defaultDriverId}
+        driverIds={link.driverIds}
         subscription={subscription}
         atsSource={atsSource}
       />

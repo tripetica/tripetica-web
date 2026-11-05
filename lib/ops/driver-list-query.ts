@@ -131,7 +131,12 @@ export function buildOpsDriverListQueryPlan(input: {
         d.service_mobile_gps_fee,
         per.status AS current_period_status,
         next_per.status AS next_period_status,
-        dv.id AS default_vehicle_id,
+        COALESCE((
+          SELECT array_agg(v.id ORDER BY fd.created_at, v.plate)
+            FROM partner_fleet_defaults fd
+            JOIN partner_vehicles v ON v.id = fd.vehicle_id AND v.deleted_at IS NULL
+           WHERE fd.driver_id = d.id
+        ), '{}') AS linked_vehicle_ids,
         CASE
           WHEN ea.id IS NULL THEN NULL
           WHEN d.uetds_company_id IS NOT NULL AND NOT EXISTS (
@@ -145,10 +150,6 @@ export function buildOpsDriverListQueryPlan(input: {
      FROM partner_drivers d
      JOIN partners p ON p.id = d.partner_id
      LEFT JOIN uetds_companies uc ON uc.id = d.uetds_company_id
-     LEFT JOIN partner_fleet_defaults fd
-       ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
-     LEFT JOIN partner_vehicles dv
-       ON dv.id = fd.vehicle_id AND dv.partner_id = d.partner_id AND dv.deleted_at IS NULL
      LEFT JOIN partner_uetds_authorities ea
        ON ea.id = d.default_edevlet_authority_id
       AND ea.partner_id = d.partner_id

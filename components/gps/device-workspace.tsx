@@ -1,9 +1,8 @@
-import { revokeGpsDeviceTokenAction, setGpsDeviceStatusAction, updateGpsImeiAction, updateGpsSimOperatorAction, updateGpsSimPhoneAction } from "@/lib/gps/actions";
-import { commandAuditState, type GpsAuditState } from "@/lib/gps/commands";
+import { setGpsDeviceStatusAction, updateGpsImeiAction, updateGpsSimOperatorAction, updateGpsSimPhoneAction } from "@/lib/gps/actions";
 import { gpsErrorText, type GpsCopy } from "@/lib/gps/copy";
 import { gpsClock } from "@/lib/gps/format";
 import { gpsPartnerLivePayload, readGpsLiveSnapshot, type GpsLiveSnapshot } from "@/lib/gps/live";
-import { listGpsRecentFixes, type GpsCommandView, type GpsDeviceListItem, type GpsRoutePoint, type GpsVehicleChoice } from "@/lib/gps/queries";
+import { listGpsRecentFixes, type GpsDeviceListItem, type GpsRoutePoint, type GpsVehicleChoice } from "@/lib/gps/queries";
 import { type Locale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { GpsDeviceAssignmentForm } from "@/components/gps/device-assignment-form";
@@ -12,8 +11,6 @@ import { loadGpsAtsPanel } from "@/lib/gps/ats-control";
 import { GpsLiveSection, type GpsSectionVisibility } from "@/components/gps/live-section";
 import { type DriveReport, type DriveVehicleInfo } from "@/lib/gps/drive";
 import { type GpsFleetVehicle } from "@/lib/gps/fleet";
-import { GpsRemoteCommands } from "@/components/gps/remote-commands";
-import { GpsTokenRotateForm } from "@/components/gps/token-rotate-form";
 import { gpsPresence } from "@/lib/gps/presence";
 import { GPS_SIM_OPERATORS, gpsSimOperator } from "@/lib/gps/registration";
 import { loadImmobilizerPanel } from "@/lib/teltonika/immobilizer-store";
@@ -30,7 +27,6 @@ export async function GpsDeviceWorkspace({
   partners = [],
   assignments = [],
   route,
-  commands,
   fromLocal,
   toLocal,
   fromIso,
@@ -60,7 +56,6 @@ export async function GpsDeviceWorkspace({
   maintenanceBase,
   fleetUrl,
   loadImmobilizer = false,
-  initialTab = "gps",
 }: {
   locale: Locale;
   copy: GpsCopy;
@@ -70,7 +65,6 @@ export async function GpsDeviceWorkspace({
   partners?: { id: string; partner_code: string; name: string }[];
   assignments?: { assignedAt: string; partnerName: string | null; partnerCode: string | null; plate: string | null }[];
   route: { total: number; step: number; points: GpsRoutePoint[] };
-  commands: GpsCommandView[];
   fromLocal: string;
   toLocal: string;
   fromIso: string;
@@ -100,7 +94,6 @@ export async function GpsDeviceWorkspace({
   maintenanceBase?: string;
   fleetUrl?: string;
   loadImmobilizer?: boolean;
-  initialTab?: "gps" | "wifi" | "camera";
 }) {
   const listPath = portalPath
     ? localizedPath(locale, portalPath)
@@ -140,8 +133,6 @@ export async function GpsDeviceWorkspace({
           status="active"
           company={null}
           partnerLabel={null}
-          wifiMode="off"
-          canToggleWifi={false}
           showDeviceList={false}
           viewerId={viewerId}
           historyQuery=""
@@ -168,10 +159,6 @@ export async function GpsDeviceWorkspace({
             toIso,
             historyPath: listPath,
           } : null}
-          wifi={null}
-          camera={null}
-          deviceControls={deviceControls}
-          initialTab={initialTab}
           sections={sections}
           liveUrl={liveUrl}
           maintenanceUrl={maintenanceBase}
@@ -195,32 +182,9 @@ export async function GpsDeviceWorkspace({
     rssi: device.rssi,
     operatorName: device.operatorName,
     network: device.network,
-    uptimeSeconds: device.uptimeSeconds,
-    simStatus: device.simStatus,
-    lteRegistration: device.lteRegistration,
-    pppStatus: device.pppStatus,
-    naptStatus: device.naptStatus,
-    ipAddress: device.ipAddress,
-    gnssResponse: device.gnssResponse,
-    wifiPolicy: device.wifiPolicy,
-    apStatus: device.apStatus,
-    wifiClients: device.wifiClients,
-    reportedMaxClients: device.reportedMaxClients,
-    lastRecoveryReason: device.lastRecoveryReason,
-    lastModemRecoveryAt: device.lastModemRecoveryAt,
-    lastGnssRecoveryAt: device.lastGnssRecoveryAt,
-    resetReason: device.resetReason,
-    powerSource: device.powerSource,
-    vehicleBatteryVoltage: device.vehicleBatteryVoltage,
     accState: device.accState,
     din1State: device.din1State,
     manufacturer: device.manufacturer,
-    powerMode: device.powerMode,
-    batteryPercent: device.batteryPercent,
-    wifiEnabled: device.reportedWifiEnabled,
-    wifiShareCommand: null,
-    lowBatteryState: device.lowBatteryState,
-    lowBatteryGraceRemainingSeconds: device.lowBatteryGraceRemainingSeconds,
     recent: recentByDevice.get(device.id) ?? [],
   };
   if (sections && !sections.live) {
@@ -251,10 +215,6 @@ export async function GpsDeviceWorkspace({
         status={device.status}
         company={device.uetdsCompany}
         partnerLabel={surface === "ops" ? (device.partnerCode ? `${device.partnerCode} · ${device.partnerName}` : copy.stock) : null}
-        wifiMode={device.wifiMode}
-        canToggleWifi={deviceControls && (surface === "partner" || canManage) && Boolean(device.partnerId)}
-        deviceControls={deviceControls}
-        initialTab={initialTab}
         showDeviceList={showDeviceList}
         viewerId={viewerId}
         historyQuery={`${fromIso}|${toIso}`}
@@ -286,41 +246,6 @@ export async function GpsDeviceWorkspace({
           historyPath: detailPath,
           includeVehicle: Boolean(fleetVehicles && fleetVehicles.length > 1),
         }}
-        wifi={null}
-        camera={null}
-        wifiDevice={deviceControls ? {
-          locale,
-          deviceId: device.id,
-          surface,
-          canManage,
-          partnerId: device.partnerId,
-          lte: device.lteRegistration ?? device.network,
-          network: device.network,
-          reportedSsid: device.reportedWifiSsid,
-          clients: device.wifiClients,
-          reportedMaxClients: device.reportedMaxClients,
-          passwordSet: device.wifiPasswordSet,
-          wifiMode: device.wifiMode,
-          wifiSsid: device.wifiSsid,
-          wifiMaxClients: device.wifiMaxClients,
-          lastHeartbeatAt: device.lastHeartbeatAt,
-          manufacturer: device.manufacturer,
-          reportedEnabled: device.reportedWifiEnabled,
-          rssi: device.rssi,
-          pppStatus: device.pppStatus,
-          naptStatus: device.naptStatus,
-          apStatus: device.apStatus,
-          wifiPolicy: device.wifiPolicy,
-        } : null}
-        cameraDevice={deviceControls ? {
-          deviceId: device.id,
-          surface,
-          lowBatteryState: device.lowBatteryState,
-          batteryPercent: device.batteryPercent,
-          lastHeartbeatAt: device.lastHeartbeatAt,
-          cameraAvailable: device.cameraAvailable,
-          cameraReady: device.cameraReady,
-        } : null}
         ats={surface === "ops" ? await loadGpsAtsPanel(device.id) : null}
         canControlAts={surface === "ops" && canManage}
         immobilizer={immobilizer}
@@ -343,14 +268,12 @@ export async function GpsDeviceWorkspace({
             <div><dt>{copy.imei}</dt><dd>{device.imei ?? copy.unavailable}</dd></div>
             <div><dt>{copy.partner}</dt><dd>{device.partnerName || copy.stock}</dd></div>
             <div><dt>{copy.vehicle}</dt><dd>{device.plate ?? copy.unassigned}</dd></div>
-            <div><dt>{copy.manufacturer}</dt><dd>{device.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</dd></div>
+            <div><dt>{copy.manufacturer}</dt><dd>{copy.receiverTeltonika}</dd></div>
             <div><dt>{copy.trackerModel}</dt><dd>{device.trackerModel ? device.trackerModel.toUpperCase() : copy.unavailable}</dd></div>
             <div><dt>{copy.link}</dt><dd>{device.linkTechnology === "4g" ? copy.link4g : device.linkTechnology === "2g" ? copy.link2g : copy.unavailable}</dd></div>
             <div><dt>{copy.installStatus}</dt><dd>{device.installationStatus === "pending" ? copy.installPending : copy.installInstalled}</dd></div>
             <div><dt>{copy.serial}</dt><dd>{device.serialNumber ?? copy.unavailable}</dd></div>
-            {device.manufacturer === "teltonika" ? (
-              <div><dt>{copy.simApn}</dt><dd>{device.simApn ?? copy.unavailable}</dd></div>
-            ) : null}
+            <div><dt>{copy.simApn}</dt><dd>{device.simApn ?? copy.unavailable}</dd></div>
             <div><dt>{copy.simOperator}</dt><dd>{device.simOperator ?? copy.unavailable}</dd></div>
             <div><dt>{copy.simPhone}</dt><dd>{device.simPhone ?? copy.simPhoneMissing}</dd></div>
             <div><dt>{copy.status}</dt><dd>{device.status === "active" ? copy.active : copy.disabled}</dd></div>
@@ -358,7 +281,6 @@ export async function GpsDeviceWorkspace({
             <div><dt>{copy.gnssTime}</dt><dd>{gpsClock(device.recordedAt)}</dd></div>
             <div><dt>{copy.popupCoordinates}</dt><dd>{device.latitude === null || device.longitude === null ? copy.unavailable : `${device.latitude.toFixed(6)}, ${device.longitude.toFixed(6)}`}</dd></div>
             <div><dt>{copy.firmware}</dt><dd>{device.firmware ?? copy.unavailable}</dd></div>
-            <div><dt>{copy.credential}</dt><dd>{credentialLabel(copy, device.credentialState)}</dd></div>
             <div><dt>{copy.createdAt}</dt><dd>{gpsClock(device.createdAt)}</dd></div>
           </dl>
           <form action={updateGpsSimOperatorAction} className="gps-inline">
@@ -382,7 +304,7 @@ export async function GpsDeviceWorkspace({
             </label>
             <button type="submit" className="ops-btn">{copy.save}</button>
           </form>
-          {device.manufacturer === "teltonika" && immobilizer ? (
+          {immobilizer ? (
             <div className="gps-stack">
               <h3>{copy.immobilizer}</h3>
               <dl className="gps-facts">
@@ -442,77 +364,14 @@ export async function GpsDeviceWorkspace({
             <input type="hidden" name="status" value={device.status === "active" ? "disabled" : "active"} />
             <button type="submit" className="ops-btn-ghost">{device.status === "active" ? copy.disable : copy.enable}</button>
           </form>
-          <GpsTokenRotateForm locale={locale} copy={copy} deviceId={device.id} />
-          <form action={revokeGpsDeviceTokenAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="deviceId" value={device.id} />
-            <button type="submit" className="ops-btn-ghost" disabled={device.credentialState !== "active"}>{copy.revoke}</button>
-          </form>
         </section>
       ) : null}
 
-      {surface === "ops" && canManage && device.partnerId ? (
-        <section className="gps-section">
-          <h2>{copy.remote}</h2>
-          <GpsRemoteCommands locale={locale} copy={copy} deviceId={device.id} />
-        </section>
-      ) : null}
-
-      {surface === "ops" ? <CommandAudit copy={copy} commands={commands} /> : null}
       {canDelete ? (
-        <GpsDeviceDelete locale={locale} copy={copy} device={device} used={error === "device_used"} />
+        <GpsDeviceDelete locale={locale} copy={copy} device={device} />
       ) : null}
     </div>
   );
-}
-
-function CommandAudit({ copy, commands }: { copy: GpsCopy; commands: GpsCommandView[] }) {
-  return (
-    <section className="gps-section">
-      <h2>{copy.audit}</h2>
-      {commands.length === 0 ? <p>{copy.commandsEmpty}</p> : (
-        <div className="ops-table-wrap">
-          <table className="ops-table">
-            <thead>
-              <tr>
-                <th>{copy.audit}</th>
-                <th>{copy.remote}</th>
-                <th>{copy.actor}</th>
-                <th>{copy.seen}</th>
-                <th>{copy.commandError}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {commands.map((command) => (
-                <tr key={command.id}>
-                  <td>{commandStatusLabel(copy, commandAuditState(command.status, command.error))}</td>
-                  <td>{command.kind}{command.ssid ? ` · ${command.ssid}` : ""}{command.maxClients ? ` · ${command.maxClients}` : ""}{command.intervalSeconds ? ` · ${command.intervalSeconds}s` : ""}</td>
-                  <td>{command.actorLabel ?? command.createdBy}</td>
-                  <td>{gpsClock(command.createdAt)}</td>
-                  <td>{command.error ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function modeLabel(copy: GpsCopy, mode: "on" | "off" | "auto") {
-  if (mode === "on") return copy.modeOn;
-  if (mode === "auto") return copy.modeAuto;
-  return copy.modeOff;
-}
-
-function commandStatusLabel(copy: GpsCopy, state: GpsAuditState) {
-  if (state === "PENDING") return copy.commandPending;
-  if (state === "DELIVERED") return copy.commandDelivered;
-  if (state === "SUCCESS") return copy.commandApplied;
-  if (state === "EXPIRED") return copy.commandExpired;
-  if (state === "CANCELLED") return copy.commandCancelled;
-  return copy.commandFailed;
 }
 
 function emptyGpsSnapshot(): GpsLiveSnapshot {
@@ -530,37 +389,8 @@ function emptyGpsSnapshot(): GpsLiveSnapshot {
     rssi: null,
     operatorName: null,
     network: null,
-    uptimeSeconds: null,
-    simStatus: null,
-    lteRegistration: null,
-    pppStatus: null,
-    naptStatus: null,
-    ipAddress: null,
-    gnssResponse: null,
-    wifiPolicy: null,
-    apStatus: null,
-    wifiClients: null,
-    reportedMaxClients: null,
-    lastRecoveryReason: null,
-    lastModemRecoveryAt: null,
-    lastGnssRecoveryAt: null,
-    resetReason: null,
-    powerSource: null,
-    vehicleBatteryVoltage: null,
     accState: null,
     din1State: null,
-    manufacturer: "esp32",
-    powerMode: null,
-    batteryPercent: null,
-    wifiEnabled: null,
-    wifiShareCommand: null,
-    lowBatteryState: null,
-    lowBatteryGraceRemainingSeconds: null,
+    manufacturer: "teltonika",
   };
-}
-
-function credentialLabel(copy: GpsCopy, state: "active" | "revoked" | "missing") {
-  if (state === "active") return copy.credentialActive;
-  if (state === "revoked") return copy.credentialRevoked;
-  return copy.credentialMissing;
 }

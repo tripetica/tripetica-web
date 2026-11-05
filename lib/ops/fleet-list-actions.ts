@@ -62,7 +62,8 @@ export async function patchOpsDriverVehicleAction(input: {
   locale: string;
   partnerId: string;
   driverId: string;
-  vehicleId: string;
+  vehicleId?: string;
+  vehicleIds?: string[];
 }) {
   const actor = await requireOpsFleetManager();
   if (!actor) {
@@ -71,7 +72,8 @@ export async function patchOpsDriverVehicleAction(input: {
   const result = await setDriverListVehicle({
     partnerId: input.partnerId,
     driverId: input.driverId,
-    vehicleId: optionalId(input.vehicleId),
+    vehicleId: input.vehicleId === undefined ? undefined : optionalId(input.vehicleId),
+    vehicleIds: input.vehicleIds,
   });
   if (result.ok) {
     refreshFleet(localeFromInput(input.locale), input.partnerId);
@@ -125,7 +127,8 @@ export async function patchOpsVehicleDriverAction(input: {
   locale: string;
   partnerId: string;
   vehicleId: string;
-  driverId: string;
+  driverId?: string;
+  driverIds?: string[];
 }) {
   const actor = await requireOpsFleetManager();
   if (!actor) {
@@ -134,7 +137,8 @@ export async function patchOpsVehicleDriverAction(input: {
   const result = await setVehicleListDriver({
     partnerId: input.partnerId,
     vehicleId: input.vehicleId,
-    driverId: optionalId(input.driverId),
+    driverId: input.driverId === undefined ? undefined : optionalId(input.driverId),
+    driverIds: input.driverIds,
   });
   if (result.ok) {
     refreshFleet(localeFromInput(input.locale), input.partnerId);

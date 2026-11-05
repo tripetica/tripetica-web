@@ -35,8 +35,17 @@ async function matchingDrivers(actor: MobileActor) {
               COALESCE(dv.service_mobile_gps_enabled, FALSE) AS service_mobile_gps_enabled,
               dv.id AS vehicle_id, dv.plate, uc.short_name AS company_name
          FROM partner_drivers d
-         LEFT JOIN partner_fleet_defaults fd ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
-         LEFT JOIN partner_vehicles dv ON dv.id = fd.vehicle_id AND dv.deleted_at IS NULL AND dv.status = 'active'
+         LEFT JOIN LATERAL (
+           SELECT v.id, v.plate, v.uetds_company_id, v.service_mobile_gps_enabled
+             FROM partner_fleet_defaults fd
+             JOIN partner_vehicles v
+               ON v.id = fd.vehicle_id
+              AND v.deleted_at IS NULL
+              AND v.status = 'active'
+            WHERE fd.driver_id = d.id
+            ORDER BY v.service_mobile_gps_enabled DESC, fd.created_at, v.plate
+            LIMIT 1
+         ) dv ON TRUE
          LEFT JOIN uetds_companies uc ON uc.id = dv.uetds_company_id
         WHERE d.id = $1 AND d.partner_id = $2 AND d.deleted_at IS NULL`,
       [actor.driverId, actor.partnerId],
@@ -50,8 +59,17 @@ async function matchingDrivers(actor: MobileActor) {
             COALESCE(dv.service_mobile_gps_enabled, FALSE) AS service_mobile_gps_enabled,
             dv.id AS vehicle_id, dv.plate, uc.short_name AS company_name
        FROM partner_drivers d
-       LEFT JOIN partner_fleet_defaults fd ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
-       LEFT JOIN partner_vehicles dv ON dv.id = fd.vehicle_id AND dv.deleted_at IS NULL AND dv.status = 'active'
+       LEFT JOIN LATERAL (
+         SELECT v.id, v.plate, v.uetds_company_id, v.service_mobile_gps_enabled
+           FROM partner_fleet_defaults fd
+           JOIN partner_vehicles v
+             ON v.id = fd.vehicle_id
+            AND v.deleted_at IS NULL
+            AND v.status = 'active'
+          WHERE fd.driver_id = d.id
+          ORDER BY v.service_mobile_gps_enabled DESC, fd.created_at, v.plate
+          LIMIT 1
+       ) dv ON TRUE
        LEFT JOIN uetds_companies uc ON uc.id = dv.uetds_company_id
       WHERE d.partner_id = $1
         AND d.deleted_at IS NULL
@@ -485,10 +503,10 @@ export async function listMobileFleet(partnerId: string) {
             session.last_stream_at,
             position.accuracy_m::text AS accuracy_m
        FROM partner_drivers d
-       JOIN gps_mobile_positions position ON position.driver_id = d.id AND position.partner_id = d.partner_id
+       JOIN gps_mobile_positions position ON position.driver_id = d.id
        JOIN gps_mobile_sessions session ON session.id = position.session_id
        LEFT JOIN partner_vehicles vehicle ON vehicle.id = position.vehicle_id
-      WHERE d.partner_id = $1
+      WHERE partner_can_access_vehicle($1, vehicle.id)
         AND d.deleted_at IS NULL
         AND d.status = 'active'
         AND vehicle.service_mobile_gps_enabled
@@ -509,8 +527,9 @@ export async function listMobileFleet(partnerId: string) {
          SELECT position.driver_id, position.recorded_at, position.latitude, position.longitude, position.speed_mps,
                 row_number() OVER (PARTITION BY position.driver_id ORDER BY position.recorded_at DESC) AS n
            FROM gps_mobile_positions position
-          WHERE position.partner_id = $1
-            AND position.recorded_at > NOW() - INTERVAL '20 minutes'
+           JOIN partner_vehicle_access access
+             ON access.vehicle_id = position.vehicle_id AND access.partner_id = $1
+          WHERE position.recorded_at > NOW() - INTERVAL '20 minutes'
        ) recent
       WHERE n <= 40
       ORDER BY driver_id, recorded_at`,
@@ -568,12 +587,15 @@ export async function listMobileRoute(input: { sessionId: string; partnerId: str
     `SELECT position.id, position.recorded_at, position.received_at, position.latitude, position.longitude,
             position.speed_mps::text, position.speed_source, position.accuracy_m::text, position.heading_deg::text, vehicle.plate
        FROM gps_mobile_positions position
-       JOIN gps_mobile_sessions focus ON focus.id = $1 AND focus.partner_id = $2
+       JOIN gps_mobile_sessions focus ON focus.id = $1
        LEFT JOIN partner_vehicles vehicle ON vehicle.id = position.vehicle_id
-      WHERE position.partner_id = focus.partner_id
-        AND (
+      WHERE (
           (focus.vehicle_id IS NOT NULL AND position.vehicle_id = focus.vehicle_id)
           OR (focus.vehicle_id IS NULL AND position.driver_id = focus.driver_id)
+        )
+        AND (
+          (focus.vehicle_id IS NOT NULL AND partner_can_access_vehicle($2, focus.vehicle_id))
+          OR (focus.vehicle_id IS NULL AND focus.partner_id = $2)
         )
         AND position.recorded_at >= $3
         AND position.recorded_at <= $4
@@ -602,8 +624,15 @@ export async function listMobileSessionEvents(sessionId: string, partnerId: stri
   const result = await query<{ id: string; kind: string; created_at: Date }>(
     `SELECT id, kind, created_at
        FROM gps_mobile_events
-      WHERE partner_id = $2
-        AND driver_id = (SELECT driver_id FROM gps_mobile_sessions WHERE id = $1 AND partner_id = $2)
+      WHERE driver_id = (
+          SELECT driver_id
+            FROM gps_mobile_sessions
+           WHERE id = $1
+             AND (
+               (vehicle_id IS NOT NULL AND partner_can_access_vehicle($2, vehicle_id))
+               OR (vehicle_id IS NULL AND partner_id = $2)
+             )
+        )
         AND ($3::timestamptz IS NULL OR created_at >= $3)
         AND ($4::timestamptz IS NULL OR created_at < $4)
       ORDER BY created_at DESC
@@ -617,7 +646,8 @@ export async function listMobileEvents(driverId: string, partnerId: string) {
   const result = await query<{ kind: string; created_at: Date }>(
     `SELECT kind, created_at
        FROM gps_mobile_events
-      WHERE driver_id = $1 AND partner_id = $2
+      WHERE driver_id = $1
+        AND partner_can_access_driver($2, driver_id)
       ORDER BY created_at DESC
       LIMIT 100`,
     [driverId, partnerId],

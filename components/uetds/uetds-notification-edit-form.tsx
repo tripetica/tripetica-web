@@ -19,7 +19,9 @@ import {
   allowedAuthorityIds,
   applyDriverVehicleDefault,
   authorityForDriverChange,
+  driversLinkedToVehicle,
   showGoldAuthorityField,
+  singleLinkedVehicleId,
   type AuthorityChoice,
 } from "@/lib/partner/fleet-pairing-rules";
 import {
@@ -209,9 +211,17 @@ export function UetdsNotificationEditForm({
       draft.endTime &&
       !isUetdsEndAfterStart(draft.startDate, draft.startTime, draft.endDate, draft.endTime),
   );
+  const visibleDrivers = useMemo(() => {
+    const linked = driversLinkedToVehicle(drivers, draft.vehicleId);
+    if (draft.driverId && !linked.some((item) => item.id === draft.driverId)) {
+      const current = drivers.find((item) => item.id === draft.driverId);
+      return current ? [current, ...linked] : linked;
+    }
+    return linked;
+  }, [drivers, draft.driverId, draft.vehicleId]);
   const driverOptions = useMemo(
-    () => drivers.map((item) => ({ value: item.id, label: item.label })),
-    [drivers],
+    () => visibleDrivers.map((item) => ({ value: item.id, label: item.label })),
+    [visibleDrivers],
   );
   const vehicleOptions = useMemo(
     () => vehicles.map((item) => ({ value: item.id, label: item.label })),
@@ -566,7 +576,10 @@ export function UetdsNotificationEditForm({
                   applyDriverVehicleDefault(
                     current,
                     value,
-                    nextDriver?.defaultVehicleId,
+                    singleLinkedVehicleId(
+                      nextDriver?.vehicleIds ?? (nextDriver?.defaultVehicleId ? [nextDriver.defaultVehicleId] : []),
+                      vehicles.map((item) => item.id),
+                    ),
                     vehicles.map((item) => item.id),
                   ),
                 );
@@ -592,7 +605,13 @@ export function UetdsNotificationEditForm({
               placeholder={copy.selectVehicle}
               emptyLabel={copy.noVehicles}
               disabled={lockDriver && vehicles.length <= 1}
-              onChange={(value) => setDraft((current) => ({ ...current, vehicleId: value }))}
+              onChange={(value) =>
+                setDraft((current) => {
+                  const linked = driversLinkedToVehicle(drivers, value);
+                  const driverId = !value || linked.some((item) => item.id === current.driverId) ? current.driverId : "";
+                  return { ...current, vehicleId: value, driverId };
+                })
+              }
             />
           </label>
           {goldAuthority ? (

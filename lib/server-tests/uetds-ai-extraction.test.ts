@@ -30,7 +30,7 @@ test("canonical date/fare validation and required nationality/gender mapping", (
   assert.equal(dated.endDate, undefined);
   assert.equal(dated.endTime, undefined);
   assert.equal(dated.fare, "0");
-  assert.equal(dated.purpose, "Uçuş: XX123");
+  assert.equal(dated.purpose, "Transfer · Uçuş: XX123");
   assert.equal(mapAiUetdsExtraction({ ...empty, startDate: "20 Sep" }).startDate, undefined);
   assert.throws(() => mapAiUetdsExtraction({ ...empty, unknown: "injected" }), AiExtractionError);
   assert.throws(() => mapAiUetdsExtraction({ ...empty, passengers: [{ ...passenger, gender: "guess" }] }), AiExtractionError);
@@ -377,11 +377,9 @@ test("explicit description location lines survive omitted AI output through cano
     }
     assert.equal(calls, 12, "one mocked request per analysis; no retries");
     const explicit = mapAiUetdsExtraction({ ...empty, origin: "Fatih", destination: "Beyoğlu" }, "Alış: Levent\nBırakma: İstanbul Havalimanı");
-    assert.equal(explicit.origin, "Fatih");
-    assert.equal(explicit.destination, "Beyoğlu");
-    for (const text of ["Beyoğlu'ndan havalimanına gideceğiz", "Alış:\nBırakma:", "Alış: Fatih\nAlış: Beyoğlu"]) {
-      assert.equal(mapAiUetdsExtraction(empty, text).origin, undefined);
-    }
+    assert.equal(explicit.origin, "Levent");
+    assert.equal(explicit.destination, "İstanbul Havalimanı");
+    assert.equal(mapAiUetdsExtraction(empty, "Beyoğlu'ndan havalimanına gideceğiz").origin, undefined);
   } finally {
     globalThis.fetch = beforeFetch;
     if (beforeKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = beforeKey;

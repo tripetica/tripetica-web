@@ -72,10 +72,14 @@ export async function loadOpsMobileHistory(input: {
 async function listDefaultDriverNames() {
   const result = await query<{ vehicle_id: string; driver_name: string }>(
     `SELECT defaults.vehicle_id,
-            trim(driver.first_name || ' ' || driver.last_name) AS driver_name
+            string_agg(
+              trim(driver.first_name || ' ' || driver.last_name),
+              ', ' ORDER BY defaults.created_at, driver.last_name, driver.id
+            ) AS driver_name
        FROM partner_fleet_defaults defaults
        JOIN partner_drivers driver ON driver.id = defaults.driver_id
-      WHERE driver.deleted_at IS NULL`,
+      WHERE driver.deleted_at IS NULL
+      GROUP BY defaults.vehicle_id`,
   );
   return new Map(result.rows.map((row) => [row.vehicle_id, row.driver_name]));
 }

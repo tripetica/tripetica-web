@@ -30,6 +30,11 @@ import {
 import { type UetdsDriverSubscriptionState } from "@/lib/uetds/driver-subscription";
 import { AtsMinistrySourceField } from "@/components/ops/ats-ministry-source-field";
 import { planAtsSourceSave, type AtsMinistrySource, type AtsSourceAudit } from "@/lib/gps/ats-source";
+import { VehiclePartnerAccessField } from "@/components/ops/vehicle-partner-access-field";
+import {
+  type VehiclePartnerAccess,
+  type VehiclePartnerOption,
+} from "@/lib/partner/vehicle-access";
 
 type PartnerVehicleFormProps = {
   locale: Locale;
@@ -45,6 +50,8 @@ type PartnerVehicleFormProps = {
   atsAudits: readonly AtsSourceAudit[];
   hasActiveAtsTrip: boolean;
   gpsAtsSelectable: boolean;
+  partnerOptions?: readonly VehiclePartnerOption[];
+  partnerAccess?: readonly VehiclePartnerAccess[];
 };
 
 function fleetError(error: OpsFleetFormState["error"], copy: OpsCopy, fallback: string) {
@@ -117,6 +124,8 @@ function PartnerVehicleFormEditor({
   atsAudits,
   hasActiveAtsTrip,
   gpsAtsSelectable,
+  partnerOptions,
+  partnerAccess,
 }: PartnerVehicleFormProps) {
   const initial = draftFromVehicle(vehicle);
   const [values, setValues] = useState(initial);
@@ -406,6 +415,27 @@ function PartnerVehicleFormEditor({
           ) : null}
         </div>
       </form>
+
+      {partnerOptions && partnerAccess ? (
+        <VehiclePartnerAccessField
+          key={partnerAccess.map((access) => access.id).sort().join(":")}
+          locale={locale}
+          vehicleId={vehicle.id}
+          options={partnerOptions}
+          initialAccess={partnerAccess}
+          canManage={canManage}
+          labels={{
+            title: copy.authorizedPartners,
+            search: copy.authorizedPartnersSearch,
+            empty: copy.authorizedPartnersEmpty,
+            save: copy.save,
+            saving: copy.saving,
+            saved: copy.authorizedPartnersSaved,
+            failed: copy.authorizedPartnersFailed,
+            requiresPartner: copy.authorizedPartnersRequired,
+          }}
+        />
+      ) : null}
 
       <form action={deleteAction} id="partner-vehicle-delete-form" hidden>
         <input type="hidden" name="locale" value={locale} />

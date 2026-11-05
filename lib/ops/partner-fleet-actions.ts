@@ -18,11 +18,11 @@ import {
   deletePartnerDriver,
   deletePartnerVehicle,
   getPartnerDriver,
-  getPartnerVehicle,
   rejectPartnerVehicle,
   updatePartnerDriver,
   updatePartnerVehicle,
 } from "@/lib/partner/fleet";
+import { getOpsVehicle } from "@/lib/ops/vehicles";
 import {
   isUetdsSubscriptionCurrency,
   parseSubscriptionPeriodsFromForm,
@@ -277,7 +277,7 @@ export async function updateOpsPartnerVehicleAction(
   }
   const { partnerId, recordId } = idsFromForm(formData);
   try {
-    const current = await getPartnerVehicle(partnerId, recordId);
+    const current = await getOpsVehicle(recordId);
     if (!current) {
       return { error: "not-found", ok: false };
     }
@@ -402,7 +402,7 @@ export async function updateOpsPartnerVehicleAction(
         if (!moved.ok) return { error: "failed", ok: false };
       }
     }
-    const saved = await getPartnerVehicle(partnerId, recordId);
+    const saved = await getOpsVehicle(recordId);
     if (!saved) {
       logFleetFailure("update-vehicle", "verify-missing", { partnerId, recordId });
       return { error: "failed", ok: false };
@@ -456,7 +456,7 @@ async function changeVehicleStatus(
       logFleetFailure(`${mode}-vehicle`, result.error, { partnerId, recordId });
       return { error: result.error, ok: false };
     }
-    const saved = await getPartnerVehicle(partnerId, recordId);
+    const saved = await getOpsVehicle(recordId);
     const expected = mode === "activate" ? "active" : "inactive";
     if (!saved || saved.status !== expected) {
       logFleetFailure(`${mode}-vehicle`, "status-not-updated", {

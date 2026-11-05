@@ -13,7 +13,7 @@ import {
   updatePartnerDriver,
 } from "@/lib/partner/fleet";
 import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
-import { saveDriverAuthority, saveDriverVehiclePair } from "@/lib/partner/fleet-pairing";
+import { saveDriverAuthority, saveDriverVehiclePair, saveDriverVehicleSet } from "@/lib/partner/fleet-pairing";
 import { firstPartnerTabPath, partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
 
@@ -73,11 +73,22 @@ async function applyDriverLinks(
   driverId: string,
   companyId: string | null,
 ): Promise<PartnerDriverFormState | null> {
-  const vehicleId = submittedId(formData, "defaultVehicleId");
-  if (vehicleId !== undefined) {
-    const paired = await saveDriverVehiclePair({ partnerId, driverId, vehicleId });
+  if (formData.has("vehicleLinksPresent")) {
+    const paired = await saveDriverVehicleSet({
+      partnerId,
+      driverId,
+      vehicleIds: formData.getAll("defaultVehicleId").map((value) => String(value).trim()).filter(Boolean),
+    });
     if (!paired.ok) {
       return { error: "invalid-fleet-pair", ok: false };
+    }
+  } else {
+    const vehicleId = submittedId(formData, "defaultVehicleId");
+    if (vehicleId !== undefined) {
+      const paired = await saveDriverVehiclePair({ partnerId, driverId, vehicleId });
+      if (!paired.ok) {
+        return { error: "invalid-fleet-pair", ok: false };
+      }
     }
   }
   const authorityId = submittedId(formData, "defaultAuthorityId");

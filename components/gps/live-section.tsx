@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GpsLiveMap, type GpsFleetMapPin } from "@/components/gps/live-map";
 import { gpsFleetHistoryReady, gpsFleetItemKey, gpsFleetPoint, gpsMarkerIdentity, mergeGpsFleetIdentity, readGpsFleet, type GpsFleetVehicle } from "@/lib/gps/fleet";
@@ -32,16 +32,12 @@ import { type GpsAtsPanel as GpsAtsPanelState } from "@/lib/gps/ats-panel-state"
 import { GpsMaintenancePanel } from "@/components/gps/maintenance-section";
 import { GpsSectionToggle } from "@/components/gps/section-toggle";
 import { type PanelLocale } from "@/lib/i18n/config";
-import { GpsWifiShareSwitch } from "@/components/gps/wifi-share-switch";
 import { GpsImmobilizerSwitch } from "@/components/gps/immobilizer-switch";
 import { GpsDriveReport } from "@/components/gps/drive-report";
 import { type DriveReport, type DriveVehicleInfo } from "@/lib/gps/drive";
 import { GpsPositionHistory, type GpsHistoryModel } from "@/components/gps/position-history";
 import { GpsVehicleIdentity } from "@/components/gps/vehicle-identity";
 import { GpsShareHistory } from "@/components/gps/share-history";
-import { GpsWifiFleetList, GpsWifiPanel, mergeWifiLive, type GpsWifiPanelDevice } from "@/components/gps/wifi-panel";
-import { GpsCameraLive } from "@/components/gps/camera-live";
-import { cameraIdlePhase } from "@/lib/gps/camera";
 import { type ShareHistoryPreset } from "@/lib/gps/share-history";
 import { type ImmobilizerPanel } from "@/lib/teltonika/immobilizer";
 import { type DriveGreenView } from "@/lib/teltonika/green-driving";
@@ -75,8 +71,6 @@ export function GpsLiveSection({
   status,
   company,
   partnerLabel,
-  wifiMode,
-  canToggleWifi,
   showDeviceList,
   viewerId,
   historyQuery,
@@ -84,8 +78,6 @@ export function GpsLiveSection({
   drive = null,
   driveVehicle = null,
   green = null,
-  wifi,
-  camera,
   awaitingPick = false,
   historyBlocked,
   fleetVehicles,
@@ -94,21 +86,17 @@ export function GpsLiveSection({
   rangeSearch = "",
   ats = null,
   canControlAts = false,
-  deviceControls = true,
   immobilizer = null,
   shareEvents = [],
   sharePreset = "week",
   shareFromLocal = "",
   shareToLocal = "",
-  wifiDevice = null,
-  cameraDevice = null,
   fleetUrl = "/api/gps/fleet",
   liveUrl,
   maintenanceUrl,
   sections = allGpsSections,
   opsFilter = false,
   locale = "tr",
-  initialTab = "gps",
 }: {
   copy: GpsCopy;
   listPath: string;
@@ -122,8 +110,6 @@ export function GpsLiveSection({
   status: "active" | "disabled";
   company: string | null;
   partnerLabel: string | null;
-  wifiMode: "on" | "off" | "auto";
-  canToggleWifi: boolean;
   showDeviceList: boolean;
   viewerId: string;
   historyQuery: string;
@@ -131,8 +117,6 @@ export function GpsLiveSection({
   drive?: DriveReport | null;
   driveVehicle?: DriveVehicleInfo | null;
   green?: DriveGreenView | null;
-  wifi: ReactNode;
-  camera: ReactNode;
   awaitingPick?: boolean;
   historyBlocked?: string;
   fleetVehicles?: GpsFleetVehicle[];
@@ -141,29 +125,17 @@ export function GpsLiveSection({
   rangeSearch?: string;
   ats?: GpsAtsPanelState | null;
   canControlAts?: boolean;
-  deviceControls?: boolean;
   immobilizer?: ImmobilizerPanel | null;
   shareEvents?: { id: string; kind: string; createdAt: string }[];
   sharePreset?: ShareHistoryPreset;
   shareFromLocal?: string;
   shareToLocal?: string;
-  wifiDevice?: GpsWifiPanelDevice | null;
-  cameraDevice?: {
-    deviceId: string;
-    surface: "ops" | "partner";
-    lowBatteryState: GpsLiveSnapshot["lowBatteryState"];
-    batteryPercent: number | null;
-    lastHeartbeatAt: string | null;
-    cameraAvailable: boolean | null;
-    cameraReady: boolean | null;
-  } | null;
   fleetUrl?: string;
   liveUrl?: string;
   maintenanceUrl?: string;
   sections?: GpsSectionVisibility;
   opsFilter?: boolean;
   locale?: PanelLocale;
-  initialTab?: "gps" | "wifi" | "camera";
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
@@ -189,8 +161,6 @@ export function GpsLiveSection({
     setSnapshot(initial);
   }
   const [clock, setClock] = useState(() => Date.now());
-  const [tab, setTab] = useState<"gps" | "wifi" | "camera">(initialTab);
-  const visibleTab = deviceControls ? tab : "gps";
   const [prefs, setPrefs] = useState<GpsPopupPrefs>(GPS_POPUP_DEFAULTS);
   const [labels, setLabels] = useState<GpsMapLabelPrefs>(GPS_MAP_LABEL_DEFAULTS);
   const presence = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
@@ -202,14 +172,12 @@ export function GpsLiveSection({
     ? { latitude: motionView.latitude, longitude: motionView.longitude }
     : raw;
   const markerState = mapMarkerState({
-    manufacturer: snapshot.manufacturer,
     receivedAt: snapshot.lastHeartbeatAt,
     nowMs: clock,
     motion: motionView?.kind ?? "unknown",
     din1: snapshot.din1State,
     speedMps: snapshot.speedMps,
   });
-  const signalCurrent = markerCurrent(markerState, presence);
   const liveSpeed = motionView?.liveSpeedMps ?? null;
   const mobileSpeed = mobileDisplaySpeedMps({
     motion: motionView?.kind ?? "unknown",
@@ -342,7 +310,6 @@ export function GpsLiveSection({
     const longitude = snapshot.longitude;
     setPins((current) => current?.map((pin) => {
       if (pin.id !== deviceId) return pin;
-      const presenceNow = gpsPresence(snapshot.lastHeartbeatAt, new Date(clock));
       const view = gpsMotionView(motionFixes(snapshot.recent, snapshot), clock);
       const latitudeNow = view?.latitude ?? latitude;
       const longitudeNow = view?.longitude ?? longitude;
@@ -365,7 +332,6 @@ export function GpsLiveSection({
           coordinates: `${latitudeNow.toFixed(6)}, ${longitudeNow.toFixed(6)}`,
           headingDeg: snapshot.headingDeg,
           state: mapMarkerState({
-            manufacturer: snapshot.manufacturer,
             receivedAt: snapshot.lastHeartbeatAt,
             nowMs: clock,
             motion: view?.kind ?? "unknown",
@@ -470,7 +436,6 @@ export function GpsLiveSection({
   const shownReceived = selectedFleet?.receivedAt ?? selectedFleet?.lastHeartbeatAt ?? snapshot.lastHeartbeatAt;
   const shownMarker = selectedFleet
     ? mapMarkerState({
-      manufacturer: selectedFleet.manufacturer,
       source: selectedFleet.source,
       receivedAt: shownReceived,
       nowMs: clock,
@@ -494,14 +459,7 @@ export function GpsLiveSection({
           <a href={listPath}>{copy.back}</a>
         </header>
       ) : null}
-      {deviceControls ? (
-        <div className="gps-tabs" role="tablist" aria-label={copy.title}>
-          <button type="button" role="tab" aria-selected={visibleTab === "gps"} onClick={() => setTab("gps")}>{copy.tabGps}</button>
-          <button type="button" role="tab" aria-selected={visibleTab === "wifi"} onClick={() => setTab("wifi")}>{copy.tabWifi}</button>
-          <button type="button" role="tab" aria-selected={visibleTab === "camera"} onClick={() => setTab("camera")}>{copy.tabCamera}</button>
-        </div>
-      ) : null}
-      <div className="gps-stack" hidden={visibleTab !== "gps"}>
+      <div className="gps-stack">
       {opsFilter ? (
         <OpsFleetFilter
           copy={copy}
@@ -559,10 +517,11 @@ export function GpsLiveSection({
           vehicleId={deviceId}
           live={fleetVehicles ? null : live}
           track={[]}
-          active={visibleTab === "gps" && panelVisible}
+          active={panelVisible}
           prefs={prefs}
           labels={labels}
           addressPending={copy.addressPending}
+          unavailableLabel={copy.mapUnavailable}
           pins={pins}
           selectedVehicleId={selectionHidden ? null : (activeId ?? selectedVehicleId)}
           onVehicleSelect={fleet ? chooseVehicle : onVehicleSelect}
@@ -657,22 +616,7 @@ export function GpsLiveSection({
       ) : null}
       {sections.device && selectedFleet?.source !== "mobile" ? (
       <GpsSectionToggle showLabel={copy.showDevice} hideLabel={copy.hideDevice} blockedMessage={picking ? copy.devicePick : undefined}>
-        <div className="gps-device-head">
-          <h2>{copy.deviceInfo}</h2>
-          {surface === "partner" ? null : (
-          <span className="gps-device-battery">
-            <span className="gps-device-sep" aria-hidden="true">·</span>
-            {deviceLoading ? <span>{copy.deviceLoading}</span> : snapshot.batteryPercent === null ? (
-              <span aria-label={copy.batteryLevel}>—</span>
-            ) : (
-              <span className={snapshot.batteryPercent < 20 ? "gps-battery is-low" : "gps-battery"} aria-label={`${copy.batteryLevel} %${snapshot.batteryPercent}`}>
-                <BatteryIcon />
-                {` %${snapshot.batteryPercent}`}
-              </span>
-            )}
-          </span>
-          )}
-        </div>
+        <h2>{copy.deviceInfo}</h2>
         {surface === "partner" && !picking && selectedFleet ? <GpsVehicleIdentity plate={selectedFleet.plate} brand={selectedFleet.brand} model={selectedFleet.model} /> : null}
         {surface === "partner" ? (
           <dl className="gps-facts gps-partner-device-facts">
@@ -685,7 +629,7 @@ export function GpsLiveSection({
         ) : deviceLoading ? <p className="gps-inline-note">{copy.deviceLoading}</p> : (
           <dl className="gps-facts">
             <div><dt>{copy.deviceId}</dt><dd>{deviceCode}</dd></div>
-            {selectedFleet?.id === deviceId && selectedFleet.manufacturer ? <div><dt>{copy.manufacturer}</dt><dd>{selectedFleet.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</dd></div> : null}
+            {selectedFleet?.id === deviceId ? <div><dt>{copy.manufacturer}</dt><dd>{copy.receiverTeltonika}</dd></div> : null}
             {selectedFleet?.id === deviceId && selectedFleet.trackerModel ? <div><dt>{copy.trackerModel}</dt><dd>{selectedFleet.trackerModel.toUpperCase()}</dd></div> : null}
             <div><dt>{copy.imei}</dt><dd>{imei ?? copy.unavailable}</dd></div>
             <div><dt>{copy.firmware}</dt><dd>{snapshot.firmware ?? copy.unavailable}</dd></div>
@@ -720,92 +664,18 @@ export function GpsLiveSection({
           <h2>{copy.technical}</h2>
           <dl className="gps-facts">
             <Tech copy={copy} label={copy.heartbeat} value={gpsClock(snapshot.lastHeartbeatAt)} />
-            <Tech copy={copy} label={copy.uptime} value={snapshot.uptimeSeconds === null ? null : `${snapshot.uptimeSeconds}s`} />
             <Tech copy={copy} label={copy.firmware} value={snapshot.firmware} />
-            <Tech copy={copy} label={copy.sim} value={snapshot.simStatus} />
-            <Tech copy={copy} label={copy.lteReg} value={snapshot.lteRegistration} />
             <Tech copy={copy} label="RSSI" value={snapshot.rssi === null ? null : `${snapshot.rssi} dBm`} />
             <Tech copy={copy} label={copy.operator} value={snapshot.operatorName} />
-            <Tech copy={copy} label={copy.ppp} value={snapshot.pppStatus} />
-            <Tech copy={copy} label={copy.napt} value={snapshot.naptStatus} />
-            <Tech copy={copy} label={copy.ip} value={snapshot.ipAddress} />
-            <Tech copy={copy} label={copy.gnssResponse} value={snapshot.gnssResponse} />
             <Tech copy={copy} label={copy.gpsFix} value={snapshot.gnssFix === null ? null : snapshot.gnssFix ? copy.fixYes : copy.fixNo} />
             <Tech copy={copy} label={copy.satellites} value={snapshot.satellites === null ? null : String(snapshot.satellites)} />
             <Tech copy={copy} label="latitude" value={live ? String(live.latitude) : null} />
             <Tech copy={copy} label="longitude" value={live ? String(live.longitude) : null} />
-            {deviceControls ? (
-              <>
-                <Tech copy={copy} label={copy.wifiPolicy} value={snapshot.wifiPolicy ?? wifiMode} />
-                <Tech copy={copy} label={copy.apStatus} value={snapshot.apStatus} />
-                <Tech copy={copy} label={copy.clients} value={snapshot.wifiClients === null ? null : String(snapshot.wifiClients)} />
-                <Tech copy={copy} label={copy.maxClients} value={snapshot.reportedMaxClients === null ? null : String(snapshot.reportedMaxClients)} />
-              </>
-            ) : null}
-            <Tech copy={copy} label={copy.recovery} value={snapshot.lastRecoveryReason} />
-            <Tech copy={copy} label={copy.modemRecovery} value={snapshot.lastModemRecoveryAt ? gpsClock(snapshot.lastModemRecoveryAt) : null} />
-            <Tech copy={copy} label={copy.gnssRecovery} value={snapshot.lastGnssRecoveryAt ? gpsClock(snapshot.lastGnssRecoveryAt) : null} />
-            <Tech copy={copy} label={copy.resetReason} value={snapshot.resetReason} />
-            <Tech copy={copy} label={copy.powerSource} value={snapshot.powerSource} />
-            <Tech copy={copy} label={copy.battery} value={snapshot.vehicleBatteryVoltage === null ? null : String(snapshot.vehicleBatteryVoltage)} />
             <Tech copy={copy} label={copy.acc} value={snapshot.accState} />
-            <Tech copy={copy} label={copy.powerMode} value={snapshot.powerMode} />
           </dl>
         </section>
       ) : null}
       </div>
-      {deviceControls && visibleTab === "wifi" ? <div>
-        <section className="gps-section">
-          <div className="gps-wifi-head">
-            <h2>{copy.wifi}</h2>
-            {canToggleWifi ? (
-              <GpsWifiShareSwitch
-                copy={copy}
-                deviceId={deviceId}
-                surface={surface}
-                enabled={snapshot.wifiEnabled}
-                batteryPercent={snapshot.batteryPercent}
-                lowBatteryState={snapshot.lowBatteryState}
-                shareCommand={snapshot.wifiShareCommand}
-              />
-            ) : null}
-          </div>
-          {wifiDevice ? (
-            <GpsWifiPanel
-              copy={copy}
-              device={mergeWifiLive(wifiDevice, snapshot)}
-              presence={presence}
-              clockMs={clock}
-            />
-          ) : wifi ?? (
-            <GpsWifiFleetList
-              copy={copy}
-              items={fleet ?? fleetVehicles ?? []}
-              mobileSelected={selectedFleet?.source === "mobile"}
-              listPath={listPath}
-              rangeSearch={rangeSearch}
-            />
-          )}
-        </section>
-      </div> : null}
-      {deviceControls && visibleTab === "camera" ? (
-        <div>
-          {cameraDevice ? (
-            <GpsCameraLive
-              copy={copy}
-              deviceId={cameraDevice.deviceId}
-              surface={cameraDevice.surface}
-              initialLowBatteryState={cameraDevice.lowBatteryState}
-              initialBatteryPercent={cameraDevice.batteryPercent}
-              initialPhase={cameraIdlePhase({
-                presence: gpsPresence(cameraDevice.lastHeartbeatAt, new Date(clock)),
-                cameraAvailable: cameraDevice.cameraAvailable,
-                cameraReady: cameraDevice.cameraReady,
-              })}
-            />
-          ) : camera}
-        </div>
-      ) : null}
     </>
   );
 }
@@ -844,7 +714,6 @@ function markerCurrent(state: string, presence: string) {
 }
 
 function mapMarkerState(input: {
-  manufacturer?: "esp32" | "teltonika" | null;
   source?: "device" | "mobile";
   receivedAt: string | null;
   nowMs: number;
@@ -852,7 +721,7 @@ function mapMarkerState(input: {
   din1?: "on" | "off" | null;
   speedMps?: number | null;
 }) {
-  if (input.manufacturer === "teltonika" && input.source !== "mobile") {
+  if (input.source !== "mobile") {
     return teltonikaMarkerState({
       receivedAt: input.receivedAt,
       nowMs: input.nowMs,
@@ -885,7 +754,6 @@ function fleetPin(vehicle: GpsFleetVehicle, unassigned: string, now: Date): GpsF
     ? { latitude: view.latitude, longitude: view.longitude }
     : stored;
   if (!point) return null;
-  const presence = gpsPresence(vehicle.lastHeartbeatAt, now);
   return {
     id: vehicle.id,
     markerKey: gpsFleetItemKey(vehicle),
@@ -908,7 +776,6 @@ function fleetPin(vehicle: GpsFleetVehicle, unassigned: string, now: Date): GpsF
       coordinates: `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`,
       headingDeg: vehicle.headingDeg,
       state: mapMarkerState({
-        manufacturer: vehicle.manufacturer,
         source: vehicle.source,
         receivedAt: vehicle.receivedAt ?? vehicle.lastHeartbeatAt,
         nowMs: now.getTime(),
@@ -918,16 +785,6 @@ function fleetPin(vehicle: GpsFleetVehicle, unassigned: string, now: Date): GpsF
       }),
     },
   };
-}
-
-function BatteryIcon() {
-  return (
-    <svg className="gps-battery-icon" viewBox="0 0 24 14" aria-hidden="true">
-      <rect x="0.8" y="0.8" width="19.2" height="12.4" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="21" y="4.2" width="2.2" height="5.6" rx="0.6" fill="currentColor" />
-      <rect x="3" y="3" width="14.6" height="8" rx="1" fill="currentColor" />
-    </svg>
-  );
 }
 
 function Tech({ copy, label, value }: { copy: GpsCopy; label: string; value: string | null }) {

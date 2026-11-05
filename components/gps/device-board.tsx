@@ -31,9 +31,7 @@ export function GpsDeviceBoard({
   const [partnerId, setPartnerId] = useState("");
   const [query, setQuery] = useState("");
   const [presence, setPresence] = useState("");
-  const [wifi, setWifi] = useState("");
   const [fix, setFix] = useState("");
-  const [manufacturer, setManufacturer] = useState("");
   const [model, setModel] = useState("");
   const [installation, setInstallation] = useState("");
   const [now] = useState(() => Date.now());
@@ -51,15 +49,13 @@ export function GpsDeviceBoard({
       }
       const state = gpsPresence(device.lastHeartbeatAt, new Date(now));
       if (presence && state !== presence) return false;
-      if (wifi && device.wifiMode !== wifi) return false;
       if (fix === "yes" && device.gnssFix !== true) return false;
       if (fix === "no" && device.gnssFix === true) return false;
-      if (manufacturer && device.manufacturer !== manufacturer) return false;
       if (model && device.trackerModel !== model) return false;
       if (installation && device.installationStatus !== installation) return false;
       return true;
     });
-  }, [devices, fix, installation, manufacturer, model, now, partnerId, presence, query, surface, wifi]);
+  }, [devices, fix, installation, model, now, partnerId, presence, query, surface]);
   const selection = useRowSelection(
     surface === "ops" ? visible.map((device) => device.id) : [],
   );
@@ -111,23 +107,6 @@ export function GpsDeviceBoard({
             </select>
           </label>
           <label>
-            <span>{copy.wifiFilter}</span>
-            <select value={wifi} onChange={(event) => setWifi(event.target.value)}>
-              <option value="">{copy.all}</option>
-              <option value="on">{copy.modeOn}</option>
-              <option value="off">{copy.modeOff}</option>
-              <option value="auto">{copy.modeAuto}</option>
-            </select>
-          </label>
-          <label>
-            <span>{copy.manufacturer}</span>
-            <select value={manufacturer} onChange={(event) => setManufacturer(event.target.value)}>
-              <option value="">{copy.all}</option>
-              <option value="teltonika">{copy.receiverTeltonika}</option>
-              <option value="esp32">{copy.receiverEsp32}</option>
-            </select>
-          </label>
-          <label>
             <span>{copy.trackerModel}</span>
             <select value={model} onChange={(event) => setModel(event.target.value)}>
               <option value="">{copy.all}</option>
@@ -169,7 +148,6 @@ export function GpsDeviceBoard({
                     />
                   </label>
                 </th>
-                <th>{copy.manufacturer}</th>
                 <th>{copy.trackerModel}</th>
                 <th>{copy.deviceId}</th>
                 <th>{copy.imei}</th>
@@ -207,7 +185,6 @@ export function GpsDeviceBoard({
                         />
                       </label>
                     </td>
-                    <td>{device.manufacturer === "teltonika" ? copy.receiverTeltonika : copy.receiverEsp32}</td>
                     <td>{modelText(device.trackerModel, device.linkTechnology)}</td>
                     <td>{device.deviceCode}</td>
                     <td>{device.imei ?? "—"}</td>
@@ -241,12 +218,10 @@ export function GpsDeviceBoard({
                 <p className="gps-card-id">{device.deviceCode}</p>
                 <dl>
                   <div><dt>{copy.gpsFix}</dt><dd>{device.gnssFix ? copy.fixYes : copy.fixNo}</dd></div>
-                  <div><dt>{copy.wifi}</dt><dd>{modeLabel(copy, device.wifiMode)}</dd></div>
                   <div><dt>{copy.lte}</dt><dd>{device.network ?? copy.unavailable}</dd></div>
                   <div><dt>{copy.signal}</dt><dd>{device.rssi === null ? copy.unavailable : `${device.rssi} dBm`}</dd></div>
                   <div><dt>{copy.gnssTime}</dt><dd>{gpsClock(device.recordedAt)}</dd></div>
                   <div><dt>{copy.seen}</dt><dd>{gpsClock(device.lastHeartbeatAt)}</dd></div>
-                  <div><dt>{copy.clients}</dt><dd>{device.wifiClients ?? 0}/{device.wifiMaxClients}</dd></div>
                   <div><dt>{copy.speed}</dt><dd>{gpsSpeed(device.speedMps)}</dd></div>
                 </dl>
               </a>
@@ -263,14 +238,7 @@ function coordinateText(latitude: number | null, longitude: number | null) {
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
-function modelText(model: "fmb920" | "fmc920" | null, link: "2g" | "4g" | null) {
+function modelText(model: "fmb920" | "fmc920", link: "2g" | "4g") {
   if (model === "fmb920") return link === "2g" ? "FMB920 · 2G" : "FMB920";
   if (model === "fmc920") return link === "4g" ? "FMC920 · 4G" : "FMC920";
-  return "—";
-}
-
-function modeLabel(copy: GpsCopy, mode: "on" | "off" | "auto") {
-  if (mode === "on") return copy.modeOn;
-  if (mode === "auto") return copy.modeAuto;
-  return copy.modeOff;
 }

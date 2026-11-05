@@ -39,6 +39,7 @@ export type PartnerActor = {
   isPrimaryPartner: boolean;
   isOwner: boolean;
   tabs: import("@/lib/partner/access").PartnerTab[];
+  deniedTabs: import("@/lib/partner/access").PartnerTab[];
   mustChangePassword: boolean;
 };
 
@@ -57,6 +58,7 @@ type SessionRow = {
   is_primary_partner: boolean;
   is_owner: boolean;
   tabs: string[] | null;
+  denied_tabs: string[] | null;
 };
 
 export function hashPartnerSessionToken(token: string) {
@@ -181,7 +183,12 @@ export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
           SELECT array_agg(g.tab)
             FROM partner_user_grants g
            WHERE g.user_id = u.id
-        ), '{}') AS tabs
+        ), '{}') AS tabs,
+        COALESCE((
+          SELECT array_agg(d.tab)
+            FROM partner_menu_denials d
+           WHERE d.partner_id = p.id
+        ), '{}') AS denied_tabs
      FROM partner_sessions s
      JOIN partner_users u ON u.id = s.user_id
      JOIN partners p ON p.id = u.partner_id
@@ -224,6 +231,9 @@ export const getPartnerActor = cache(async (): Promise<PartnerActor | null> => {
     isPrimaryPartner: row.is_primary_partner,
     isOwner: row.is_owner,
     tabs: (row.tabs ?? []).filter((tab): tab is import("@/lib/partner/access").PartnerTab =>
+      ["jobs", "accepted", "drivers", "vehicles", "gps", "uetds", "edevlet", "profile", "billing", "users"].includes(tab),
+    ),
+    deniedTabs: (row.denied_tabs ?? []).filter((tab): tab is import("@/lib/partner/access").PartnerTab =>
       ["jobs", "accepted", "drivers", "vehicles", "gps", "uetds", "edevlet", "profile", "billing", "users"].includes(tab),
     ),
     mustChangePassword: row.must_change_password,

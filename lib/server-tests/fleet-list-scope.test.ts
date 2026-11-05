@@ -22,12 +22,12 @@ const companyB = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 test("list choices and inline patches stay inside one partner", async () => {
   const globals = globalThis as typeof globalThis & { tripeticaPgPool?: unknown };
   const before = globals.tripeticaPgPool;
-  let authorityCleared = false;
 
   globals.tripeticaPgPool = {
     query: async (sql: string, values: unknown[] = []) => {
       assert.doesNotMatch(sql, /password_sealed|identity_sealed|SELECT \*/);
-      if (sql.includes("FROM partner_vehicles") && sql.includes("plate")) {
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rows: [] };
+      if (sql.includes("partner_vehicle_access access") && sql.includes("v.plate")) {
         return {
           rows: [
             { id: vehicleA, partner_id: partnerA, plate: "34 A" },
@@ -35,7 +35,7 @@ test("list choices and inline patches stay inside one partner", async () => {
           ],
         };
       }
-      if (sql.includes("FROM partner_drivers") && sql.includes("first_name") && sql.includes("ANY")) {
+      if (sql.includes("requested.partner_id") && sql.includes("partner_can_access_driver")) {
         return {
           rows: [
             { id: driverA, partner_id: partnerA, first_name: "A", last_name: "Driver" },
@@ -63,7 +63,7 @@ test("list choices and inline patches stay inside one partner", async () => {
           ],
         };
       }
-      if (sql.includes("SELECT uetds_company_id, default_edevlet_authority_id")) {
+      if (sql.includes("default_edevlet_authority_id") && sql.includes("partner_can_access_driver")) {
         if (values[0] === driverA && values[1] === partnerA) {
           return { rows: [{ uetds_company_id: companyA, default_edevlet_authority_id: authorityA }] };
         }
@@ -82,13 +82,12 @@ test("list choices and inline patches stay inside one partner", async () => {
         return { rows: [] };
       }
       if (sql.includes("SET default_edevlet_authority_id = NULL")) {
-        authorityCleared = true;
         return { rows: [] };
       }
       if (sql.includes("JOIN partner_vehicles")) {
         return { rows: [] };
       }
-      if (sql.includes("SELECT uetds_company_id") && !sql.includes("default_edevlet_authority_id")) {
+      if (sql.includes("COALESCE(access.uetds_company_id") && !sql.includes("default_edevlet_authority_id")) {
         return {
           rows:
             values[0] === driverA && values[1] === partnerA ? [{ uetds_company_id: companyA }] : [],
@@ -108,6 +107,14 @@ test("list choices and inline patches stay inside one partner", async () => {
       throw new Error(`unexpected sql: ${sql}`);
     },
   };
+  const mockPool = globals.tripeticaPgPool as {
+    query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }>;
+    connect?: () => Promise<unknown>;
+  };
+  mockPool.connect = async () => ({
+    query: mockPool.query,
+    release: () => undefined,
+  });
 
   try {
     const choices = await listFleetChoicesForPartners([partnerA]);
@@ -131,7 +138,7 @@ test("list choices and inline patches stay inside one partner", async () => {
       assert.equal(company.companyId, companyB);
       assert.equal(company.authorityId, null);
     }
-    assert.equal(authorityCleared, true);
+    assert.equal(company.ok ? company.authorityId : "failed", null);
 
     assert.equal(
       (

@@ -18,73 +18,31 @@ const snapshot: GpsLiveSnapshot = {
   rssi: -70,
   operatorName: "28601",
   network: "home",
-  uptimeSeconds: 10,
-  simStatus: null,
-  lteRegistration: null,
-  pppStatus: null,
-  naptStatus: null,
-  ipAddress: null,
-  gnssResponse: null,
-  wifiPolicy: null,
-  apStatus: null,
-  wifiClients: 0,
-  reportedMaxClients: null,
-  lastRecoveryReason: null,
-  lastModemRecoveryAt: null,
-  lastGnssRecoveryAt: null,
-  resetReason: null,
-  powerSource: null,
-  vehicleBatteryVoltage: null,
   accState: null,
   din1State: null,
-  manufacturer: "esp32",
-  powerMode: null,
-  batteryPercent: null,
-  wifiEnabled: null,
-  wifiShareCommand: null,
-  lowBatteryState: null,
-  lowBatteryGraceRemainingSeconds: null,
+  manufacturer: "teltonika",
 };
 
 test("live snapshot etag changes only when the device state changes", () => {
   assert.equal(gpsLiveEtag(snapshot), gpsLiveEtag({ ...snapshot }));
   assert.notEqual(gpsLiveEtag(snapshot), gpsLiveEtag({ ...snapshot, latitude: 41.02 }));
   assert.notEqual(gpsLiveEtag(snapshot), gpsLiveEtag({ ...snapshot, rssi: -80 }));
-  assert.notEqual(gpsLiveEtag(snapshot), gpsLiveEtag({ ...snapshot, batteryPercent: 97 }));
-  assert.equal(readGpsLiveSnapshot({ ...snapshot, batteryPercent: 0 })?.batteryPercent, 0);
-  assert.equal(readGpsLiveSnapshot({ ...snapshot, wifiEnabled: true })?.wifiEnabled, true);
-  assert.equal(readGpsLiveSnapshot({ ...snapshot, wifiEnabled: false })?.wifiEnabled, false);
-  assert.notEqual(gpsLiveEtag(snapshot), gpsLiveEtag({ ...snapshot, wifiEnabled: false }));
-  assert.equal(readGpsLiveSnapshot({ ...snapshot, batteryPercent: 101 }), null);
   assert.equal(readGpsLiveSnapshot(snapshot)?.satellites, 11);
   assert.equal(readGpsLiveSnapshot({ ...snapshot, latitude: 0, longitude: 0 })?.latitude, 0);
   assert.equal(readGpsLiveSnapshot({ ...snapshot, seq: 1.5 }), null);
   assert.equal(GPS_LIVE_POLL_MS, 5000);
 });
 
-test("partner live payload keeps the map and Wi-Fi status", () => {
+test("partner live payload keeps the map and Teltonika status", () => {
   const payload = gpsPartnerLivePayload({
     ...snapshot,
-    wifiEnabled: true,
-    wifiClients: 2,
     rssi: -70,
-    lteRegistration: "home",
-    pppStatus: "up",
-    naptStatus: "on",
-    apStatus: "up",
   });
   assert.equal("firmware" in payload, false);
   assert.equal("operatorName" in payload, false);
-  assert.equal("ipAddress" in payload, false);
   assert.equal(payload.latitude, 41.01);
   assert.equal(payload.rssi, -70);
-  assert.equal(payload.lteRegistration, "home");
-  assert.equal(payload.pppStatus, "up");
-  assert.equal(payload.naptStatus, "on");
-  assert.equal(payload.apStatus, "up");
-  assert.equal(payload.wifiEnabled, true);
-  assert.equal(payload.wifiClients, 2);
-  assert.equal(payload.manufacturer, "esp32");
+  assert.equal(payload.manufacturer, "teltonika");
   assert.equal(payload.satellites, 11);
   const parsed = readGpsLiveSnapshot(payload);
   assert.equal(parsed?.firmware, null);
@@ -92,7 +50,7 @@ test("partner live payload keeps the map and Wi-Fi status", () => {
   assert.equal(parsed?.rssi, -70);
   assert.equal(parsed?.latitude, 41.01);
   assert.equal(parsed?.din1State, null);
-  assert.equal(parsed?.manufacturer, "esp32");
+  assert.equal(parsed?.manufacturer, "teltonika");
 });
 
 test("partner device card stays on the same five fields while data loads", () => {
@@ -135,8 +93,7 @@ test("live poll reads one device and does not reload history", () => {
   assert.doesNotMatch(section, /listGpsRoute|\/telemetry/);
   const pull = section.slice(section.indexOf("async function pull"), section.indexOf("function onVisibility"));
   assert.doesNotMatch(pull, /gps\/address|lookupGpsAddress/);
-  assert.match(section, /gps-battery/);
-  assert.match(section, /snapshot\.batteryPercent === null/);
+  assert.doesNotMatch(section, /gps-battery|batteryPercent|wifiEnabled/);
   assert.doesNotMatch(section, /charging_inferred|chargingInferred|Şarj oluyor|Harici güç|Type-C/);
   assert.equal(GPS_LIVE_POLL_MS, 5000);
 });

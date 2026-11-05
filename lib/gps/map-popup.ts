@@ -72,7 +72,7 @@ export const TELTONIKA_MAP_MOVING_MPS = 1;
 /** Server receive age after which a Teltonika pin is treated as fully disconnected. Not the GNSS time and not the normal send interval. */
 export const TELTONIKA_LINK_LOST_MS = 15 * 60 * 1000;
 
-/** Teltonika map color. ESP32 and mobile GPS keep gpsMapMarkerState. receivedAt is the server packet time. */
+/** Teltonika map color; mobile GPS keeps gpsMapMarkerState. receivedAt is the server packet time. */
 export function teltonikaMarkerState(input: {
   receivedAt: string | null;
   nowMs: number;

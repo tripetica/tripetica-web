@@ -3,7 +3,8 @@
 import { useActionState, useMemo, useState, type ReactNode } from "react";
 import { OpsConfirmDialog } from "@/components/ops/ops-confirm-dialog";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
-import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
+import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
+import { patchPartnerVehicleDriverAction } from "@/lib/partner/fleet-list-actions";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
 import { VehicleFields, type VehicleDraft } from "@/components/partner/vehicle-fields";
 import { type Locale } from "@/lib/i18n/config";
@@ -44,7 +45,7 @@ type PartnerVehicleDetailProps = {
   vehicle: PartnerVehicleRecord;
   activeUetdsCompanies: readonly UetdsCompanyRef[];
   drivers: readonly FleetChoice[];
-  defaultDriverId: string;
+  driverIds: readonly string[];
   subscription: UetdsDriverSubscriptionState;
   atsSource: AtsMinistrySource;
 };
@@ -127,6 +128,7 @@ function DetailRow({
           className="partner-edit-btn"
           aria-label={editLabel}
           aria-pressed={editing}
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={onEdit}
         >
           <PencilIcon />
@@ -143,16 +145,22 @@ export function PartnerVehicleDetail({
   vehicle,
   activeUetdsCompanies,
   drivers,
-  defaultDriverId: linkedDriverId,
+  driverIds: linkedDriverIds,
   subscription,
   atsSource,
 }: PartnerVehicleDetailProps) {
   const baseline = useMemo(() => draftFromVehicle(vehicle), [vehicle]);
   const [draft, setDraft] = useState(baseline);
   const [uetdsCompanyId, setUetdsCompanyId] = useState(vehicle.uetdsCompanyId ?? "");
-  const [defaultDriverId, setDefaultDriverId] = useState(linkedDriverId);
+  const [driverIds, setDriverIds] = useState(linkedDriverIds);
+  const [driverMenuOpen, setDriverMenuOpen] = useState(false);
   const baselineUetdsCompanyId = vehicle.uetdsCompanyId ?? "";
-  const baselineDriverId = linkedDriverId;
+  const linkedDriverKey = linkedDriverIds.join(",");
+  const [seenDriverKey, setSeenDriverKey] = useState(linkedDriverKey);
+  if (seenDriverKey !== linkedDriverKey) {
+    setSeenDriverKey(linkedDriverKey);
+    setDriverIds([...linkedDriverIds]);
+  }
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [statusConfirm, setStatusConfirm] = useState<"activate" | "deactivate" | null>(null);
@@ -180,8 +188,7 @@ export function PartnerVehicleDetail({
   });
   const dirty =
     !draftsEqual(draft, baseline) ||
-    uetdsCompanyId !== baselineUetdsCompanyId ||
-    defaultDriverId !== baselineDriverId;
+    uetdsCompanyId !== baselineUetdsCompanyId;
   const mode = partnerDriverDetailMode(editing, dirty);
   const listHref = localizedPath(locale, "/partner/vehicles");
   const fieldError =
@@ -193,7 +200,7 @@ export function PartnerVehicleDetail({
   function discardEdits() {
     setDraft(baseline);
     setUetdsCompanyId(baselineUetdsCompanyId);
-    setDefaultDriverId(baselineDriverId);
+    setDriverMenuOpen(false);
     setEditing(false);
   }
 
@@ -235,14 +242,6 @@ export function PartnerVehicleDetail({
               searchPlaceholder={copy.uetdsCompanySearch}
               emptyLabel={copy.uetdsCompanyEmpty}
               onChange={setUetdsCompanyId}
-            />
-            <FleetOptionalSelect
-              name="defaultDriverId"
-              label={copy.defaultDriver}
-              value={defaultDriverId}
-              emptyLabel={copy.fleetPairNone}
-              options={drivers}
-              onChange={setDefaultDriverId}
             />
           </>
         ) : (
@@ -371,19 +370,43 @@ export function PartnerVehicleDetail({
                 <p className="ats-ministry-source-note">{copy.atsSourceMobileNotice}</p>
               ) : null}
             </section>
-            <input type="hidden" name="defaultDriverId" value={defaultDriverId} />
-            <DetailRow
-              label={copy.defaultDriver}
-              editLabel={`${copy.editField}: ${copy.defaultDriver}`}
-              editing={false}
-              onEdit={() => setEditing(true)}
-            >
-              <p className="partner-billing-value">
-                {drivers.find((item) => item.id === defaultDriverId)?.label || copy.fleetPairNone}
-              </p>
-            </DetailRow>
           </>
         )}
+        <DetailRow
+          label={copy.defaultDriver}
+          editLabel={`${copy.editField}: ${copy.defaultDriver}`}
+          editing={driverMenuOpen}
+          onEdit={() => setDriverMenuOpen((current) => !current)}
+        >
+          <input type="hidden" name="driverLinksPresent" value="1" />
+          {driverIds.map((id) => <input key={id} type="hidden" name="defaultDriverId" value={id} />)}
+          <div onPointerDown={(event) => event.stopPropagation()}>
+            <FleetLinkMenu
+              mode="multiple"
+              values={driverIds}
+              options={drivers}
+              emptyLabel={copy.fleetPairNone}
+              saveLabel={copy.vehicleSave}
+              cancelLabel={copy.cancelEdit}
+              saveFailedLabel={copy.vehicleSaveFailed}
+              open={driverMenuOpen}
+              onOpenChange={setDriverMenuOpen}
+              showTrigger={false}
+              onSave={async (next) => {
+                const result = await patchPartnerVehicleDriverAction({
+                  locale,
+                  vehicleId: vehicle.id,
+                  driverIds: next,
+                });
+                if (!result.ok) {
+                  return false;
+                }
+                setDriverIds(result.driverIds);
+                return true;
+              }}
+            />
+          </div>
+        </DetailRow>
 
         {saveState.ok && mode === "view" ? (
           <p className="ops-form-ok" role="status">

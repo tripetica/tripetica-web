@@ -89,7 +89,7 @@ export async function loadImmobilizerPanelForDevice(deviceId: string, partnerSco
      WHERE device.id = $1
        AND device.receiver = 'teltonika'
        AND device.status = 'active'
-       AND ($2::uuid IS NULL OR device.partner_id = $2)`,
+       AND ($2::uuid IS NULL OR partner_can_access_gps_device($2, device.id))`,
     [deviceId, partnerScope],
   );
   if (result.rows.length !== 1) return null;
@@ -112,7 +112,7 @@ export async function loadImmobilizerPanel(vehicleId: string, partnerScope: stri
      WHERE device.vehicle_id = $1
        AND device.receiver = 'teltonika'
        AND device.status = 'active'
-       AND ($2::uuid IS NULL OR device.partner_id = $2)`,
+       AND ($2::uuid IS NULL OR partner_can_access_gps_device($2, device.id))`,
     [vehicleId, partnerScope],
   );
   if (result.rows.length !== 1) return null;
@@ -138,7 +138,7 @@ export async function beginImmobilizerEnable(input: {
          AND device.status = 'active'
          AND device.vehicle_id IS NOT NULL
          AND device.partner_id IS NOT NULL
-         AND ($2::uuid IS NULL OR device.partner_id = $2)
+         AND ($2::uuid IS NULL OR partner_can_access_gps_device($2, device.id))
          AND (
            SELECT COUNT(*)
            FROM gps_devices sibling
@@ -218,7 +218,7 @@ export async function recordImmobilizerRequest(input: {
          AND device.receiver = 'teltonika'
          AND device.status = 'active'
          AND device.vehicle_id IS NOT NULL
-         AND ($2::uuid IS NULL OR device.partner_id = $2)
+         AND ($2::uuid IS NULL OR partner_can_access_gps_device($2, device.id))
        FOR UPDATE OF device`,
       [input.deviceId, input.partnerScope],
     );

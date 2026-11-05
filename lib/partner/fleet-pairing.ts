@@ -1,6 +1,6 @@
 import "server-only";
 
-import { query } from "@/lib/db/postgres";
+import { getPool, query } from "@/lib/db/postgres";
 import { isUuid } from "@/lib/ops/process-filters";
 import { partnerDriverFullName } from "@/lib/partner/fleet-view";
 import {
@@ -16,10 +16,11 @@ export async function listPartnerVehicleChoices(partnerId: string): Promise<Flee
     return [];
   }
   const result = await query<{ id: string; plate: string }>(
-    `SELECT id, plate
-     FROM partner_vehicles
-     WHERE partner_id = $1 AND deleted_at IS NULL
-     ORDER BY plate ASC, id ASC`,
+    `SELECT v.id, v.plate
+       FROM partner_vehicles v
+      WHERE partner_can_access_vehicle($1, v.id)
+        AND v.deleted_at IS NULL
+      ORDER BY v.plate ASC, v.id ASC`,
     [partnerId],
   );
   return result.rows.map((row) => ({ id: row.id, label: row.plate }));
@@ -30,10 +31,11 @@ export async function listPartnerDriverChoices(partnerId: string): Promise<Fleet
     return [];
   }
   const result = await query<{ id: string; first_name: string; last_name: string }>(
-    `SELECT id, first_name, last_name
-     FROM partner_drivers
-     WHERE partner_id = $1 AND deleted_at IS NULL
-     ORDER BY first_name ASC, last_name ASC, id ASC`,
+    `SELECT d.id, d.first_name, d.last_name
+       FROM partner_drivers d
+      WHERE partner_can_access_driver($1, d.id)
+        AND d.deleted_at IS NULL
+      ORDER BY d.first_name ASC, d.last_name ASC, d.id ASC`,
     [partnerId],
   );
   return result.rows.map((row) => ({
@@ -87,17 +89,21 @@ export async function listFleetChoicesForPartners(
   }
   const [vehicles, drivers, authorities] = await Promise.all([
     query<{ id: string; partner_id: string; plate: string }>(
-      `SELECT id, partner_id, plate
-       FROM partner_vehicles
-       WHERE partner_id = ANY($1::uuid[]) AND deleted_at IS NULL
-       ORDER BY plate ASC, id ASC`,
+      `SELECT v.id, access.partner_id, v.plate
+         FROM partner_vehicle_access access
+         JOIN partner_vehicles v ON v.id = access.vehicle_id
+        WHERE access.partner_id = ANY($1::uuid[])
+          AND v.deleted_at IS NULL
+        ORDER BY v.plate ASC, v.id ASC`,
       [ids],
     ),
     query<{ id: string; partner_id: string; first_name: string; last_name: string }>(
-      `SELECT id, partner_id, first_name, last_name
-       FROM partner_drivers
-       WHERE partner_id = ANY($1::uuid[]) AND deleted_at IS NULL
-       ORDER BY first_name ASC, last_name ASC, id ASC`,
+      `SELECT d.id, requested.partner_id, d.first_name, d.last_name
+         FROM unnest($1::uuid[]) AS requested(partner_id)
+         JOIN partner_drivers d
+           ON partner_can_access_driver(requested.partner_id, d.id)
+        WHERE d.deleted_at IS NULL
+        ORDER BY d.first_name ASC, d.last_name ASC, d.id ASC`,
       [ids],
     ),
     query<{
@@ -141,10 +147,10 @@ export async function listFleetChoicesForPartners(
 
 export async function getDriverFleetLink(partnerId: string, driverId: string) {
   if (!isUuid(partnerId) || !isUuid(driverId)) {
-    return { defaultVehicleId: "", defaultAuthorityId: "" };
+    return { defaultVehicleId: "", vehicleIds: [] as string[], defaultAuthorityId: "" };
   }
-  const result = await query<{ vehicle_id: string | null; authority_id: string | null }>(
-    `SELECT v.id AS vehicle_id,
+  const result = await query<{ vehicle_ids: string[] | null; authority_id: string | null }>(
+    `SELECT COALESCE(array_agg(v.id ORDER BY fd.created_at, v.plate), '{}') AS vehicle_ids,
             CASE
               WHEN a.id IS NULL THEN NULL
               WHEN d.uetds_company_id IS NOT NULL AND NOT EXISTS (
@@ -155,41 +161,53 @@ export async function getDriverFleetLink(partnerId: string, driverId: string) {
             END AS authority_id
      FROM partner_drivers d
      LEFT JOIN partner_fleet_defaults fd
-       ON fd.driver_id = d.id AND fd.partner_id = d.partner_id
+       ON fd.driver_id = d.id
      LEFT JOIN partner_vehicles v
-       ON v.id = fd.vehicle_id AND v.partner_id = d.partner_id AND v.deleted_at IS NULL
+       ON v.id = fd.vehicle_id
+      AND v.deleted_at IS NULL
+      AND partner_can_access_vehicle($2, v.id)
      LEFT JOIN partner_uetds_authorities a
        ON a.id = d.default_edevlet_authority_id
       AND a.partner_id = d.partner_id
       AND a.deleted_at IS NULL
       AND a.status = 'active'
-     WHERE d.id = $1 AND d.partner_id = $2 AND d.deleted_at IS NULL
-     LIMIT 1`,
+     WHERE d.id = $1
+       AND partner_can_access_driver($2, d.id)
+       AND d.deleted_at IS NULL
+     GROUP BY d.id, a.id, d.uetds_company_id`,
     [driverId, partnerId],
   );
   const row = result.rows[0];
+  const vehicleIds = row?.vehicle_ids ?? [];
   return {
-    defaultVehicleId: row?.vehicle_id ?? "",
+    defaultVehicleId: vehicleIds.length === 1 ? vehicleIds[0] ?? "" : "",
+    vehicleIds,
     defaultAuthorityId: row?.authority_id ?? "",
   };
 }
 
 export async function getVehicleFleetLink(partnerId: string, vehicleId: string) {
   if (!isUuid(partnerId) || !isUuid(vehicleId)) {
-    return { defaultDriverId: "" };
+    return { defaultDriverId: "", driverIds: [] as string[] };
   }
-  const result = await query<{ driver_id: string | null }>(
-    `SELECT d.id AS driver_id
+  const result = await query<{ driver_ids: string[] | null }>(
+    `SELECT COALESCE(array_agg(d.id ORDER BY fd.created_at, d.last_name, d.id), '{}') AS driver_ids
      FROM partner_vehicles v
      LEFT JOIN partner_fleet_defaults fd
-       ON fd.vehicle_id = v.id AND fd.partner_id = v.partner_id
+       ON fd.vehicle_id = v.id
      LEFT JOIN partner_drivers d
-       ON d.id = fd.driver_id AND d.partner_id = v.partner_id AND d.deleted_at IS NULL
-     WHERE v.id = $1 AND v.partner_id = $2 AND v.deleted_at IS NULL
-     LIMIT 1`,
+       ON d.id = fd.driver_id AND d.deleted_at IS NULL
+     WHERE v.id = $1
+       AND partner_can_access_vehicle($2, v.id)
+       AND v.deleted_at IS NULL
+     GROUP BY v.id`,
     [vehicleId, partnerId],
   );
-  return { defaultDriverId: result.rows[0]?.driver_id ?? "" };
+  const driverIds = result.rows[0]?.driver_ids ?? [];
+  return {
+    defaultDriverId: driverIds.length === 1 ? driverIds[0] ?? "" : "",
+    driverIds,
+  };
 }
 
 export async function saveDriverVehiclePair(input: {
@@ -200,47 +218,202 @@ export async function saveDriverVehiclePair(input: {
   if (!isUuid(input.partnerId) || !isUuid(input.driverId)) {
     return { ok: false as const, error: "invalid-fleet-pair" as const };
   }
-  if (input.vehicleId === null) {
-    const owned = await query<{ id: string }>(
-      `SELECT id FROM partner_drivers
-       WHERE id = $1 AND partner_id = $2 AND deleted_at IS NULL`,
-      [input.driverId, input.partnerId],
-    );
-    if (!owned.rows[0]) {
+  if (input.vehicleId !== null && !isUuid(input.vehicleId)) {
+    return { ok: false as const, error: "invalid-fleet-pair" as const };
+  }
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const allowed = input.vehicleId === null
+      ? await client.query<{ driver_id: string }>(
+          `SELECT id AS driver_id
+             FROM partner_drivers
+            WHERE id = $1
+              AND partner_can_access_driver($2, id)
+              AND deleted_at IS NULL
+            FOR UPDATE`,
+          [input.driverId, input.partnerId],
+        )
+      : await client.query<{ driver_id: string }>(
+          `SELECT d.id AS driver_id
+             FROM partner_drivers d
+             JOIN partner_vehicles v
+               ON v.id = $3 AND v.deleted_at IS NULL
+            WHERE d.id = $2
+              AND partner_can_access_driver($1, d.id)
+              AND partner_can_access_vehicle($1, v.id)
+              AND d.deleted_at IS NULL
+            FOR UPDATE OF d, v`,
+          [input.partnerId, input.driverId, input.vehicleId],
+        );
+    if (!allowed.rows[0]) {
+      await client.query("ROLLBACK");
       return { ok: false as const, error: "invalid-fleet-pair" as const };
     }
-    await query(
-      `DELETE FROM partner_fleet_defaults
-       WHERE partner_id = $1 AND driver_id = $2`,
-      [input.partnerId, input.driverId],
-    );
+    if (input.vehicleId === null) {
+      await client.query(`DELETE FROM partner_fleet_defaults WHERE driver_id = $1`, [input.driverId]);
+    } else {
+      await client.query(
+        `UPDATE partner_drivers
+            SET vehicle_derived_visibility = TRUE, updated_at = NOW()
+          WHERE id = $1`,
+        [input.driverId],
+      );
+      await client.query(
+        `DELETE FROM partner_fleet_defaults
+          WHERE driver_id = $1
+            AND vehicle_id <> $2`,
+        [input.driverId, input.vehicleId],
+      );
+      await client.query(
+        `INSERT INTO partner_fleet_defaults (partner_id, driver_id, vehicle_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (driver_id, vehicle_id) DO NOTHING`,
+        [input.partnerId, input.driverId, input.vehicleId],
+      );
+    }
+    await client.query("COMMIT");
     return { ok: true as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  if (!isUuid(input.vehicleId)) {
+}
+
+async function linksAreAllowed(partnerId: string, driverIds: readonly string[], vehicleIds: readonly string[]) {
+  const client = await getPool().connect();
+  try {
+    const drivers = driverIds.length === 0
+      ? { rows: [] as { id: string }[] }
+      : await client.query<{ id: string }>(
+          `SELECT id
+             FROM partner_drivers
+            WHERE id = ANY($2::uuid[])
+              AND partner_can_access_driver($1, id)
+              AND deleted_at IS NULL`,
+          [partnerId, driverIds],
+        );
+    const vehicles = vehicleIds.length === 0
+      ? { rows: [] as { id: string }[] }
+      : await client.query<{ id: string }>(
+          `SELECT id
+             FROM partner_vehicles
+            WHERE id = ANY($2::uuid[])
+              AND partner_can_access_vehicle($1, id)
+              AND deleted_at IS NULL`,
+          [partnerId, vehicleIds],
+        );
+    return drivers.rows.length === new Set(driverIds).size && vehicles.rows.length === new Set(vehicleIds).size;
+  } finally {
+    client.release();
+  }
+}
+
+export async function saveDriverVehicleSet(input: {
+  partnerId: string;
+  driverId: string;
+  vehicleIds: readonly string[];
+}) {
+  if (!isUuid(input.partnerId) || !isUuid(input.driverId) || input.vehicleIds.some((id) => !isUuid(id))) {
     return { ok: false as const, error: "invalid-fleet-pair" as const };
   }
-  const owned = await query<{ driver_id: string }>(
-    `SELECT d.id AS driver_id
-     FROM partner_drivers d
-     JOIN partner_vehicles v
-       ON v.id = $3 AND v.partner_id = d.partner_id AND v.deleted_at IS NULL
-     WHERE d.id = $2 AND d.partner_id = $1 AND d.deleted_at IS NULL`,
-    [input.partnerId, input.driverId, input.vehicleId],
-  );
-  if (!owned.rows[0]) {
+  const vehicleIds = [...new Set(input.vehicleIds)];
+  if (vehicleIds.length > 1) {
     return { ok: false as const, error: "invalid-fleet-pair" as const };
   }
-  await query(
-    `DELETE FROM partner_fleet_defaults
-     WHERE partner_id = $1 AND (driver_id = $2 OR vehicle_id = $3)`,
-    [input.partnerId, input.driverId, input.vehicleId],
-  );
-  await query(
-    `INSERT INTO partner_fleet_defaults (partner_id, driver_id, vehicle_id)
-     VALUES ($1, $2, $3)`,
-    [input.partnerId, input.driverId, input.vehicleId],
-  );
-  return { ok: true as const };
+  if (!await linksAreAllowed(input.partnerId, [input.driverId], vehicleIds)) {
+    return { ok: false as const, error: "invalid-fleet-pair" as const };
+  }
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE partner_drivers
+          SET vehicle_derived_visibility = TRUE, updated_at = NOW()
+        WHERE id = $1`,
+      [input.driverId],
+    );
+    await client.query(
+      `DELETE FROM partner_fleet_defaults
+        WHERE driver_id = $1
+          AND NOT (vehicle_id = ANY($2::uuid[]))`,
+      [input.driverId, vehicleIds],
+    );
+    if (vehicleIds.length > 0) {
+      await client.query(
+        `INSERT INTO partner_fleet_defaults (partner_id, driver_id, vehicle_id)
+         SELECT $1, $2, vehicle_id
+           FROM unnest($3::uuid[]) AS vehicle_id
+         ON CONFLICT (driver_id, vehicle_id) DO NOTHING`,
+        [input.partnerId, input.driverId, vehicleIds],
+      );
+    }
+    await client.query("COMMIT");
+    return { ok: true as const, vehicleIds };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function saveVehicleDriverSet(input: {
+  partnerId: string;
+  vehicleId: string;
+  driverIds: readonly string[];
+}) {
+  if (!isUuid(input.partnerId) || !isUuid(input.vehicleId) || input.driverIds.some((id) => !isUuid(id))) {
+    return { ok: false as const, error: "invalid-fleet-pair" as const };
+  }
+  const driverIds = [...new Set(input.driverIds)];
+  if (!await linksAreAllowed(input.partnerId, driverIds, [input.vehicleId])) {
+    return { ok: false as const, error: "invalid-fleet-pair" as const };
+  }
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    if (driverIds.length > 0) {
+      await client.query(
+        `UPDATE partner_drivers
+            SET vehicle_derived_visibility = TRUE, updated_at = NOW()
+          WHERE id = ANY($1::uuid[])`,
+        [driverIds],
+      );
+    }
+    await client.query(
+      `DELETE FROM partner_fleet_defaults
+        WHERE vehicle_id = $1
+          AND NOT (driver_id = ANY($2::uuid[]))`,
+      [input.vehicleId, driverIds],
+    );
+    if (driverIds.length > 0) {
+      await client.query(
+        `DELETE FROM partner_fleet_defaults
+          WHERE driver_id = ANY($1::uuid[])
+            AND vehicle_id <> $2`,
+        [driverIds, input.vehicleId],
+      );
+    }
+    if (driverIds.length > 0) {
+      await client.query(
+        `INSERT INTO partner_fleet_defaults (partner_id, driver_id, vehicle_id)
+         SELECT $1, driver_id, $2
+           FROM unnest($3::uuid[]) AS driver_id
+         ON CONFLICT (driver_id, vehicle_id) DO NOTHING`,
+        [input.partnerId, input.vehicleId, driverIds],
+      );
+    }
+    await client.query("COMMIT");
+    return { ok: true as const, driverIds };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function saveVehicleDriverPair(input: {
@@ -255,23 +428,11 @@ export async function saveVehicleDriverPair(input: {
       vehicleId: input.vehicleId,
     });
   }
-  if (!isUuid(input.partnerId) || !isUuid(input.vehicleId)) {
-    return { ok: false as const, error: "invalid-fleet-pair" as const };
-  }
-  const owned = await query<{ id: string }>(
-    `SELECT id FROM partner_vehicles
-     WHERE id = $1 AND partner_id = $2 AND deleted_at IS NULL`,
-    [input.vehicleId, input.partnerId],
-  );
-  if (!owned.rows[0]) {
-    return { ok: false as const, error: "invalid-fleet-pair" as const };
-  }
-  await query(
-    `DELETE FROM partner_fleet_defaults
-     WHERE partner_id = $1 AND vehicle_id = $2`,
-    [input.partnerId, input.vehicleId],
-  );
-  return { ok: true as const };
+  return saveVehicleDriverSet({
+    partnerId: input.partnerId,
+    vehicleId: input.vehicleId,
+    driverIds: [],
+  });
 }
 
 export async function saveDriverAuthority(input: {
@@ -288,7 +449,7 @@ export async function saveDriverAuthority(input: {
   }
   const driver = await query<{ id: string }>(
     `SELECT id FROM partner_drivers
-     WHERE id = $1 AND partner_id = $2 AND deleted_at IS NULL`,
+     WHERE id = $1 AND partner_can_access_driver($2, id) AND deleted_at IS NULL`,
     [input.driverId, input.partnerId],
   );
   if (!driver.rows[0]) {
@@ -298,7 +459,7 @@ export async function saveDriverAuthority(input: {
     await query(
       `UPDATE partner_drivers
        SET default_edevlet_authority_id = NULL
-       WHERE id = $1 AND partner_id = $2`,
+       WHERE id = $1 AND partner_can_access_driver($2, id)`,
       [input.driverId, input.partnerId],
     );
     return { ok: true as const };
@@ -328,7 +489,9 @@ export async function saveDriverAuthority(input: {
   await query(
     `UPDATE partner_drivers
      SET default_edevlet_authority_id = $3
-     WHERE id = $1 AND partner_id = $2 AND deleted_at IS NULL`,
+     WHERE id = $1
+       AND partner_can_access_driver($2, id)
+       AND deleted_at IS NULL`,
     [input.driverId, input.partnerId, input.authorityId],
   );
   return { ok: true as const };
@@ -341,14 +504,14 @@ export async function releaseFleetPair(input: {
 }) {
   if (input.driverId && isUuid(input.partnerId) && isUuid(input.driverId)) {
     await query(
-      `DELETE FROM partner_fleet_defaults WHERE partner_id = $1 AND driver_id = $2`,
-      [input.partnerId, input.driverId],
+      `DELETE FROM partner_fleet_defaults WHERE driver_id = $1`,
+      [input.driverId],
     );
   }
   if (input.vehicleId && isUuid(input.partnerId) && isUuid(input.vehicleId)) {
     await query(
-      `DELETE FROM partner_fleet_defaults WHERE partner_id = $1 AND vehicle_id = $2`,
-      [input.partnerId, input.vehicleId],
+      `DELETE FROM partner_fleet_defaults WHERE vehicle_id = $1`,
+      [input.vehicleId],
     );
   }
 }

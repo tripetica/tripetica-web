@@ -181,7 +181,7 @@ test("device output, not the user request, decides active and passive", () => {
   assert.equal(immobilizerControlAllowed({ ...allowed, surface: "ops", opsCanManage: true }), true);
 });
 
-test("immobilizer requests stay out of the ESP32 command queue and the AVL listener", () => {
+test("immobilizer requests stay out of the removed HTTP command queue and the AVL listener", () => {
   const action = readFileSync(new URL("../gps/immobilizer-actions.ts", import.meta.url), "utf8");
   const listener = readFileSync(new URL("../../scripts/teltonika-listen.ts", import.meta.url), "utf8");
   const ats = readFileSync(new URL("../gps/ats-run.ts", import.meta.url), "utf8");

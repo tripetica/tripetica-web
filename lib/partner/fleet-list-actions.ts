@@ -66,13 +66,15 @@ export async function patchPartnerDriverCompanyAction(input: {
 export async function patchPartnerDriverVehicleAction(input: {
   locale: string;
   driverId: string;
-  vehicleId: string;
+  vehicleId?: string;
+  vehicleIds?: string[];
 }) {
   const actor = await requirePartner(input.locale, "drivers");
   const result = await setDriverListVehicle({
     partnerId: actor.partnerId,
     driverId: input.driverId,
-    vehicleId: optionalId(input.vehicleId),
+    vehicleId: input.vehicleId === undefined ? undefined : optionalId(input.vehicleId),
+    vehicleIds: input.vehicleIds,
   });
   if (result.ok) {
     refreshFleet(localeFromInput(input.locale), actor.partnerId);
@@ -117,13 +119,15 @@ export async function patchPartnerVehicleCompanyAction(input: {
 export async function patchPartnerVehicleDriverAction(input: {
   locale: string;
   vehicleId: string;
-  driverId: string;
+  driverId?: string;
+  driverIds?: string[];
 }) {
   const actor = await requirePartner(input.locale, "vehicles");
   const result = await setVehicleListDriver({
     partnerId: actor.partnerId,
     vehicleId: input.vehicleId,
-    driverId: optionalId(input.driverId),
+    driverId: input.driverId === undefined ? undefined : optionalId(input.driverId),
+    driverIds: input.driverIds,
   });
   if (result.ok) {
     refreshFleet(localeFromInput(input.locale), actor.partnerId);

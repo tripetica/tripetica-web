@@ -12,25 +12,36 @@ export type UetdsFleetOption = {
   company: UetdsCompanyReadiness | null;
   hasNationalId?: boolean;
   membershipStatus?: DriverMembershipStatus;
+  vehicleIds?: readonly string[];
   defaultVehicleId?: string | null;
   defaultAuthorityId?: string | null;
 };
+
+export type UetdsInitialFleetSelectionPolicy =
+  | "first-eligible"
+  | "single-eligible-driver";
 
 /** Initial selection only; lists already enforce fleet status and actor scope. */
 export function initialUetdsFleetSelection(
   selection: { driverId: string; vehicleId: string },
   drivers: UetdsFleetOption[],
   vehicles: UetdsFleetOption[],
+  policy: UetdsInitialFleetSelectionPolicy = "first-eligible",
 ) {
   const usable = (option: UetdsFleetOption) =>
     isUetdsCompanyUsable(option.company) && option.uetdsCompanyId === option.company?.id;
   let driver = drivers.find((option) => option.id === selection.driverId);
   let vehicle = vehicles.find((option) => option.id === selection.vehicleId);
   if (!selection.driverId) {
-    driver = drivers.find((option) => usable(option) && option.hasNationalId !== false &&
-      (!selection.vehicleId || (vehicle && usable(vehicle) && option.uetdsCompanyId === vehicle.uetdsCompanyId)));
+    driver =
+      policy === "single-eligible-driver"
+        ? drivers.length === 1
+          ? drivers[0]
+          : undefined
+        : drivers.find((option) => usable(option) && option.hasNationalId !== false &&
+            (!selection.vehicleId || (vehicle && usable(vehicle) && option.uetdsCompanyId === vehicle.uetdsCompanyId)));
   }
-  if (!selection.vehicleId) {
+  if (!selection.vehicleId && policy === "first-eligible") {
     vehicle = vehicles.find((option) => usable(option) &&
       (!(selection.driverId || driver) || (driver && usable(driver) && option.uetdsCompanyId === driver.uetdsCompanyId)));
   }

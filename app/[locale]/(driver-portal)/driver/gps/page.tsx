@@ -150,7 +150,6 @@ export default async function DriverGpsPage({
           device={selected}
           vehicles={[]}
           route={route}
-          commands={[]}
           fromLocal={ranged ? range.fromLocal : ""}
           toLocal={ranged ? range.toLocal : ""}
           fromIso={ranged ? range.from.toISOString() : ""}

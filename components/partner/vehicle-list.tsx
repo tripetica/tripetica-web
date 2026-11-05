@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
+import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { type UetdsCompanyRef } from "@/lib/ops/uetds-company-fields";
@@ -59,7 +60,7 @@ export function PartnerVehicleList({
   const [rows, setRows] = useState(vehicles);
   const rowSignature = vehicles
     .map((vehicle) =>
-      [vehicle.id, vehicle.uetdsCompanyId ?? "", vehicle.defaultDriverId ?? ""].join(":"),
+      [vehicle.id, vehicle.uetdsCompanyId ?? "", (vehicle.linkedDriverIds ?? []).join(",")].join(":"),
     )
     .join("|");
   const [seenRows, setSeenRows] = useState(rowSignature);
@@ -173,32 +174,30 @@ export function PartnerVehicleList({
                       }}
                     />
                   </td>
-                  <td>
-                    <FleetInlineSelect
-                      value={vehicle.defaultDriverId ?? ""}
+                  <td className="fleet-link-cell">
+                    <FleetLinkMenu
+                      mode="multiple"
+                      values={vehicle.linkedDriverIds ?? (vehicle.defaultDriverId ? [vehicle.defaultDriverId] : [])}
                       options={fleetChoicesForPartner(fleetChoices, vehicle.partnerId).drivers}
                       emptyLabel={copy.fleetPairNone}
-                      label={copy.defaultDriver}
+                      saveLabel={copy.vehicleSave}
+                      cancelLabel={copy.cancelEdit}
                       saveFailedLabel={copy.vehicleSaveFailed}
                       onSave={async (next) => {
                         const result = await patchPartnerVehicleDriverAction({
                           locale,
                           vehicleId: vehicle.id,
-                          driverId: next,
+                          driverIds: next,
                         });
                         if (!result.ok) return false;
+                        const taken = new Set(result.driverIds);
                         setRows((current) =>
                           current.map((item) => {
                             if (item.id === vehicle.id) {
-                              return { ...item, defaultDriverId: result.driverId };
+                              return { ...item, defaultDriverId: result.driverIds[0] ?? null, linkedDriverIds: result.driverIds };
                             }
-                            if (result.releasedVehicleId && item.id === result.releasedVehicleId) {
-                              return { ...item, defaultDriverId: null };
-                            }
-                            if (result.driverId && item.defaultDriverId === result.driverId) {
-                              return { ...item, defaultDriverId: null };
-                            }
-                            return item;
+                            const linkedDriverIds = (item.linkedDriverIds ?? []).filter((id) => !taken.has(id));
+                            return { ...item, defaultDriverId: linkedDriverIds[0] ?? null, linkedDriverIds };
                           }),
                         );
                         return true;

@@ -6,8 +6,10 @@ export async function notificationHasGoldDriver(notificationId: string, partnerI
   try {
     const result = await query<{ service_advanced_enabled: boolean }>(
       `SELECT v.service_advanced_enabled FROM uetds_notifications n
-       JOIN partner_vehicles v ON v.id = n.vehicle_id AND v.partner_id = n.partner_id
-       WHERE n.id = $1 AND n.partner_id = $2 AND v.deleted_at IS NULL`,
+       JOIN partner_vehicles v ON v.id = n.vehicle_id
+       WHERE n.id = $1
+         AND partner_can_access_uetds_notification($2, n.id)
+         AND v.deleted_at IS NULL`,
       [notificationId, partnerId],
     );
     return result.rows[0]?.service_advanced_enabled === true;

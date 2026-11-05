@@ -148,7 +148,7 @@ async function loadLiveDriver(driverId: string | null, partnerId: string) {
             phone_country_code, languages, status, deleted_at, updated_at
      FROM partner_drivers
      WHERE id = $1
-       AND partner_id = $2
+       AND partner_can_access_driver($2, id)
      LIMIT 1`,
     [driverId, partnerId],
   );
@@ -166,7 +166,7 @@ async function loadLiveVehicle(vehicleId: string | null, partnerId: string) {
             approved_at, deleted_at, created_at, updated_at
      FROM partner_vehicles
      WHERE id = $1
-       AND partner_id = $2
+       AND partner_can_access_vehicle($2, id)
      LIMIT 1`,
     [vehicleId, partnerId],
   );
@@ -498,8 +498,8 @@ async function loadLiveDriversByIds(partnerId: string, driverIds: string[]) {
     `SELECT id, partner_id, first_name, last_name, national_id, phone,
             phone_country_code, languages, status, deleted_at, updated_at
      FROM partner_drivers
-     WHERE partner_id = $1
-       AND id = ANY($2::uuid[])`,
+     WHERE id = ANY($2::uuid[])
+       AND partner_can_access_driver($1, id)`,
     [partnerId, driverIds],
   );
   for (const row of result.rows) {
@@ -519,8 +519,8 @@ async function loadLiveVehiclesByIds(partnerId: string, vehicleIds: string[]) {
             vehicle_class_code, feature_codes, feature_other, features, status,
             approved_at, deleted_at, created_at, updated_at
      FROM partner_vehicles
-     WHERE partner_id = $1
-       AND id = ANY($2::uuid[])`,
+     WHERE id = ANY($2::uuid[])
+       AND partner_can_access_vehicle($1, id)`,
     [partnerId, vehicleIds],
   );
   for (const row of result.rows) {

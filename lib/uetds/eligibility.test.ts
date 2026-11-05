@@ -190,6 +190,29 @@ test("shared eligibility and form are reused and do not hard-code a carrier", ()
   assert.doesNotMatch(source("lib/uetds/submit.ts"), /live_password_sealed/);
 });
 
+test("submit requires the explicit partner-scoped driver and vehicle before ministry dispatch", () => {
+  const submit = source("lib/uetds/submit.ts");
+  const fleetScope = source("lib/uetds/fleet-scope.ts");
+  const driverLookup = fleetScope.slice(
+    fleetScope.indexOf("export async function getUetdsDriverOption"),
+    fleetScope.indexOf("export async function withSelectedUetdsOptions"),
+  );
+  const vehicleLookup = fleetScope.slice(
+    fleetScope.indexOf("export async function getUetdsVehicleOption"),
+  );
+  assert.match(submit, /partnerId:\s*scopePartnerId,\s*driverId:\s*draft\.driverId/);
+  assert.match(submit, /partnerId:\s*scopePartnerId,\s*vehicleId:\s*draft\.vehicleId/);
+  assert.match(submit, /if \(!driver \|\| !vehicle\) \{\s*return \{ ok: false, error: "forbidden" \}/);
+  assert.match(submit, /driver\.partnerId !== input\.partnerId \|\| vehicle\.partnerId !== input\.partnerId/);
+  assert.doesNotMatch(submit, /drivers?\s*\[\s*0\s*\]/);
+  assert.match(driverLookup, /d\.status = 'active'/);
+  assert.match(vehicleLookup, /v\.status = 'active'/);
+  assert.ok(
+    submit.indexOf("if (!driver || !vehicle)") <
+      submit.indexOf("ministry = await submitUetdsTestNotification"),
+  );
+});
+
 test("images larger than 1 MB can reach extraction without a 1 MB action limit", () => {
   const config = source("next.config.ts");
   assert.match(config, /serverActions/);

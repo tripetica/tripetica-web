@@ -338,7 +338,10 @@ test("maintenance stays on the partner GPS page and does not notify the driver",
   assert.match(store, /assignedMaintenanceDriver/);
   assert.match(store, /maintenanceDeliveryPlan/);
   assert.match(store, /driver_push_subscriptions/);
-  assert.match(panel, /portalActor === "driver" && notice\.driverBody/);
+  assert.match(panel, /maintenanceHistoryShow/);
+  assert.doesNotMatch(panel, /maintenanceNotices|gps-maintenance-notices|notice\.driverBody/);
+  assert.match(store, /INSERT INTO vehicle_maintenance_notices/);
+  assert.match(store, /sweepVehicleMaintenance/);
   assert.doesNotMatch(store, /ats-run|immobilizer|setdigout|driver-portal/);
   assert.match(store, /listActivePartnerPushSubscriptionsForPartner/);
   assert.match(store, /useIgnition: source === "physical"/);
@@ -476,4 +479,52 @@ test("driver maintenance notices use the driver copy and leave the partner mail 
   assert.equal(partner.subject, "Araç Bakım Hatırlatması — 34 ABC 123 — 500 km Kaldı");
   assert.match(partner.text, /Şoför: Ahmet Yılmaz/);
   assert.match(partner.text, /Partner Portal/);
+});
+
+function unusedSqlParameters(source: string) {
+  const unused: string[] = [];
+  const pattern = /query(?:<[^>]*>)?\(\s*`([^`]*)`\s*,\s*\[([^[\]]*)\]/g;
+  for (const match of source.matchAll(pattern)) {
+    const sql = match[1] ?? "";
+    const values = (match[2] ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+    const used = new Set([...sql.matchAll(/\$(\d+)/g)].map((item) => Number(item[1])));
+    for (let index = 1; index <= values.length; index += 1) {
+      if (!used.has(index)) unused.push(`$${index}`);
+    }
+  }
+  return unused;
+}
+
+test("maintenance load binds the vehicle id once and ends loading on success, empty, and error", () => {
+  const store = readFileSync(new URL("./maintenance-store.ts", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../../components/gps/maintenance-section.tsx", import.meta.url), "utf8");
+  const actions = readFileSync(new URL("./maintenance-actions.ts", import.meta.url), "utf8");
+  const partnerRoute = readFileSync(new URL("../../app/api/gps/maintenance/[vehicleId]/route.ts", import.meta.url), "utf8");
+  const driverRoute = readFileSync(new URL("../../app/api/driver/gps/maintenance/[vehicleId]/route.ts", import.meta.url), "utf8");
+  const profile = store.slice(store.indexOf("async function readProfile"), store.indexOf("async function readHistory"));
+  assert.deepEqual(unusedSqlParameters(store), []);
+  assert.match(profile, /WHERE vehicle_id = \$1 FOR UPDATE/);
+  assert.match(profile, /\[vehicleId\]/);
+  assert.doesNotMatch(profile, /\[vehicleId, partnerId\]/);
+  assert.match(store, /partner_can_access_vehicle\(\$2, id\)/);
+  assert.match(store, /if \(!row\) return \{ started: false as const, vehicleId, today \}/);
+  assert.match(panel, /if \(!snapshot && loadProblem\)/);
+  assert.match(panel, /maintenanceLoadError/);
+  assert.match(panel, /maintenanceRetry/);
+  assert.match(panel, /response\.status === 401 \|\| response\.status === 404 \? "forbidden" : "failed"/);
+  assert.match(panel, /if \(!snapshot\.started\)/);
+  assert.match(panel, /cache: "no-store"/);
+  assert.match(panel, /window\.setTimeout/);
+  assert.doesNotMatch(panel, /AbortSignal|webkit/);
+  assert.match(partnerRoute, /partnerHasTab\(actor, "gps"\)/);
+  assert.match(partnerRoute, /syncVehicleMaintenance/);
+  assert.match(driverRoute, /driverGpsContext\("gpsMaintenance"\)/);
+  assert.match(driverRoute, /syncVehicleMaintenance/);
+  assert.match(actions, /permissions\.gpsMaintenance/);
+  assert.match(actions, /driverAuthorizedVehicleIds/);
+  assert.equal(gpsCopy.tr.maintenanceLoadError, "Bakım bilgileri yüklenemedi.");
+  assert.equal(gpsCopy.tr.maintenanceRetry, "Yeniden dene");
+  assert.equal(gpsCopy.en.maintenanceRetry, "Try again");
+  assert.equal(gpsCopy.ru.maintenanceLoadError, "Не удалось загрузить данные обслуживания.");
+  assert.equal(gpsCopy.ar.maintenanceRetry, "إعادة المحاولة");
 });

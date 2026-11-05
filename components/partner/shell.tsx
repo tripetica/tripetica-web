@@ -3,7 +3,6 @@ import { type PartnerCopy } from "@/lib/partner/copy";
 import { partnerHasTab, partnerTabForPath } from "@/lib/partner/access";
 import { PARTNER_NAV } from "@/lib/partner/nav";
 import { type PartnerActor } from "@/lib/partner/session";
-import { PartnerLowBatteryWarning } from "@/components/partner/low-battery-warning";
 import { PartnerNav } from "@/components/partner/nav";
 import { PartnerMobileShareRuntime, type MobileShareView } from "@/components/gps/mobile-share";
 import { PartnerPushControl } from "@/components/partner/push-control";
@@ -66,7 +65,6 @@ export function PartnerShell({
       <div className="ops-body">
         <main className="ops-main">
           {actor.isOwner ? <PartnerMobileShareRuntime initial={share} /> : null}
-          {actor.isPrimaryPartner ? <PartnerLowBatteryWarning locale={locale} /> : null}
           {children}
         </main>
       </div>

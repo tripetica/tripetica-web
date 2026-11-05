@@ -5,8 +5,7 @@ import { asPanelLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { actorCan } from "@/lib/ops/session";
 import { gpsCopy } from "@/lib/gps/copy";
-import { canDeleteGpsDevice } from "@/lib/gps/delete-access";
-import { getGpsDevice, listGpsAssignments, listGpsCommands, listGpsPartners, listGpsRoute, listGpsVehicles } from "@/lib/gps/queries";
+import { getGpsDevice, listGpsAssignments, listGpsPartners, listGpsRoute, listGpsVehicles } from "@/lib/gps/queries";
 import { readGpsRange } from "@/lib/gps/range";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +36,7 @@ export default async function OpsGpsDevicePage({
         from: range.from,
         to: range.to,
       });
-  const [commands, vehicles, partners, assignments] = await Promise.all([
-    device.partnerId ? listGpsCommands(device.id, device.partnerId) : Promise.resolve([]),
+  const [vehicles, partners, assignments] = await Promise.all([
     listGpsVehicles(),
     listGpsPartners(),
     listGpsAssignments(device.id),
@@ -54,14 +52,13 @@ export default async function OpsGpsDevicePage({
       partners={partners}
       assignments={assignments}
       route={route}
-      commands={commands}
       fromLocal={"error" in range ? "" : range.fromLocal}
       toLocal={"error" in range ? "" : range.toLocal}
       fromIso={"error" in range ? "" : range.from.toISOString()}
       toIso={"error" in range ? "" : range.to.toISOString()}
       error={error}
       canManage={actorCan(actor, "gps.manage")}
-      canDelete={canDeleteGpsDevice(actor.id)}
+      canDelete={actorCan(actor, "gps.manage")}
       faultNotice={faultNotice(locale, one(query.fault), one(query.need), one(query.rank))}
       showDeviceList
       viewerId={actor.id}

@@ -47,7 +47,9 @@ import {
   allowedAuthorityIds,
   applyDriverVehicleDefault,
   authorityForNotificationForm,
+  driversLinkedToVehicle,
   initialVehicleForSelectedDriver,
+  singleLinkedVehicleId,
   type AuthorityChoice,
 } from "@/lib/partner/fleet-pairing-rules";
 import {
@@ -161,13 +163,21 @@ export function UetdsNotificationForm({
   const [draft, setDraft] = useState(() => {
     const selected = syncDraftLocations({
       ...initialDraft,
-      ...initialUetdsFleetSelection(initialDraft, drivers, vehicles),
+      ...initialUetdsFleetSelection(
+        initialDraft,
+        drivers,
+        vehicles,
+        actor === "partner" ? "single-eligible-driver" : "first-eligible",
+      ),
     });
     const driver = drivers.find((item) => item.id === selected.driverId);
     return initialVehicleForSelectedDriver(
       selected,
       initialDraft.vehicleId,
-      driver?.defaultVehicleId,
+      singleLinkedVehicleId(
+        driver?.vehicleIds ?? (driver?.defaultVehicleId ? [driver.defaultVehicleId] : []),
+        vehicles.map((item) => item.id),
+      ),
       vehicles.map((item) => item.id),
     );
   });
@@ -356,9 +366,17 @@ export function UetdsNotificationForm({
         .sort((a, b) => a.label.localeCompare(b.label, locale)),
     [locale],
   );
+  const visibleDrivers = useMemo(() => {
+    const linked = driversLinkedToVehicle(drivers, draft.vehicleId);
+    if (draft.driverId && !linked.some((item) => item.id === draft.driverId)) {
+      const current = drivers.find((item) => item.id === draft.driverId);
+      return current ? [current, ...linked] : linked;
+    }
+    return linked;
+  }, [drivers, draft.driverId, draft.vehicleId]);
   const driverOptions = useMemo(
-    () => drivers.map((item) => ({ value: item.id, label: item.label })),
-    [drivers],
+    () => visibleDrivers.map((item) => ({ value: item.id, label: item.label })),
+    [visibleDrivers],
   );
   const vehicleOptions = useMemo(
     () => vehicles.map((item) => ({ value: item.id, label: item.label })),
@@ -1201,7 +1219,10 @@ export function UetdsNotificationForm({
                   const next = applyDriverVehicleDefault(
                     current,
                     value,
-                    nextDriver?.defaultVehicleId,
+                    singleLinkedVehicleId(
+                      nextDriver?.vehicleIds ?? (nextDriver?.defaultVehicleId ? [nextDriver.defaultVehicleId] : []),
+                      vehicles.map((item) => item.id),
+                    ),
                     vehicles.map((item) => item.id),
                   );
                   if (next === current) {
@@ -1236,7 +1257,19 @@ export function UetdsNotificationForm({
               placeholder={copy.selectVehicle}
               emptyLabel={copy.noVehicles}
               disabled={lockDriver && vehicles.length <= 1}
-              onChange={(value) => updateTrip("vehicleId", value)}
+              onChange={(value) => {
+                setDraft((current) => {
+                  const linked = driversLinkedToVehicle(drivers, value);
+                  const driverId = !value || linked.some((item) => item.id === current.driverId) ? current.driverId : "";
+                  const next = { ...current, vehicleId: value, driverId };
+                  next.fieldProvenance = {
+                    ...current.fieldProvenance,
+                    vehicleId: markUserEdited(current.fieldProvenance.vehicleId, value, current.vehicleId),
+                    driverId: markUserEdited(current.fieldProvenance.driverId, driverId, current.driverId),
+                  };
+                  return next;
+                });
+              }}
             />
             {lockDriver && vehicles.length === 0 ? (
               <p className="uetds-field-hint" role="status">{copy.noVehicles}</p>

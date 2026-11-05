@@ -40,12 +40,6 @@ function kindLabel(copy: GpsCopy, kind: MaintenanceEventKind) {
   return copy.maintenanceKindSetup;
 }
 
-function noticeLabel(copy: GpsCopy, thresholdKm: number) {
-  if (thresholdKm > 0) return `${copy.maintenanceRemaining}: ${thresholdKm} ${copy.maintenanceKmUnit}`;
-  if (thresholdKm === 0) return `${copy.maintenanceDue}: 0 ${copy.maintenanceKmUnit}`;
-  return `${copy.maintenanceOverdue}: ${-thresholdKm} ${copy.maintenanceKmUnit}`;
-}
-
 export function GpsMaintenancePanel({
   vehicleId,
   copy,
@@ -63,6 +57,8 @@ export function GpsMaintenancePanel({
   const [mode, setMode] = useState<"view" | "update" | "confirm" | "edit">("view");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadProblem, setLoadProblem] = useState<"forbidden" | "failed" | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [pending, setPending] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
 
@@ -75,11 +71,19 @@ export function GpsMaintenancePanel({
           headers: { Accept: "application/json" },
           cache: "no-store",
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (!stopped) setLoadProblem(response.status === 401 || response.status === 404 ? "forbidden" : "failed");
+          return;
+        }
         const body = await response.json() as MaintenanceSnapshot;
-        if (!stopped && body && typeof body === "object" && "started" in body) setSnapshot(body);
+        if (!stopped && body && typeof body === "object" && "started" in body) {
+          setSnapshot(body);
+          setLoadProblem(null);
+          return;
+        }
+        if (!stopped) setLoadProblem("failed");
       } catch {
-        return;
+        if (!stopped) setLoadProblem("failed");
       } finally {
         if (!stopped) timer = window.setTimeout(() => void pull(), GPS_LIVE_POLL_MS);
       }
@@ -89,7 +93,7 @@ export function GpsMaintenancePanel({
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, [locale, maintenanceUrl, vehicleId]);
+  }, [attempt, locale, maintenanceUrl, vehicleId]);
 
   async function submit(action: (formData: FormData) => Promise<{ ok: true; snapshot: MaintenanceSnapshot } | { ok: false; error: MaintenanceError }>, formData: FormData) {
     setPending(true);
@@ -104,6 +108,15 @@ export function GpsMaintenancePanel({
     setSnapshot(result.snapshot);
     setMode("view");
     setIdempotencyKey(newKey());
+  }
+
+  if (!snapshot && loadProblem) {
+    return (
+      <div className="gps-maintenance-actions">
+        <p className="gps-inline-note" role="alert">{loadProblem === "forbidden" ? copy.maintenanceForbidden : copy.maintenanceLoadError}</p>
+        <button type="button" className="ops-btn-primary" onClick={() => { setLoadProblem(null); setAttempt((value) => value + 1); }}>{copy.maintenanceRetry}</button>
+      </div>
+    );
   }
 
   if (!snapshot) return <p className="gps-inline-note">{copy.maintenanceLoading}</p>;
@@ -248,28 +261,6 @@ export function GpsMaintenancePanel({
             ))}
           </ul>
         )
-      ) : null}
-      {active.notices.length > 0 ? (
-        <div className="gps-maintenance-notices">
-          <h3>{copy.maintenanceNotices}</h3>
-          <ul className="gps-maintenance-history">
-            {active.notices.map((notice) => (
-              <li key={`${notice.thresholdKm}-${notice.createdAt}`}>
-                {portalActor === "driver" && notice.driverBody ? (
-                  <>
-                    <strong>{notice.driverTitle}</strong>
-                    <span className="gps-inline-note" style={{ whiteSpace: "pre-line", display: "block" }}>{notice.driverBody}</span>
-                  </>
-                ) : (
-                  <>
-                    {noticeLabel(copy, notice.thresholdKm)}
-                    {` · ${formatMaintenanceDateTime(notice.createdAt, locale)}`}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
     </div>
   );

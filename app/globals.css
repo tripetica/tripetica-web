@@ -14211,6 +14211,100 @@ html[dir="rtl"] .location-back {
   font-size: 0.82rem;
 }
 
+.ops-table td.fleet-link-cell {
+  white-space: normal;
+  vertical-align: top;
+  min-width: 11rem;
+  max-width: 18rem;
+}
+
+.ops-table td.fleet-link-cell.is-single {
+  max-width: 12rem;
+  white-space: nowrap;
+}
+
+.fleet-link-trigger,
+.fleet-link-summary-text {
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.fleet-link-trigger {
+  display: inline;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.fleet-link-trigger.is-wrapping,
+.fleet-link-summary-text {
+  white-space: normal;
+}
+
+.fleet-link-popover {
+  z-index: 80;
+  padding: 0.35rem;
+  border: 1px solid #d0d7e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 8px 24px rgba(20, 46, 92, 0.14);
+}
+
+.fleet-link-popover ul {
+  list-style: none;
+  max-height: 15rem;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+.fleet-link-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0.42rem 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.fleet-link-option span {
+  min-width: 0;
+  white-space: normal;
+}
+
+.fleet-link-popover input[type="checkbox"],
+.fleet-link-popover input[type="radio"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 0 0 0 auto;
+  padding: 0;
+}
+
+.fleet-link-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.35rem 0.2rem 0.15rem;
+}
+
+.fleet-link-actions .ops-btn-primary,
+.fleet-link-actions .ops-btn-secondary {
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+}
+
 .ops-driver-membership-select {
   max-width: 8.5rem;
 }
@@ -14918,47 +15012,9 @@ body:has(.driver-portal.ops-app) {
   overflow-wrap: anywhere;
 }
 
-.gps-battery {
-  white-space: nowrap;
-  color: #17803d;
-}
-
-.gps-battery.is-low {
-  color: #b42318;
-}
-
-.gps-battery-icon {
-  display: inline-block;
-  width: 1.15em;
-  height: 0.72em;
-  vertical-align: -0.05em;
-}
-
 .gps-partner-device-facts {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: 12.5rem;
-}
-
-.gps-device-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.55rem;
-  min-width: 0;
-}
-
-.gps-device-battery {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  min-width: 0;
-  color: #142e5c;
-  font-size: 1.02rem;
-  line-height: 1.3;
-}
-
-.gps-device-sep {
-  color: #5c6b80;
 }
 
 .gps-ats {
@@ -15125,57 +15181,6 @@ body:has(.driver-portal.ops-app) {
 .gps-pill.is-stale { background: #fff4d6; color: #8a5a00; }
 .gps-pill.is-offline { background: #f1f3f6; color: #5c6b80; }
 
-.gps-wifi-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.35rem 0.75rem;
-  margin-bottom: 0.85rem;
-}
-
-.gps-wifi-head h2 {
-  min-width: 0;
-}
-
-.gps-wifi-notice {
-  margin: 0 0 0.85rem;
-  color: #3d4d66;
-  line-height: 1.45;
-}
-
-.gps-wifi-fleet {
-  display: grid;
-  gap: 0.65rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.gps-wifi-fleet a {
-  width: 100%;
-  display: grid;
-  gap: 0.2rem;
-  text-align: left;
-  min-height: 2.75rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #d0d7e2;
-  border-radius: 1rem;
-  background: #fff;
-  color: #142e5c;
-  font: inherit;
-  text-decoration: none;
-}
-
-.gps-wifi-fleet a strong {
-  font-size: 1rem;
-}
-
-.gps-wifi-fleet a em {
-  font-style: normal;
-  font-weight: 700;
-  color: #1d4f91;
-}
-
 .gps-unpinned {
   display: flex;
   flex-wrap: wrap;
@@ -15249,23 +15254,6 @@ body:has(.driver-portal.ops-app) {
   font-weight: 400;
 }
 
-.gps-wifi-share {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.55rem;
-  flex: 0 1 auto;
-  min-width: 0;
-  min-height: 2.75rem;
-}
-
-.gps-wifi-share-label {
-  color: #142e5c;
-  font-size: 0.92rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
 .gps-section .booking-switch {
   display: inline-flex;
   align-items: center;
@@ -15284,83 +15272,17 @@ body:has(.driver-portal.ops-app) {
   box-shadow: 0 0 0 2px rgb(20 46 92 / 0.28);
 }
 
-.gps-wifi-share-error {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-
-.gps-wifi-dialog {
+.gps-confirm-dialog {
   width: min(32rem, calc(100vw - 2rem));
 }
 
-.gps-wifi-dialog .ops-modal-actions button,
-.gps-low-dialog .ops-modal-actions button {
+.gps-confirm-dialog .ops-modal-actions button {
   min-height: 44px;
 }
 
-.gps-wifi-dialog .ops-btn,
-.gps-low-dialog .ops-btn {
+.gps-confirm-dialog .ops-btn {
   background: #142e5c;
   color: #fff;
-}
-
-.gps-low-banner {
-  display: flex;
-  width: 100%;
-  margin: 0 0 0.75rem;
-  padding: 0.75rem 1rem;
-  min-height: 44px;
-  border: 1px solid #f3c3bc;
-  border-radius: 0.75rem;
-  background: #fff4f2;
-  color: #b42318;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.gps-low-dialog {
-  position: relative;
-  width: min(28rem, calc(100vw - 1.5rem));
-}
-
-.gps-low-dialog .ops-modal-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.gps-low-dialog .ops-modal-actions button {
-  min-height: 44px;
-  flex: 1 1 8rem;
-}
-
-.gps-low-dismiss {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #142e5c;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.gps-low-device {
-  margin: 0;
-  font-weight: 650;
-}
-
-.gps-low-clock {
-  margin: 0.2rem 0 0.75rem;
-  font-variant-numeric: tabular-nums;
-  font-size: 1.75rem;
-  font-weight: 650;
-  letter-spacing: 0.04em;
 }
 
 .gps-section,
@@ -15898,6 +15820,32 @@ body:has(.driver-portal.ops-app) {
   margin-top: 0.75rem;
   border-radius: 12px;
   overflow: hidden;
+}
+
+.gps-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.gps-map-unavailable {
+  position: relative;
+  z-index: 1;
+  margin: 1rem;
+  color: #142e5c;
+}
+
+.gps-map .gps-status-wrap,
+.gps-map .gps-history-dot,
+.gps-map .gps-playback-vehicle {
+  position: absolute;
+}
+
+.gps-map .gps-fleet-label,
+.gps-map .gps-playback-end {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
 }
 
 .gps-facts .gps-fleet-pick {
@@ -16515,76 +16463,6 @@ body:has(.driver-portal.ops-app) {
   }
 }
 
-.gps-camera {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.gps-camera-stage {
-  position: relative;
-  width: 100%;
-  max-width: 40rem;
-  aspect-ratio: 16 / 9;
-  margin: 0;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #101820;
-  color: #d5dde8;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  padding: 1rem;
-}
-
-.gps-camera-stage p {
-  margin: 0;
-  max-width: 18rem;
-}
-
-.gps-camera-stage img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: #000;
-}
-
-.gps-camera-badge {
-  position: absolute;
-  top: 0.6rem;
-  left: 0.6rem;
-  z-index: 1;
-  border-radius: 999px;
-  padding: 0.2rem 0.55rem;
-  background: #dc2626;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.gps-camera-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.gps-camera-actions button {
-  min-height: 44px;
-}
-
-@media (max-width: 480px) {
-  .gps-camera-stage {
-    max-width: none;
-  }
-
-  .gps-camera-actions button {
-    width: 100%;
-  }
-}
-
 .gps-maintenance-form {
   display: grid;
   gap: 0.75rem;
@@ -16652,12 +16530,6 @@ body:has(.driver-portal.ops-app) {
   border-top: 1px solid #e6ebf2;
   color: #3d4a5c;
   font-size: 0.84rem;
-}
-
-.gps-maintenance-notices h3 {
-  margin: 0.9rem 0 0;
-  color: #142e5c;
-  font-size: 0.95rem;
 }
 
 @media (min-width: 720px) {

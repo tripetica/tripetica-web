@@ -10,7 +10,7 @@ export type UetdsDeleteReason = "deleted" | "still-valid" | "unverified" | "unav
 export type UetdsDeleteResult = { id: string; reason: UetdsDeleteReason };
 type Row = { id: string; status: string; company_id: string | null; ministry_env: string; ministry_reference: string | null };
 const rowSql = `SELECT id, status, company_id, ministry_env, ministry_reference FROM uetds_notifications
- WHERE id = $1 AND ($2::uuid IS NULL OR partner_id = $2)`;
+ WHERE id = $1 AND ($2::uuid IS NULL OR partner_can_access_uetds_notification($2, id))`;
 function authorizedInput(id: string, scope: UetdsDeleteScope) {
   return isUuid(id) && (scope.actorType === "ops" || isUuid(scope.partnerId ?? ""));
 }

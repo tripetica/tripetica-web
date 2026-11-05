@@ -3,11 +3,11 @@ export type GpsInstallationStatus = "pending" | "installed";
 export type GpsLinkTechnology = "2g" | "4g";
 
 export type GpsRegistrationProfile = {
-  receiver: "esp32" | "teltonika";
-  manufacturer: "esp32" | "teltonika";
-  trackerModel: GpsTrackerModel | null;
-  linkTechnology: GpsLinkTechnology | null;
-  imei: string | null;
+  receiver: "teltonika";
+  manufacturer: "teltonika";
+  trackerModel: GpsTrackerModel;
+  linkTechnology: GpsLinkTechnology;
+  imei: string;
   serialNumber: string | null;
   simPhone: string | null;
   simOperator: string | null;
@@ -39,10 +39,9 @@ export function gpsSimOperator(value: string): GpsSimOperator | null {
   return (GPS_SIM_OPERATORS as readonly string[]).includes(trimmed) ? trimmed as GpsSimOperator : null;
 }
 
-export function gpsLinkForModel(model: GpsTrackerModel | null): GpsLinkTechnology | null {
+export function gpsLinkForModel(model: GpsTrackerModel): GpsLinkTechnology {
   if (model === "fmb920") return "2g";
-  if (model === "fmc920") return "4g";
-  return null;
+  return "4g";
 }
 
 export function gpsSecretRegistrationField(name: string) {
@@ -50,8 +49,7 @@ export function gpsSecretRegistrationField(name: string) {
 }
 
 export function gpsRegistrationProfile(input: {
-  receiver: "esp32" | "teltonika";
-  model: GpsTrackerModel | null;
+  model: GpsTrackerModel;
   imei: string;
   serial: string;
   simPhone: string;
@@ -64,26 +62,7 @@ export function gpsRegistrationProfile(input: {
   const simOperator = gpsSimOperator(input.simOperator);
   const simApn = optionalText(input.simApn);
   if (!simOperator || simPhone === undefined) return { ok: false, error: "invalid" };
-  if (input.receiver === "esp32") {
-    if (imei && !IMEI_PATTERN.test(imei)) return { ok: false, error: "imei" };
-    if (serial || simApn) return { ok: false, error: "invalid" };
-    return {
-      ok: true,
-      value: {
-        receiver: "esp32",
-        manufacturer: "esp32",
-        trackerModel: null,
-        linkTechnology: null,
-        imei: imei || null,
-        serialNumber: null,
-        simPhone,
-        simOperator,
-        simApn: null,
-        installationStatus: "installed",
-      },
-    };
-  }
-  if (!input.model || !IMEI_PATTERN.test(imei)) return { ok: false, error: "imei" };
+  if (!IMEI_PATTERN.test(imei)) return { ok: false, error: "imei" };
   if (serial && !SERIAL_PATTERN.test(serial)) return { ok: false, error: "invalid" };
   if (simApn && !APN_PATTERN.test(simApn)) return { ok: false, error: "invalid" };
   return {
@@ -101,15 +80,6 @@ export function gpsRegistrationProfile(input: {
       installationStatus: "pending",
     },
   };
-}
-
-export function gpsInitialLiveSource(input: {
-  receiver: "esp32" | "teltonika";
-  hasVehicle: boolean;
-  vehicleHasLiveSource: boolean;
-}) {
-  if (input.receiver === "teltonika" || !input.hasVehicle) return false;
-  return !input.vehicleHasLiveSource;
 }
 
 export function gpsLiveSourceAfterAssignment(input: {

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { PartnerDetail } from "@/components/ops/partner-detail";
+import { PartnerMenuAccess } from "@/components/ops/partner-menu-access";
 import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { requireOpsPage } from "@/lib/ops/auth";
 import { opsCopy } from "@/lib/ops/copy";
@@ -7,6 +8,7 @@ import { getOpsPartner, getPrimaryPartnerId } from "@/lib/ops/partners";
 import { actorCan } from "@/lib/ops/session";
 import { listOpsPartnerAcceptedJobs } from "@/lib/ops/partner-jobs";
 import { listPartnerDrivers, listPartnerVehicles } from "@/lib/partner/fleet";
+import { listPartnerMenuDenials } from "@/lib/partner/menu-access";
 
 export const dynamic = "force-dynamic";
 
@@ -33,16 +35,26 @@ export default async function OpsPartnerDetailPage({
   }
   const query = await searchParams;
   const tab = parseTab(query.tab);
-  const [drivers, vehicles, jobs, primaryPartnerId] = await Promise.all([
+  const [drivers, vehicles, jobs, primaryPartnerId, denied] = await Promise.all([
     listPartnerDrivers(partner.id),
     listPartnerVehicles(partner.id),
     listOpsPartnerAcceptedJobs(partner.id, locale),
     getPrimaryPartnerId(),
+    listPartnerMenuDenials(partner.id),
   ]);
   const copy = opsCopy[asPanelLocale(locale)];
 
   return (
     <PartnerDetail
+      authoritySection={
+        <PartnerMenuAccess
+          locale={locale}
+          partnerId={partner.id}
+          copy={copy}
+          denied={denied}
+          canManage={actorCan(actor, "partners.manage")}
+        />
+      }
       locale={locale}
       copy={copy}
       partner={partner}

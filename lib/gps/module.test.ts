@@ -13,10 +13,10 @@ import { partnerCopy } from "@/lib/partner/copy";
 import { partnerHasGpsDeviceControls } from "@/lib/partner/gps-access";
 import { opsCopy } from "@/lib/ops/copy";
 
-test("menu and module names include camera in every panel locale", () => {
-  assert.equal(partnerCopy.tr.gps, "GPS / Wi-Fi / Kamera");
-  assert.equal(partnerCopy.en.gps, "GPS / Wi-Fi / Camera");
-  assert.equal(partnerCopy.ru.gps, "GPS / Wi-Fi / Камера");
+test("menu and module expose only the shared GPS surface", () => {
+  assert.equal(partnerCopy.tr.gps, "GPS");
+  assert.equal(partnerCopy.en.gps, "GPS");
+  assert.equal(partnerCopy.ru.gps, "GPS");
   assert.equal(partnerCopy.tr.gpsOnly, "GPS");
   assert.equal(partnerCopy.en.gpsOnly, "GPS");
   assert.equal(partnerCopy.ru.gpsOnly, "GPS");
@@ -24,19 +24,11 @@ test("menu and module names include camera in every panel locale", () => {
   assert.equal(partnerHasGpsDeviceControls(false), false);
   const shell = readFileSync(new URL("../../components/partner/shell.tsx", import.meta.url), "utf8");
   const live = readFileSync(new URL("../../components/gps/live-section.tsx", import.meta.url), "utf8");
-  const camera = readFileSync(new URL("../../lib/gps/camera-access.ts", import.meta.url), "utf8");
-  const actions = readFileSync(new URL("../../lib/gps/actions.ts", import.meta.url), "utf8");
   assert.match(shell, /actor\.isPrimaryPartner \? copy\.gps : copy\.gpsOnly/);
-  assert.match(live, /deviceControls \? tab : "gps"/);
-  assert.match(camera, /!actor\.isPrimaryPartner/);
-  assert.doesNotMatch(camera, /Tripetica/);
-  assert.match(actions, /!partner\.isPrimaryPartner/);
+  assert.doesNotMatch(live, /WifiPanel|CameraLive|batteryPercent|wifiEnabled|cameraReady/);
   assert.doesNotMatch(readFileSync(new URL("../../lib/partner/gps-access.ts", import.meta.url), "utf8"), /Tripetica|partnerName/);
   assert.equal(opsCopy.tr.gps, partnerCopy.tr.gps);
   assert.equal(gpsCopy.tr.tabGps, "GPS");
-  assert.equal(gpsCopy.en.tabCamera, "Camera");
-  assert.equal(gpsCopy.ru.tabCamera, "Камера");
-  assert.match(gpsCopy.tr.cameraEmpty, /henüz bağlı değil/);
   assert.equal(gpsCopy.tr.popupAddress, "Adres");
   assert.equal(gpsCopy.tr.showHistory, "Konum geçmişini göster");
   assert.equal(gpsCopy.tr.hideHistory, "Konum geçmişini gizle");

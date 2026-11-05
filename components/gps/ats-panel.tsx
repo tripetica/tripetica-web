@@ -117,7 +117,7 @@ export function GpsAtsPanel({
       {confirming && mounted ? createPortal(
         <div className="ops-modal-backdrop" role="presentation" onClick={() => setConfirming(false)}>
           <div
-            className="ops-modal gps-wifi-dialog"
+            className="ops-modal gps-confirm-dialog"
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}

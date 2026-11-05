@@ -12,7 +12,7 @@ export async function listPartnerDriverPermissions(partnerId: string) {
   const result = await query<{ id: string; portal_permissions: unknown }>(
     `SELECT id, portal_permissions
        FROM partner_drivers
-      WHERE partner_id = $1
+      WHERE partner_can_access_driver($1, id)
         AND deleted_at IS NULL`,
     [partnerId],
   );
@@ -27,7 +27,7 @@ export async function getPartnerDriverPermissions(partnerId: string, driverId: s
     `SELECT portal_permissions
        FROM partner_drivers
       WHERE id = $1
-        AND partner_id = $2
+        AND partner_can_access_driver($2, id)
         AND deleted_at IS NULL
       LIMIT 1`,
     [driverId, partnerId],

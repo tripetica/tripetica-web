@@ -9,8 +9,10 @@ import {
   authorityForNotificationForm,
   companyChoicesForRow,
   fleetChoicesForPartner,
+  driversLinkedToVehicle,
   initialVehicleForSelectedDriver,
   showGoldAuthorityField,
+  singleLinkedVehicleId,
 } from "./fleet-pairing-rules";
 
 const driver = "33333333-3333-4333-8333-333333333333";
@@ -21,7 +23,7 @@ const authority = "99999999-9999-4999-8999-999999999999";
 const otherAuthority = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const company = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
-test("driver selection fills the linked vehicle and leaves a later manual vehicle in place", () => {
+test("driver selection fills its linked vehicle and clears a stale vehicle when the driver changes", () => {
   const vehicles = [vehicleA, vehicleB];
   const filled = applyDriverVehicleDefault(
     { driverId: "", vehicleId: "", note: "kept" },
@@ -36,7 +38,7 @@ test("driver selection fills the linked vehicle and leaves a later manual vehicl
   assert.equal(sameDriver, manual);
 
   const switched = applyDriverVehicleDefault(manual, otherDriver, null, vehicles);
-  assert.equal(switched.vehicleId, vehicleB);
+  assert.equal(switched.vehicleId, "");
   assert.equal(switched.driverId, otherDriver);
 
   const missingDefault = applyDriverVehicleDefault(
@@ -45,7 +47,7 @@ test("driver selection fills the linked vehicle and leaves a later manual vehicl
     "not-in-list",
     vehicles,
   );
-  assert.equal(missingDefault.vehicleId, vehicleB);
+  assert.equal(missingDefault.vehicleId, "");
 
   const opened = initialVehicleForSelectedDriver(
     { driverId: driver, vehicleId: vehicleB },
@@ -61,6 +63,19 @@ test("driver selection fills the linked vehicle and leaves a later manual vehicl
     vehicles,
   );
   assert.equal(reserved.vehicleId, vehicleB);
+  assert.equal(singleLinkedVehicleId([vehicleA, vehicleB], vehicles), "");
+  assert.equal(singleLinkedVehicleId([vehicleA], vehicles), vehicleA);
+  assert.equal(singleLinkedVehicleId([vehicleA], [vehicleB]), "");
+  assert.deepEqual(
+    driversLinkedToVehicle(
+      [
+        { id: driver, vehicleIds: [vehicleA] },
+        { id: otherDriver, vehicleIds: [vehicleB] },
+      ],
+      vehicleA,
+    ).map((item) => item.id),
+    [driver],
+  );
 });
 
 test("gold edit fills the linked authority and a manual choice stays until the driver changes", () => {
@@ -185,7 +200,8 @@ test("forms autofill an optional authority on the notification form and keep SOA
   const ops = readFileSync("lib/ops/partner-fleet-actions.ts", "utf8");
 
   assert.match(notification, /applyDriverVehicleDefault/);
-  assert.match(notification, /updateTrip\("vehicleId"/);
+  assert.match(notification, /driversLinkedToVehicle/);
+  assert.match(notification, /singleLinkedVehicleId/);
   assert.match(notification, /authorityForNotificationForm/);
   assert.match(notification, /edevletAuthorityOptional/);
   assert.doesNotMatch(notification, /name="edevletAuthorityId"/);
@@ -254,6 +270,9 @@ test("inline lists keep one partner scope and the pairing table as the only link
   assert.match(patch, /partner_fleet_defaults/);
   assert.match(patch, /saveDriverVehiclePair/);
   assert.match(patch, /saveVehicleDriverPair/);
+  assert.match(patch, /saveDriverVehicleSet/);
+  assert.match(patch, /saveVehicleDriverSet/);
+  assert.doesNotMatch(readFileSync("lib/partner/fleet-pairing.ts", "utf8"), /OR vehicle_id = \$2/);
   assert.match(patch, /default_edevlet_authority_id = NULL/);
   assert.doesNotMatch(patch, /default_vehicle_id|default_driver_id/);
   assert.match(css, /\.edevlet-company-options \.ops-check input\[type="checkbox"\][\s\S]*width:\s*1rem/);

@@ -2,14 +2,13 @@ import { notFound } from "next/navigation";
 import { GpsDeviceWorkspace } from "@/components/gps/device-workspace";
 import { isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
-import { isPartnerCommand } from "@/lib/gps/commands";
 import { gpsCopyFor } from "@/lib/gps/copy";
 import { analyzeDriveTrack, type DriveTrackPoint } from "@/lib/gps/drive";
 import { listPartnerVehicleIdentity, listPhysicalDrivePoints, listVehicleGreenDriving, readDriveVehicle } from "@/lib/gps/drive-store";
 import { type DriveGreenView } from "@/lib/teltonika/green-driving";
 import { partnerGpsFocus, type GpsFleetVehicle } from "@/lib/gps/fleet";
 import { gpsIsLiveMapSource } from "@/lib/gps/registration";
-import { listFleetDefaultDrivers, listGpsCommands, listGpsDevices, listGpsRoute, type GpsRoutePoint } from "@/lib/gps/queries";
+import { listFleetDefaultDrivers, listGpsDevices, listGpsRoute, type GpsRoutePoint } from "@/lib/gps/queries";
 import { readGpsRange } from "@/lib/gps/range";
 import { requirePartnerPage } from "@/lib/partner/auth";
 import { partnerCopyFor } from "@/lib/partner/copy";
@@ -68,9 +67,6 @@ export default async function PartnerGpsPage({
       to: range.to,
     })
     : { total: 0, step: 1, points: [] as GpsRoutePoint[] };
-  const commands = selected?.partnerId && deviceControls
-    ? (await listGpsCommands(selected.id, selected.partnerId)).filter((command) => isPartnerCommand(command.kind) || command.kind === "wifi.configure" || command.kind === "wifi.disable")
-    : [];
   const drive = !("error" in range) && selected?.vehicleId
     ? analyzeDriveTrack({
         ...(await listPhysicalDrivePoints({
@@ -135,7 +131,6 @@ export default async function PartnerGpsPage({
       device={selected ?? null}
       vehicles={[]}
       route={route}
-      commands={commands}
       fromLocal={"error" in range ? "" : range.fromLocal}
       toLocal={"error" in range ? "" : range.toLocal}
       fromIso={"error" in range ? "" : range.from.toISOString()}
@@ -158,7 +153,6 @@ export default async function PartnerGpsPage({
       rangeSearch={rangeParams.toString()}
       deviceControls={deviceControls}
       loadImmobilizer
-      initialTab={one(query.tab) === "wifi" ? "wifi" : one(query.tab) === "camera" ? "camera" : "gps"}
       drive={drive}
       driveVehicle={driveVehicle}
       green={green}
@@ -187,15 +181,8 @@ function fleetVehicle(
     source: "device",
     vehicleId: device.vehicleId,
     manufacturer: device.manufacturer,
-    wifiEnabled: device.reportedWifiEnabled,
-    reportedWifiSsid: device.reportedWifiSsid,
-    wifiClients: device.wifiClients,
-    lteRegistration: device.lteRegistration,
     network: device.network,
     rssi: device.rssi,
-    pppStatus: device.pppStatus,
-    naptStatus: device.naptStatus,
-    apStatus: device.apStatus,
     din1State: device.din1State,
     driverName: device.vehicleId ? drivers.get(device.vehicleId) ?? null : null,
   }, identities);

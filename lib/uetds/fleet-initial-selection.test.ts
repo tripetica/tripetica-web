@@ -14,6 +14,28 @@ test('empty lists remain empty; either fleet can be selected independently', () 
 test('first eligible driver and matching vehicle follow existing list order', () => {
   assert.deepEqual(select(empty, [option('d2'), option('d1')], [option('v-other','b'),option('v2'),option('v1')]), { driverId: 'd2', vehicleId: 'v2' });
 });
+test('partner new notification selects a driver only when exactly one eligible driver exists', () => {
+  const policy = 'single-eligible-driver';
+  assert.deepEqual(select(empty, [], [option('v')], policy), empty);
+  assert.deepEqual(select(empty, [option('d')], [option('v')], policy), { driverId: 'd', vehicleId: '' });
+  assert.deepEqual(
+    select(empty, [option('d1'), option('d2'), option('d3')], [option('v')], policy),
+    empty,
+  );
+});
+test('partner new notification counts every in-scope listed driver and preserves explicit selections', () => {
+  const inactive = option('inactive'); inactive.company!.status = 'inactive';
+  const missingIdentity = option('missing-identity'); missingIdentity.hasNationalId = false;
+  assert.deepEqual(
+    select(empty, [inactive, missingIdentity, option('only')], [option('v')], 'single-eligible-driver'),
+    empty,
+  );
+  const chosen = { driverId: 'chosen', vehicleId: 'chosen-vehicle' };
+  assert.deepEqual(
+    select(chosen, [option('d1'), option('d2')], [option('v1'), option('v2')], 'single-eligible-driver'),
+    chosen,
+  );
+});
 test('inactive/not-ready/missing company and missing driver identity are skipped', () => {
   const inactive = option('inactive'); inactive.company!.status = 'inactive';
   const unready = option('unready'); unready.company!.integrationStatus = 'incomplete';

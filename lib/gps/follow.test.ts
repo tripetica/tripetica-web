@@ -66,4 +66,8 @@ test("live map popup cannot pan the selected marker off center", () => {
   const popupOpen = map.slice(map.indexOf('"popupopen"'), map.indexOf('"popupclose"'));
   assert.doesNotMatch(popupOpen, /setView|panTo|panBy|fitBounds|flyTo/);
   assert.match(map, /GLIDE_MS = 800/);
+  assert.equal(map.split("mountGoogleMap(").length - 1, 1);
+  assert.doesNotMatch(map, /openstreetmap\.org|from \"leaflet\"/);
+  const updates = map.slice(map.indexOf("[liveLatitude, liveLongitude, mapEpoch, trackKey, vehicleId]"));
+  assert.doesNotMatch(updates, /mountGoogleMap\(/);
 });

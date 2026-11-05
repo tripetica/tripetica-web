@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FleetInlineSelect } from "@/components/partner/fleet-inline-select";
+import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
 import { localizedPath } from "@/lib/i18n/path";
 import { type Locale } from "@/lib/i18n/config";
 import { type OpsCopy } from "@/lib/ops/copy";
@@ -216,37 +217,31 @@ export function OpsVehicleTable({
                       formatUetdsCompanyListLabel(vehicle.uetdsCompany, copy.uetdsCompanyExternal)
                     )}
                   </td>
-                  <td>
+                  <td className="fleet-link-cell">
                     <OpsVehicleDriverCell
                       canManage={canManage}
-                      value={vehicle.defaultDriverId}
+                      values={vehicle.linkedDriverIds ?? (vehicle.defaultDriverId ? [vehicle.defaultDriverId] : [])}
                       options={fleetChoicesForPartner(fleetChoices, vehicle.partnerId).drivers}
                       emptyLabel={copy.fleetPairNone}
-                      label={copy.defaultDriver}
+                      saveLabel={copy.save}
+                      cancelLabel={copy.cancelEdit}
                       saveFailedLabel={copy.vehicleSaveFailed}
                       onSave={async (next) => {
                         const result = await patchOpsVehicleDriverAction({
                           locale,
                           partnerId: vehicle.partnerId,
                           vehicleId: vehicle.id,
-                          driverId: next,
+                          driverIds: next,
                         });
                         if (!result.ok) return false;
+                        const taken = new Set(result.driverIds);
                         setItems((current) =>
                           current.map((item) => {
                             if (item.id === vehicle.id) {
-                              return { ...item, defaultDriverId: result.driverId };
+                              return { ...item, defaultDriverId: result.driverIds[0] ?? null, linkedDriverIds: result.driverIds };
                             }
-                            if (item.partnerId !== vehicle.partnerId) {
-                              return item;
-                            }
-                            if (result.releasedVehicleId && item.id === result.releasedVehicleId) {
-                              return { ...item, defaultDriverId: null };
-                            }
-                            if (result.driverId && item.defaultDriverId === result.driverId) {
-                              return { ...item, defaultDriverId: null };
-                            }
-                            return item;
+                            const linkedDriverIds = (item.linkedDriverIds ?? []).filter((id) => !taken.has(id));
+                            return { ...item, defaultDriverId: linkedDriverIds[0] ?? null, linkedDriverIds };
                           }),
                         );
                         return true;
@@ -333,33 +328,35 @@ export function OpsVehicleTable({
 
 function OpsVehicleDriverCell({
   canManage,
-  value,
+  values,
   options,
   emptyLabel,
-  label,
+  saveLabel,
+  cancelLabel,
   saveFailedLabel,
   onSave,
 }: {
   canManage: boolean;
-  value: string | null;
+  values: readonly string[];
   options: readonly FleetChoice[];
   emptyLabel: string;
-  label: string;
+  saveLabel: string;
+  cancelLabel: string;
   saveFailedLabel: string;
-  onSave: (next: string) => Promise<boolean>;
+  onSave: (next: string[]) => Promise<boolean>;
 }) {
+  const labels = options.filter((option) => values.includes(option.id)).map((option) => option.label);
   if (!canManage) {
-    if (!value) {
-      return emptyLabel;
-    }
-    return options.find((option) => option.id === value)?.label ?? emptyLabel;
+    return labels.join(", ") || emptyLabel;
   }
   return (
-    <FleetInlineSelect
-      value={value ?? ""}
+    <FleetLinkMenu
+      mode="multiple"
+      values={values}
       options={options}
       emptyLabel={emptyLabel}
-      label={label}
+      saveLabel={saveLabel}
+      cancelLabel={cancelLabel}
       saveFailedLabel={saveFailedLabel}
       onSave={onSave}
     />

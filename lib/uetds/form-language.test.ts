@@ -145,5 +145,5 @@ test("permanent AI language rules cover Ops+Partner fill paths and schema fields
   assert.match(source("lib/uetds/ministry-submit.ts"), /normalizeUetdsPurposeText/);
   assert.match(source("lib/uetds/ministry-mutate.ts"), /normalizeUetdsPurposeText/);
   assert.match(source("lib/uetds/notification-actions.ts"), /extractAiUetdsDocument/);
-  assert.match(source("lib/uetds/notification-actions.ts"), /\["ops", "partner"\]/);
+  assert.match(source("lib/uetds/notification-actions.ts"), /\["ops", "partner", "driver"\]/);
 });

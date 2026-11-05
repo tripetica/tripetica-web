@@ -39,6 +39,7 @@ export type OpsDriverListItem = {
   uetdsCompanyId: string | null;
   uetdsCompany: UetdsCompanyRef | null;
   defaultVehicleId: string | null;
+  linkedVehicleIds: string[];
   defaultAuthorityId: string | null;
   uetdsSubscription: UetdsDriverSubscriptionListSummary;
 };
@@ -72,7 +73,7 @@ type DriverListRow = {
   service_advanced_fee: string | null;
   service_mobile_gps_enabled: boolean | null;
   service_mobile_gps_fee: string | null;
-  default_vehicle_id: string | null;
+  linked_vehicle_ids: string[] | null;
   default_authority_id: string | null;
 };
 
@@ -121,7 +122,8 @@ function mapListItem(row: DriverListRow): OpsDriverListItem {
     partnerName: row.partner_name,
     partnerCode: row.partner_code,
     ...mapUetdsCompanyLink(row.uetds_company_id, row.uetds_company_short_name),
-    defaultVehicleId: row.default_vehicle_id,
+    defaultVehicleId: row.linked_vehicle_ids?.[0] ?? null,
+    linkedVehicleIds: row.linked_vehicle_ids ?? [],
     defaultAuthorityId: row.default_authority_id,
     uetdsSubscription: mapUetdsSubscriptionListSummary({
       enrolledAt: row.uetds_subscription_enrolled_at,

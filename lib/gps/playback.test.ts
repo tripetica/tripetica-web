@@ -184,6 +184,10 @@ test("history playback stays on the selected device and off the live poll", () =
   assert.match(icon, /iconSize: \[22, 22\]/);
   assert.match(icon, /iconAnchor: \[11, 11\]/);
   assert.doesNotMatch(history, /fetch\(|\/api\/gps\/address|lookupGpsAddress/);
+  assert.equal(history.split("mountGoogleMap(").length - 1, 1);
+  assert.doesNotMatch(history, /openstreetmap\.org|from \"leaflet\"/);
+  const playbackPaint = history.slice(history.indexOf("paintRef.current = (at: number)"), history.indexOf("tickRef.current"));
+  assert.doesNotMatch(playbackPaint, /mountGoogleMap\(/);
   assert.doesNotMatch(playback, /INSERT|gps_positions|fetch\(/);
   const pull = section.slice(section.indexOf("async function pull"), section.indexOf("function onVisibility"));
   assert.doesNotMatch(pull, /playback|gps\/address|geocode/);

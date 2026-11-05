@@ -17,3 +17,15 @@ test("extra users only receive granted tabs", () => {
   assert.equal(partnerTabForPath("/partner/users/1"), "users");
   assert.equal(firstPartnerTabPath(member), "/partner/drivers");
 });
+
+test("a standard partner is open unless that menu was explicitly closed", () => {
+  const owner = { isOwner: true, tabs: [] as string[], deniedTabs: ["gps"] };
+  assert.equal(partnerHasTab(owner, "jobs"), true);
+  assert.equal(partnerHasTab(owner, "gps"), false);
+  assert.equal(partnerHasTab({ isOwner: true, tabs: [], deniedTabs: [] }, "billing"), true);
+  const member = { isOwner: false, tabs: ["drivers", "gps"], deniedTabs: ["gps"] };
+  assert.equal(partnerHasTab(member, "drivers"), true);
+  assert.equal(partnerHasTab(member, "gps"), false);
+  assert.equal(partnerHasTab(member, "vehicles"), false);
+  assert.equal(firstPartnerTabPath(owner), "/partner/jobs");
+});

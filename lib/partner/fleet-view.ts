@@ -32,6 +32,7 @@ export type PartnerDriverRecord = {
   uetdsCompanyId?: string | null;
   uetdsCompany?: UetdsCompanyRef | null;
   defaultVehicleId?: string | null;
+  linkedVehicleIds?: string[];
   defaultAuthorityId?: string | null;
   uetdsSubscription?: UetdsDriverSubscriptionListSummary;
 };
@@ -62,6 +63,7 @@ export type PartnerVehicleRecord = {
   uetdsCompanyId?: string | null;
   uetdsCompany?: UetdsCompanyRef | null;
   defaultDriverId?: string | null;
+  linkedDriverIds?: string[];
   services?: DriverServiceSelection;
   uetdsSubscription?: UetdsDriverSubscriptionListSummary;
 };

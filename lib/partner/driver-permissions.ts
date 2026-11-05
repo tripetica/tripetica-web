@@ -25,7 +25,7 @@ export async function savePartnerDriverPermissionsAction(input: {
         SET portal_permissions = $3::jsonb,
             updated_at = NOW()
       WHERE id = $1
-        AND partner_id = $2
+        AND partner_can_access_driver($2, id)
         AND deleted_at IS NULL
       RETURNING portal_permissions`,
     [input.driverId, actor.partnerId, JSON.stringify(stored)],

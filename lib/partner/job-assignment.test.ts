@@ -429,7 +429,8 @@ test("assignment schema and server path stay partner-scoped", () => {
   assert.doesNotMatch(store, /sendAssignmentCustomerNotification/);
   assert.doesNotMatch(store, /sendReservationSmtpMail/);
   assert.doesNotMatch(store, /assignment-customer-notification/);
-  assert.match(store, /AND partner_id = \$2/);
+  assert.match(store, /partner_can_access_driver\(\$2, id\)/);
+  assert.match(store, /partner_can_access_vehicle\(\$2, id\)/);
 
   const ui = source("components/partner/job-assignment.tsx");
   const assignmentRender = ui.slice(ui.indexOf("return ("), ui.indexOf("function DriverAssignmentBlock"));

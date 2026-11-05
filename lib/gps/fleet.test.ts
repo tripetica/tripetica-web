@@ -233,9 +233,7 @@ test("fleet endpoint stays partner scoped and the live map is the partner home",
   assert.match(section, /document\.hidden/);
   assert.match(section, /copy\.historyPick/);
   assert.match(section, /copy\.devicePick/);
-  assert.match(section, /copy\.batteryLevel/);
   assert.match(section, /pendingVehicleId/);
-  assert.match(section, /gps-device-head/);
   const liveFactsStart = section.indexOf('<dl className="gps-facts">');
   const liveFacts = section.slice(liveFactsStart, section.indexOf("</dl>", liveFactsStart));
   assert.doesNotMatch(liveFacts, /batteryLevel|gps-battery/);

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  gpsInitialLiveSource,
   gpsInstallPromotion,
   gpsIsLiveMapSource,
   gpsLinkForModel,
@@ -16,7 +15,6 @@ test("Teltonika model selects the link and starts as installation pending", () =
   assert.equal(gpsLinkForModel("fmb920"), "2g");
   assert.equal(gpsLinkForModel("fmc920"), "4g");
   const fmb = gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmb920",
     imei: "990000000920101",
     serial: "SN-1",
@@ -32,7 +30,6 @@ test("Teltonika model selects the link and starts as installation pending", () =
   assert.equal(fmb.value.serialNumber, "SN-1");
   assert.equal(fmb.value.simOperator, "Turkcell");
   const fmc = gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmc920",
     imei: "990000000920102",
     serial: "",
@@ -42,7 +39,6 @@ test("Teltonika model selects the link and starts as installation pending", () =
   });
   assert.equal(fmc.ok && fmc.value.linkTechnology, "4g");
   assert.equal(gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmb920",
     imei: "",
     serial: "",
@@ -51,7 +47,6 @@ test("Teltonika model selects the link and starts as installation pending", () =
     simApn: "",
   }).ok, false);
   assert.equal(gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmb920",
     imei: "123",
     serial: "",
@@ -63,7 +58,6 @@ test("Teltonika model selects the link and starts as installation pending", () =
 
 test("a new device requires one of the three SIM operators", () => {
   assert.equal(gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmb920",
     imei: "990000000920103",
     serial: "",
@@ -72,7 +66,6 @@ test("a new device requires one of the three SIM operators", () => {
     simApn: "",
   }).ok, false);
   assert.equal(gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmb920",
     imei: "990000000920104",
     serial: "",
@@ -80,49 +73,9 @@ test("a new device requires one of the three SIM operators", () => {
     simOperator: "Türk Telekom",
     simApn: "",
   }).ok, true);
-  assert.equal(gpsRegistrationProfile({
-    receiver: "esp32",
-    model: null,
-    imei: "",
-    serial: "",
-    simPhone: "",
-    simOperator: "Vodafone",
-    simApn: "internet",
-  }).ok, false);
-});
-
-test("ESP32 registration stays installed and stores only the selected SIM operator", () => {
-  const esp = gpsRegistrationProfile({
-    receiver: "esp32",
-    model: null,
-    imei: "",
-    serial: "",
-    simPhone: "",
-    simOperator: "Turkcell",
-    simApn: "",
-  });
-  assert.equal(esp.ok, true);
-  if (!esp.ok) return;
-  assert.equal(esp.value.installationStatus, "installed");
-  assert.equal(esp.value.trackerModel, null);
-  assert.equal(esp.value.imei, null);
-  assert.equal(esp.value.simOperator, "Turkcell");
-  assert.equal(gpsRegistrationProfile({
-    receiver: "esp32",
-    model: null,
-    imei: "",
-    serial: "ABC",
-    simPhone: "",
-    simOperator: "Turkcell",
-    simApn: "",
-  }).ok, false);
 });
 
 test("a second device is not the live map or assignment source", () => {
-  assert.equal(gpsInitialLiveSource({ receiver: "teltonika", hasVehicle: true, vehicleHasLiveSource: true }), false);
-  assert.equal(gpsInitialLiveSource({ receiver: "teltonika", hasVehicle: true, vehicleHasLiveSource: false }), false);
-  assert.equal(gpsInitialLiveSource({ receiver: "esp32", hasVehicle: true, vehicleHasLiveSource: true }), false);
-  assert.equal(gpsInitialLiveSource({ receiver: "esp32", hasVehicle: true, vehicleHasLiveSource: false }), true);
   assert.equal(gpsLiveSourceAfterAssignment({
     liveSource: true,
     vehicleId: "vehicle",
@@ -158,7 +111,6 @@ test("SIM phone keeps the digits and accepts Turkey and international numbers", 
   assert.equal(gpsSimPhone("+90 5XX XXX XX XX"), undefined);
   assert.equal(gpsSimPhone("123"), undefined);
   const saved = gpsRegistrationProfile({
-    receiver: "teltonika",
     model: "fmb920",
     imei: "990000000920105",
     serial: "",
@@ -167,17 +119,6 @@ test("SIM phone keeps the digits and accepts Turkey and international numbers", 
     simApn: "",
   });
   assert.equal(saved.ok && saved.value.simPhone, "+905321112233");
-  const esp = gpsRegistrationProfile({
-    receiver: "esp32",
-    model: null,
-    imei: "",
-    serial: "",
-    simPhone: "+1 202 555 0123",
-    simOperator: "Vodafone",
-    simApn: "",
-  });
-  assert.equal(esp.ok && esp.value.simPhone, "+12025550123");
-  assert.equal(esp.ok && esp.value.installationStatus, "installed");
 });
 
 test("registration does not accept or store an SMS password", () => {
@@ -205,5 +146,5 @@ test("registration does not accept or store an SMS password", () => {
   assert.match(migration, /installation_status/);
   assert.match(store, /installation_status = 'pending'/);
   assert.doesNotMatch(store, /gps_ats_settings/);
-  assert.doesNotMatch(ingest, /installation_status|teltonika/);
+  assert.match(ingest, /receiver = 'teltonika'/);
 });

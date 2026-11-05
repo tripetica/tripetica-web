@@ -167,6 +167,7 @@ async function main() {
       isPrimaryPartner: false,
       isOwner: true,
       tabs: [],
+      deniedTabs: [],
       mustChangePassword: false,
     };
     const partnerReject = await changePartnerPassword({

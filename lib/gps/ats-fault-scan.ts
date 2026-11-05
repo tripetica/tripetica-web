@@ -298,7 +298,9 @@ async function driverFor(vehicleId: string) {
     `SELECT driver.first_name, driver.last_name, driver.phone
      FROM partner_fleet_defaults fleet
      JOIN partner_drivers driver ON driver.id = fleet.driver_id AND driver.deleted_at IS NULL
-     WHERE fleet.vehicle_id = $1`,
+     WHERE fleet.vehicle_id = $1
+     ORDER BY fleet.created_at, driver.last_name, driver.id
+     LIMIT 1`,
     [vehicleId],
   );
   const row = result.rows[0];
