@@ -231,6 +231,7 @@ export function mapAiUetdsExtraction(raw: unknown, description = "", nowUtcMs = 
     }
   }
   if (!mapped.fare && listed.fare) mapped.fare = listed.fare;
+  if (listed.groupName) mapped.groupName = listed.groupName;
   if (!mapped.origin && listed.origin) mapped.origin = listed.origin;
   if (!mapped.destination && listed.destination) mapped.destination = listed.destination;
   if (!mapped.startDate && listed.startDate) mapped.startDate = listed.startDate;

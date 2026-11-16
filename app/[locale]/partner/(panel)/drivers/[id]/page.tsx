@@ -6,6 +6,7 @@ import { partnerCopyFor } from "@/lib/partner/copy";
 import { listActiveUetdsCompanyOptions } from "@/lib/ops/uetds-company-options";
 import { getPartnerDriverPermissions } from "@/lib/partner/driver-permission-store";
 import { getPartnerDriver } from "@/lib/partner/fleet";
+import { readDriverQualification } from "@/lib/uetds/qualification-store";
 import {
   getDriverFleetLink,
   listAssignableEdevletAuthorities,
@@ -33,6 +34,7 @@ export default async function PartnerDriverDetailPage({
   if (!driver) {
     notFound();
   }
+  const qualification = await readDriverQualification(driver.id, driver.uetdsCompanyId ?? null);
   return (
     <div className="ops-page partner-profile-page">
       <PartnerDriverDetail
@@ -46,6 +48,7 @@ export default async function PartnerDriverDetailPage({
         vehicleIds={link.vehicleIds}
         defaultAuthorityId={link.defaultAuthorityId}
         permissions={permissions}
+        qualification={qualification}
       />
     </div>
   );

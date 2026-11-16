@@ -54,6 +54,8 @@ export async function GpsDeviceWorkspace({
   sections,
   liveUrl,
   maintenanceBase,
+  documentsUrl,
+  documentsCanEdit = true,
   fleetUrl,
   loadImmobilizer = false,
 }: {
@@ -92,6 +94,8 @@ export async function GpsDeviceWorkspace({
   sections?: GpsSectionVisibility;
   liveUrl?: string;
   maintenanceBase?: string;
+  documentsUrl?: string;
+  documentsCanEdit?: boolean;
   fleetUrl?: string;
   loadImmobilizer?: boolean;
 }) {
@@ -162,6 +166,8 @@ export async function GpsDeviceWorkspace({
           sections={sections}
           liveUrl={liveUrl}
           maintenanceUrl={maintenanceBase}
+          documentsUrl={documentsUrl}
+          documentsCanEdit={documentsCanEdit}
           fleetUrl={fleetUrl}
         />
       </div>
@@ -252,6 +258,8 @@ export async function GpsDeviceWorkspace({
         sections={sections}
         liveUrl={liveUrl}
         maintenanceUrl={maintenanceBase}
+        documentsUrl={documentsUrl}
+        documentsCanEdit={documentsCanEdit}
         fleetUrl={fleetUrl}
       />
 

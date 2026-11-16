@@ -191,7 +191,7 @@ test("IMEI handshake accepts only an active Teltonika row", () => {
   if (!partial.ok && "need" in partial) assert.ok(partial.need > 4);
 });
 
-test("TCP listener ACKs Codec 8 Extended crash trace AVL and rejects a second socket for the same IMEI", async () => {
+test("TCP listener ACKs Codec 8 Extended crash trace AVL and lets the same IMEI replace its old socket", async () => {
   const imei = "356307042441013";
   const stored: number[] = [];
   const server = await startTeltonikaServer({
@@ -231,7 +231,7 @@ test("TCP listener ACKs Codec 8 Extended crash trace AVL and rejects a second so
     second.on("error", reject);
     second.write(encodeImei(imei));
   });
-  assert.equal(denied[0], 0);
+  assert.equal(denied[0], 1);
   first.destroy();
   second.destroy();
   await new Promise<void>((resolve) => server.close(() => resolve()));

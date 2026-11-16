@@ -93,6 +93,7 @@ test("Teltonika shared ingest preserves backfill order on DEV", { skip: devDatab
       deviceId: created.id,
       partnerId: owner.partner_id,
       vehicleId: owner.vehicle_id,
+      accessPartnerId: null,
       from: new Date(base),
       to: new Date(base + 10 * 60_000),
     });

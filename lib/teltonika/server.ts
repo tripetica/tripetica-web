@@ -30,11 +30,13 @@ export function startTeltonikaServer(input: {
   host?: string;
   port?: number;
   maxConnections?: number;
+  idleMs?: number;
   handlers: TeltonikaHandlers;
 }) {
   const host = input.host ?? "127.0.0.1";
   const maxConnections = input.maxConnections ?? TELTONIKA_MAX_CONNECTIONS;
-  const claimed = new Set<string>();
+  const idleMs = input.idleMs ?? TELTONIKA_IDLE_MS;
+  const sessions = new Map<string, Socket>();
   let open = 0;
   const server = createServer((socket) => {
     if (open >= maxConnections) {
@@ -42,7 +44,7 @@ export function startTeltonikaServer(input: {
       return;
     }
     open += 1;
-    attachSocket(socket, input.handlers, claimed, () => {
+    attachSocket(socket, input.handlers, sessions, idleMs, () => {
       open = Math.max(0, open - 1);
     });
   });
@@ -51,30 +53,66 @@ export function startTeltonikaServer(input: {
   });
 }
 
+export type TeltonikaSessionClaim<T> =
+  | { status: "claimed"; previous: T | null }
+  | { status: "closed"; previous: null };
+
+/** A destroyed socket must not occupy or create an IMEI session. A new live socket replaces the previous owner. */
+export function claimTeltonikaSession<T extends { destroyed: boolean }>(
+  sessions: Map<string, T>,
+  imei: string,
+  socket: T,
+): TeltonikaSessionClaim<T> {
+  if (socket.destroyed) return { status: "closed", previous: null };
+  const owner = sessions.get(imei);
+  const previous = owner && owner !== socket ? owner : null;
+  sessions.set(imei, socket);
+  return { status: "claimed", previous };
+}
+
+/** Removes this socket's session. A newer owner of the same IMEI stays in place. */
+export function releaseTeltonikaSession<T extends { destroyed: boolean }>(
+  sessions: Map<string, T>,
+  imei: string,
+  socket: T,
+) {
+  if (imei && sessions.get(imei) === socket) sessions.delete(imei);
+}
+
 function attachSocket(
   socket: Socket,
   handlers: TeltonikaHandlers,
-  claimed: Set<string>,
+  sessions: Map<string, Socket>,
+  idleMs: number,
   onClose: () => void,
 ) {
   let buffer = Buffer.alloc(0);
   let phase: "imei" | "avl" = "imei";
   let imei = "";
   let reading = false;
+  let closed = false;
   let awaiting: { id: string } | null = null;
   let commandTimer: ReturnType<typeof setTimeout> | null = null;
   const pending: Buffer[] = [];
-  socket.setTimeout(TELTONIKA_IDLE_MS);
+  socket.setTimeout(idleMs);
   const release = () => {
-    if (imei) claimed.delete(imei);
-    socket.removeListener("close", release);
+    releaseTeltonikaSession(sessions, imei, socket);
   };
-  socket.on("timeout", () => socket.destroy());
-  socket.on("error", () => socket.destroy());
-  socket.on("close", () => {
+  const finish = () => {
     release();
+    if (closed) return;
+    closed = true;
     onClose();
+  };
+  socket.on("timeout", () => {
+    release();
+    socket.destroy();
   });
+  socket.on("error", () => {
+    release();
+    socket.destroy();
+  });
+  socket.on("close", finish);
   socket.on("data", (chunk) => {
     pending.push(chunk);
     if (reading) return;
@@ -106,15 +144,21 @@ function attachSocket(
           socket.destroy();
           return;
         }
-        if (!allowed || claimed.has(frame.value)) {
-          socket.write(imeiResponse(false));
-          socket.end();
+        if (socket.destroyed) return;
+        if (!allowed) {
+          rejectImei(socket);
           return;
         }
-        claimed.add(frame.value);
+        const claim = claimTeltonikaSession(sessions, frame.value, socket);
+        if (claim.status === "closed") return;
         imei = frame.value;
         phase = "avl";
+        if (socket.destroyed) {
+          release();
+          return;
+        }
         socket.write(imeiResponse(true));
+        if (claim.previous && claim.previous !== socket) claim.previous.destroy();
         await offerCommand();
         continue;
       }
@@ -169,6 +213,12 @@ function attachSocket(
       reading = true;
       void pump();
     }
+  }
+
+  function rejectImei(target: Socket) {
+    if (target.destroyed || !target.writable) return;
+    target.write(imeiResponse(false));
+    target.end();
   }
 
   function clearCommandTimer() {

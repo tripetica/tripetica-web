@@ -59,6 +59,7 @@ export default async function OpsGpsPage({
       deviceId: device.id,
       partnerId: device.partnerId,
       vehicleId: device.vehicleId,
+      accessPartnerId: null,
       from: range.from,
       to: range.to,
     })

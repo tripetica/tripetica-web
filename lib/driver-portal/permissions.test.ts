@@ -8,9 +8,31 @@ import {
   driverPermissionGroupState,
   driverUetdsPermissionKeys,
   emptyDriverPermissions,
+  newDriverPermissions,
   parseDriverPermissions,
   setDriverPermissionGroup,
 } from "@/lib/driver-portal/permissions";
+
+test("document tracking is a GPS child and stays off until granted", () => {
+  assert.deepEqual([...driverGpsPermissionKeys], [
+    "gpsLive",
+    "gpsHistory",
+    "gpsDocuments",
+    "gpsMaintenance",
+    "gpsDrive",
+    "gpsDevice",
+  ]);
+  assert.equal(parseDriverPermissions({ gpsLive: true }).gpsDocuments, false);
+  const created = newDriverPermissions();
+  assert.equal(created.gpsDocuments, true);
+  assert.equal(created.gpsLive, true);
+  assert.equal(created.gpsHistory, true);
+  assert.equal(created.gpsMaintenance, true);
+  assert.equal(created.gpsDrive, true);
+  assert.equal(created.gpsDevice, false);
+  assert.equal(created.uetdsNew, true);
+  assert.equal(created.uetdsList, true);
+});
 
 test("missing and unknown permission keys stay off", () => {
   assert.deepEqual(parseDriverPermissions(null), emptyDriverPermissions());

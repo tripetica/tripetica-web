@@ -342,30 +342,37 @@ export async function listGpsRoute(input: {
   deviceId: string;
   partnerId: string | null;
   vehicleId: string | null;
+  accessPartnerId: string | null;
   from: Date;
   to: Date;
 }) {
-  if (input.partnerId) {
+  const assigned = Boolean(input.partnerId && input.vehicleId);
+  if (input.accessPartnerId) {
     const allowed = await query<{ allowed: boolean }>(
-      `SELECT partner_can_access_gps_device($1, $2) AS allowed`,
-      [input.partnerId, input.deviceId],
+      assigned
+        ? `SELECT partner_can_access_vehicle($1, $2) AS allowed`
+        : `SELECT partner_can_access_gps_device($1, $2) AS allowed`,
+      assigned
+        ? [input.accessPartnerId, input.vehicleId]
+        : [input.accessPartnerId, input.deviceId],
     );
     if (!allowed.rows[0]?.allowed) {
       return { total: 0, step: 1, points: [] as GpsRoutePoint[] };
     }
   }
-  const assigned = Boolean(input.partnerId && input.vehicleId);
+  const from = input.from.toISOString();
+  const to = input.to.toISOString();
   const count = await query<{ total: number }>(
     assigned
       ? `SELECT COUNT(*)::int AS total FROM gps_positions
-          WHERE device_id = $1 AND vehicle_id = $4
-            AND recorded_at >= $2 AND recorded_at < $3`
+          WHERE partner_id = $1 AND vehicle_id = $2
+            AND recorded_at >= $3 AND recorded_at < $4`
       : `SELECT COUNT(*)::int AS total FROM gps_positions
           WHERE device_id = $1 AND vehicle_id IS NULL
             AND recorded_at >= $2 AND recorded_at < $3`,
     assigned
-      ? [input.deviceId, input.from.toISOString(), input.to.toISOString(), input.vehicleId]
-      : [input.deviceId, input.from.toISOString(), input.to.toISOString()],
+      ? [input.partnerId, input.vehicleId, from, to]
+      : [input.deviceId, from, to],
   );
   const total = count.rows[0]?.total ?? 0;
   if (total === 0) return { total: 0, step: 1, points: [] as GpsRoutePoint[] };
@@ -391,21 +398,22 @@ export async function listGpsRoute(input: {
               row_number() OVER (ORDER BY position.recorded_at, position.seq) AS n
          FROM gps_positions position
          LEFT JOIN partner_vehicles vehicle ON vehicle.id = position.vehicle_id
-        WHERE position.device_id = $1
-          AND ${assigned ? "position.vehicle_id = $5" : "position.vehicle_id IS NULL"}
-          AND position.recorded_at >= $2
-          AND position.recorded_at < $3
+        WHERE ${assigned
+          ? "position.partner_id = $1 AND position.vehicle_id = $2"
+          : "position.device_id = $1 AND position.vehicle_id IS NULL"}
+          AND position.recorded_at >= $${assigned ? 3 : 2}
+          AND position.recorded_at < $${assigned ? 4 : 3}
      )
      SELECT seq::text AS seq, recorded_at, received_at,
             latitude::text AS latitude, longitude::text AS longitude,
             speed_mps::text AS speed_mps, heading_deg::text AS heading_deg,
             satellites, hdop::text AS hdop, fix_mode, plate
        FROM windowed
-      WHERE ((n - 1) % $4) = 0
+      WHERE ((n - 1) % $${assigned ? 5 : 4}) = 0
       ORDER BY n`,
     assigned
-      ? [input.deviceId, input.from.toISOString(), input.to.toISOString(), step, input.vehicleId]
-      : [input.deviceId, input.from.toISOString(), input.to.toISOString(), step],
+      ? [input.partnerId, input.vehicleId, from, to, step]
+      : [input.deviceId, from, to, step],
   );
   return {
     total,
