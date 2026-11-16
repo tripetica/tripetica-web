@@ -7,9 +7,10 @@ export function buildUetdsCompanySelectOptions(
   active: readonly UetdsCompanyRef[],
   current: UetdsCompanyRef | null,
   noneLabel: string,
+  includeNone = true,
 ) {
   const options = [
-    { value: UETDS_NOTIFY_NONE_VALUE, label: noneLabel },
+    ...(includeNone ? [{ value: UETDS_NOTIFY_NONE_VALUE, label: noneLabel }] : []),
     ...active.map((company) => ({ value: company.id, label: company.shortName })),
   ];
   if (current && !active.some((company) => company.id === current.id)) {

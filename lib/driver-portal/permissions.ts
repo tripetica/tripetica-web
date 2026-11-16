@@ -1,6 +1,7 @@
 export const driverGpsPermissionKeys = [
   "gpsLive",
   "gpsHistory",
+  "gpsDocuments",
   "gpsMaintenance",
   "gpsDrive",
   "gpsDevice",
@@ -21,6 +22,7 @@ export function emptyDriverPermissions(): DriverPermissions {
   return {
     gpsLive: false,
     gpsHistory: false,
+    gpsDocuments: false,
     gpsMaintenance: false,
     gpsDrive: false,
     gpsDevice: false,
@@ -59,6 +61,19 @@ export function setDriverPermissionGroup(
   const next = { ...permissions };
   for (const key of keys) next[key] = enabled;
   return next;
+}
+
+export function newDriverPermissions(): DriverPermissions {
+  return {
+    ...emptyDriverPermissions(),
+    gpsLive: true,
+    gpsHistory: true,
+    gpsDocuments: true,
+    gpsMaintenance: true,
+    gpsDrive: true,
+    uetdsNew: true,
+    uetdsList: true,
+  };
 }
 
 export function driverHasGpsAccess(permissions: DriverPermissions) {

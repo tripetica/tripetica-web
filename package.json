@@ -19,6 +19,7 @@
     "mobile-gps:remind": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx --conditions=react-server scripts/dispatch-mobile-gps-reminders.ts",
     "mobile-gps:remind:prod": "EXPECTED_DATABASE=tripetica NODE_ENV=production tsx --conditions=react-server scripts/dispatch-mobile-gps-reminders-prod.ts",
     "maintenance:remind:prod": "EXPECTED_DATABASE=tripetica NODE_ENV=production tsx --conditions=react-server scripts/dispatch-maintenance-prod.ts",
+    "documents:remind:prod": "EXPECTED_DATABASE=tripetica NODE_ENV=production tsx --conditions=react-server scripts/dispatch-vehicle-documents-prod.ts",
     "gps-fault:scan": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx --conditions=react-server scripts/dispatch-gps-fault-alerts.ts",
     "gps-fault:scan:prod": "EXPECTED_DATABASE=tripetica NODE_ENV=production tsx --conditions=react-server scripts/dispatch-gps-fault-alerts-prod.ts",
     "teltonika:listen": "EXPECTED_DATABASE=tripetica_dev NODE_ENV=development tsx --conditions=react-server scripts/teltonika-listen.ts",

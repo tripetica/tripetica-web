@@ -30,10 +30,12 @@ test("menu and module expose only the shared GPS surface", () => {
   assert.equal(opsCopy.tr.gps, partnerCopy.tr.gps);
   assert.equal(gpsCopy.tr.tabGps, "GPS");
   assert.equal(gpsCopy.tr.popupAddress, "Adres");
-  assert.equal(gpsCopy.tr.showHistory, "Konum geçmişini göster");
-  assert.equal(gpsCopy.tr.hideHistory, "Konum geçmişini gizle");
-  assert.equal(gpsCopy.tr.showDevice, "Cihaz bilgilerini göster");
-  assert.equal(gpsCopy.tr.hideDevice, "Cihaz bilgilerini gizle");
+  assert.equal(gpsCopy.tr.showHistory, "Konum Geçmişi");
+  assert.equal(gpsCopy.tr.hideHistory, "Konum Geçmişini Kapat");
+  assert.equal(gpsCopy.tr.showDocuments, "Belge Takibi");
+  assert.equal(gpsCopy.tr.hideDocuments, "Belge Takibini Kapat");
+  assert.equal(gpsCopy.tr.showDevice, "Cihaz Bilgileri");
+  assert.equal(gpsCopy.tr.hideDevice, "Cihaz Bilgilerini Kapat");
   assert.equal(gpsCopy.tr.deviceInfo, "Cihaz bilgileri");
   assert.equal(gpsCopy.tr.label, "Cihaz adı");
   assert.match(live, /copy\.showHistory/);

@@ -83,17 +83,13 @@ export function overlappingTripReminderBlocks(input: { otherTripSentAtMs: number
   return recentReminderBlocks({ lastSentAtMs: input.otherTripSentAtMs, nowMs: input.nowMs });
 }
 
-export function reminderTargets(input: { ownerIsDriver: boolean }): Array<{ audience: ReminderAudience; channel: "push" | "email" }> {
+export function reminderTargets(input: { ownerIsDriver: boolean }): Array<{ audience: ReminderAudience; channel: "push" }> {
   if (input.ownerIsDriver) {
-    return [
-      { audience: "driver", channel: "push" },
-      { audience: "driver", channel: "email" },
-    ];
+    return [{ audience: "driver", channel: "push" }];
   }
   return [
     { audience: "driver", channel: "push" },
     { audience: "owner", channel: "push" },
-    { audience: "owner", channel: "email" },
   ];
 }
 

@@ -63,6 +63,7 @@ export default async function PartnerGpsPage({
       deviceId: selected.id,
       partnerId: selected.partnerId,
       vehicleId: selected.vehicleId,
+      accessPartnerId: actor.partnerId,
       from: range.from,
       to: range.to,
     })

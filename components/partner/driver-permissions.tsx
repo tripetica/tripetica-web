@@ -47,10 +47,12 @@ export function DriverPermissionsEditor({
   driverId,
   initial,
   copy,
+  persist = true,
 }: {
-  driverId: string;
+  driverId?: string;
   initial: DriverPermissions;
   copy: PartnerCopy;
+  persist?: boolean;
 }) {
   const [permissions, setPermissions] = useState(initial);
   const [pending, setPending] = useState(false);
@@ -59,6 +61,11 @@ export function DriverPermissionsEditor({
   const uetds = driverPermissionGroupState(permissions, driverUetdsPermissionKeys);
 
   async function save(next: DriverPermissions) {
+    if (!persist) {
+      setPermissions(next);
+      return;
+    }
+    if (!driverId) return;
     const previous = permissions;
     setPermissions(next);
     setPending(true);
@@ -80,6 +87,7 @@ export function DriverPermissionsEditor({
   const gpsItems: { key: DriverPermissionKey; label: string }[] = [
     { key: "gpsLive", label: copy.driverPermissionsLive },
     { key: "gpsHistory", label: copy.driverPermissionsHistory },
+    { key: "gpsDocuments", label: copy.driverPermissionsDocuments },
     { key: "gpsMaintenance", label: copy.driverPermissionsMaintenance },
     { key: "gpsDrive", label: copy.driverPermissionsDrive },
     { key: "gpsDevice", label: copy.driverPermissionsDevice },
@@ -91,6 +99,7 @@ export function DriverPermissionsEditor({
 
   return (
     <div className="driver-permissions">
+      {persist ? null : <input type="hidden" name="permissionsPresent" value="1" />}
       <fieldset disabled={pending}>
         <GroupBox
           label={copy.driverPermissionsGps}
@@ -104,6 +113,8 @@ export function DriverPermissionsEditor({
             <label key={item.key}>
               <input
                 type="checkbox"
+                name={persist ? undefined : "permission"}
+                value={item.key}
                 checked={permissions[item.key]}
                 onChange={(event) => toggle(item.key, event.target.checked)}
               />
@@ -125,6 +136,8 @@ export function DriverPermissionsEditor({
             <label key={item.key}>
               <input
                 type="checkbox"
+                name={persist ? undefined : "permission"}
+                value={item.key}
                 checked={permissions[item.key]}
                 onChange={(event) => toggle(item.key, event.target.checked)}
               />

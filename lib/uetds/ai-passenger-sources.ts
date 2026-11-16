@@ -72,6 +72,7 @@ type TripSlice = {
   tripKind?: "transfer" | "tour" | "charter" | "other";
   purpose?: string;
   fare?: string;
+  groupName?: string;
   passengerCount?: number;
   passengers?: AiPassengerSource[];
 };
@@ -90,7 +91,7 @@ export function mergeAiExtractedSources<T extends TripSlice>(parts: T[], nowUtcM
       if (!merged.startDate && part.startDate && incomingScore >= 0) merged.startDate = part.startDate as never;
       if (!merged.startTime && part.startTime && incomingScore >= 0) merged.startTime = part.startTime as never;
     }
-    for (const key of ["origin", "destination", "endDate", "endTime", "tripKind", "purpose", "fare"] as const) {
+    for (const key of ["origin", "destination", "endDate", "endTime", "tripKind", "purpose", "fare", "groupName"] as const) {
       if (!merged[key] && part[key]) merged[key] = part[key] as never;
     }
     const stated = part.passengerCount ?? 0;

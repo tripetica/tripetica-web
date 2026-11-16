@@ -38,13 +38,13 @@ function locationCodes(location: UetdsLocation) {
   };
 }
 
-function seferFields(input: { draft: UetdsDraft; plate: string }) {
+function seferFields(input: { draft: UetdsDraft; plate: string; firmaSeferNo: string | null }) {
   return `<ariziSeferBilgileriInput>
       ${soapField("aracPlaka", canonicalMinistryPlate(input.plate))}
       ${soapField("seferAciklama", normalizeUetdsPurposeText(input.draft.purpose.trim() || purposeForTripKind(input.draft.tripKind)))}
       ${soapField("hareketTarihi", dateTime(input.draft.startDate))}
       ${soapField("hareketSaati", input.draft.startTime)}
-      ${soapField("firmaSeferNo", input.draft.reservationId?.trim() || "")}
+      ${input.firmaSeferNo ? soapField("firmaSeferNo", input.firmaSeferNo) : ""}
       ${soapField("seferBitisTarihi", dateTime(input.draft.endDate))}
       ${soapField("seferBitisSaati", input.draft.endTime)}
     </ariziSeferBilgileriInput>`;
@@ -56,6 +56,7 @@ export async function mutateUetdsSeferGuncelle(input: {
   seferReferansNo: string;
   draft: UetdsDraft;
   plate: string;
+  firmaSeferNo: string | null;
 }): Promise<UetdsMutationResult> {
   const result = await callUetdsTestSoap({
     operation: "seferGuncelle",
@@ -64,7 +65,7 @@ export async function mutateUetdsSeferGuncelle(input: {
     password: input.password,
     innerXml: `${soapUserXml(input.username, input.password)}
       ${soapField("guncellenecekSeferReferansNo", input.seferReferansNo)}
-      ${seferFields({ draft: input.draft, plate: input.plate })}`,
+      ${seferFields(input)}`,
   });
   return {
     operation: "seferGuncelle",
