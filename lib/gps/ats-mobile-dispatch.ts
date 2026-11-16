@@ -349,7 +349,6 @@ async function chooseDriverFix(
 ): Promise<AtsFixChoice<StoredFix>> {
   const driverId = items[0]?.point.driver_id;
   if (!driverId) return { ok: false, reason: "fix_missing", unresolved: [] };
-  const floor = new Date(Math.min(...items.map((item) => item.startMs)) - MOBILE_ATS_MAX_FIX_AGE_MS);
   const ceiling = new Date(nowMs + 5 * 60 * 1000 + 1);
   const points: StoredFix[] = [];
   let before = ceiling;
@@ -360,11 +359,10 @@ async function chooseDriverFix(
          FROM gps_mobile_positions
         WHERE vehicle_id = $1
           AND driver_id = $2
-          AND recorded_at >= $3
-          AND recorded_at < $4
+          AND recorded_at < $3
         ORDER BY recorded_at DESC
         LIMIT ${FIX_PAGE}`,
-      [vehicleId, driverId, floor, before],
+      [vehicleId, driverId, before],
     );
     for (const row of rows.rows) {
       points.push({
@@ -378,7 +376,6 @@ async function chooseDriverFix(
       pointsNewestFirst: points,
       trips: items.map((item) => ({ id: item.row.id, startMs: item.startMs })),
       nowMs,
-      maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
       resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
     });
     const oldest = rows.rows.at(-1);

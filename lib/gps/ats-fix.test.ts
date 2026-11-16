@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { chooseAtsFixForTrips } from "@/lib/gps/ats-fix";
-import { MOBILE_ATS_MAX_FIX_AGE_MS } from "@/lib/gps/mobile-ats";
 
 const minute = 60 * 1000;
 const hour = 60 * minute;
@@ -21,26 +20,31 @@ const resolve = (latitude: number) =>
     ? { ok: false as const }
     : { ok: true as const, ilKodu: 34, ilceMernisKodu: latitude };
 
-test("a fix from the sixtieth minute is kept and the sixty-first is not", () => {
+test("a fix older than an hour before the trip is still the last real coordinate", () => {
   const now = firstStart;
   const accepted = chooseAtsFixForTrips({
     pointsNewestFirst: [point("p60", firstStart - hour, 2053)],
     trips: [trips[0]!],
     nowMs: now,
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(accepted.ok, true);
-  if (accepted.ok) assert.equal(accepted.point.id, "p60");
-  const rejected = chooseAtsFixForTrips({
-    pointsNewestFirst: [point("p61", firstStart - hour - minute, 2053)],
+  if (accepted.ok) {
+    assert.equal(accepted.point.id, "p60");
+    assert.equal(accepted.point.measuredAtMs, firstStart - hour);
+  }
+  const older = chooseAtsFixForTrips({
+    pointsNewestFirst: [point("hours", firstStart - 3 * hour, 2049)],
     trips: [trips[0]!],
     nowMs: now,
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
-  assert.equal(rejected.ok, false);
-  if (!rejected.ok) assert.equal(rejected.reason, "fix_before_window");
+  assert.equal(older.ok, true);
+  if (older.ok) {
+    assert.equal(older.point.id, "hours");
+    assert.equal(older.point.measuredAtMs, firstStart - 3 * hour);
+    assert.equal(older.point.latitude, 2049);
+  }
 });
 
 test("an unresolved newer fix falls back to the previous real fix and its own district", () => {
@@ -51,7 +55,6 @@ test("an unresolved newer fix falls back to the previous real fix and its own di
     pointsNewestFirst: [fresh, older],
     trips,
     nowMs: now,
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(choice.ok, true);
@@ -71,7 +74,6 @@ test("overlapping sefers share one fix only while both are open", () => {
     pointsNewestFirst: [point("live", Date.parse("2026-10-12T15:42:00+03:00"), 1835)],
     trips,
     nowMs: Date.parse("2026-10-12T15:42:00+03:00"),
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(during.ok, true);
@@ -81,7 +83,6 @@ test("overlapping sefers share one fix only while both are open", () => {
     pointsNewestFirst: [point("early", Date.parse("2026-10-12T14:20:00+03:00"), 1183)],
     trips: [trips[0]!],
     nowMs: Date.parse("2026-10-12T14:20:00+03:00"),
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(beforeSecond.ok, true);
@@ -91,23 +92,24 @@ test("overlapping sefers share one fix only while both are open", () => {
     pointsNewestFirst: [point("late", Date.parse("2026-10-12T16:10:00+03:00"), 1835)],
     trips: [trips[1]!],
     nowMs: Date.parse("2026-10-12T16:10:00+03:00"),
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(afterFirst.ok, true);
   if (afterFirst.ok) assert.deepEqual(afterFirst.tripIds, ["sefer-2"]);
 });
 
-test("a fix too old for the later sefer stays on the earlier sefer only", () => {
+test("an older fix is sent for every active sefer", () => {
+  const measuredAtMs = Date.parse("2026-10-12T14:29:00+03:00");
   const choice = chooseAtsFixForTrips({
-    pointsNewestFirst: [point("border", Date.parse("2026-10-12T14:29:00+03:00"), 1183)],
+    pointsNewestFirst: [point("border", measuredAtMs, 1183)],
     trips,
     nowMs: Date.parse("2026-10-12T15:42:00+03:00"),
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(choice.ok, true);
-  if (choice.ok) assert.deepEqual(choice.tripIds, ["sefer-1"]);
+  if (!choice.ok) return;
+  assert.deepEqual(choice.tripIds, ["sefer-1", "sefer-2"]);
+  assert.equal(choice.point.measuredAtMs, measuredAtMs);
 });
 
 test("a new resolved fix replaces the stored one without rewriting its time", () => {
@@ -117,7 +119,6 @@ test("a new resolved fix replaces the stored one without rewriting its time", ()
     pointsNewestFirst: [newer, older],
     trips: [{ id: "evening", startMs: Date.parse("2026-10-12T18:00:00+03:00") }],
     nowMs: Date.parse("2026-10-12T18:40:00+03:00"),
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(choice.ok, true);
@@ -134,7 +135,6 @@ test("thirty silent minutes still uses the last in-window fix and the trip end d
     pointsNewestFirst: [stored],
     trips: [{ id: "evening", startMs: start }],
     nowMs: start + 30 * minute,
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(during.ok, true);
@@ -146,7 +146,6 @@ test("thirty silent minutes still uses the last in-window fix and the trip end d
     pointsNewestFirst: [stored],
     trips: [],
     nowMs: Date.parse("2026-10-12T20:00:00+03:00"),
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve,
   });
   assert.equal(ended.ok, false);

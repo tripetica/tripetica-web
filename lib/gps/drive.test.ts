@@ -62,8 +62,8 @@ test("selected-range distance matches maintenance filters and skips ignition-off
   assert.equal(formatDriveKilometers(125_600, "tr"), "125,6 km");
   assert.equal(formatDriveKilometers(125_600, "en"), "125.6 km");
   assert.equal(formatDriveDay(start, "tr"), "13 Ekim 2026 — Salı");
-  assert.equal(gpsCopy.tr.showDrive, "Sürüş analizini göster");
-  assert.equal(gpsCopy.en.hideDrive, "Hide driving analysis");
+  assert.equal(gpsCopy.tr.showDrive, "Sürüş Analizi");
+  assert.equal(gpsCopy.en.hideDrive, "Close driving analysis");
   assert.equal(gpsCopy.ru.driveUnavailable, "Данные отсутствуют");
   assert.equal(gpsCopy.tr.rangeDistance, "Seçilen Aralıkta Tahmini Mesafe");
   assert.equal(gpsCopy.tr.driveBehaviorPending, "Sürüş davranışı verileri henüz kullanılabilir değil. Cihaz yapılandırması tamamlandığında bu bölümde görüntülenecek.");
@@ -163,7 +163,8 @@ test("partner GPS drive queries reference every bound parameter", () => {
   const store = readFileSync(new URL("./drive-store.ts", import.meta.url), "utf8");
   assert.deepEqual(unusedSqlParameters(store), []);
   assert.match(store, /FROM gps_positions[\s\S]*?WHERE vehicle_id = \$1[\s\S]*?LIMIT \$4/);
-  assert.match(store, /FROM gps_green_driving_events[\s\S]*?WHERE vehicle_id = \$1[\s\S]*?LIMIT 200/);
+  assert.match(store, /FROM gps_green_driving_events[\s\S]*?WHERE vehicle_id = \$1[\s\S]*?ORDER BY recorded_at DESC, id DESC[\s\S]*?LIMIT 200/);
+  assert.match(store, /FROM gps_positions[\s\S]*?ORDER BY recorded_at ASC, seq ASC/);
   assert.match(store, /partner_can_access_vehicle\(\$1, \$2\)/);
 });
 
@@ -181,8 +182,9 @@ test("drive analysis reads physical points and does not invent event rows", () =
   assert.doesNotMatch(store, /gps_mobile_positions|setdigout|ats-run/);
   assert.doesNotMatch(live, /harshBrakeCount|driveScoreValue|greenDrivingValue/);
   const historyAt = live.indexOf("copy.showHistory");
+  const documentsAt = live.indexOf("copy.showDocuments");
   const driveAt = live.indexOf("copy.showDrive");
   const maintenanceAt = live.indexOf("copy.showMaintenance");
   const deviceAt = live.indexOf("copy.showDevice");
-  assert.ok(historyAt >= 0 && historyAt < maintenanceAt && maintenanceAt < driveAt && driveAt < deviceAt);
+  assert.ok(historyAt >= 0 && historyAt < documentsAt && documentsAt < maintenanceAt && maintenanceAt < driveAt && driveAt < deviceAt);
 });

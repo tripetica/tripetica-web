@@ -35,11 +35,12 @@ test("mobile GPS uses the phone fix from inside the start window without a devic
   assert.equal(mobileAtsBlockReason(open), null);
 });
 
-test("a fix sixty-one minutes before the start is not sent", () => {
+test("a fix from before the trip start is still sent while the trip is active", () => {
   const input = { ...open, measuredAt: "2026-10-10T07:26:59.000Z" };
-  assert.equal(selectAtsFeed(input), "none");
-  assert.equal(mobileAtsBlockReason(input), "fix_before_window");
-  assert.equal(selectAtsFeed({ ...open, measuredAt: "2026-10-10T07:28:00.000Z" }), "mobile");
+  assert.equal(selectAtsFeed(input), "mobile");
+  assert.equal(mobileAtsBlockReason(input), null);
+  assert.equal(selectAtsFeed({ ...open, measuredAt: null }), "none");
+  assert.equal(mobileAtsBlockReason({ ...open, measuredAt: null }), "fix_missing");
 });
 
 test("Mobil GPS service off is a recorded block, not a device-switch block", () => {

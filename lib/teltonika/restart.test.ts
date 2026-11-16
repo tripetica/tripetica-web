@@ -1,0 +1,51 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { parseCodec12, encodeCodec12 } from "@/lib/teltonika/codec12";
+import { teltonikaWireCommandAllowed } from "@/lib/teltonika/config-read";
+import { advanceDeviceRestart, deviceRestartAllowed, devListenerCommandAllowed, productionListenerCommandAllowed, TELTONIKA_CPU_RESET } from "@/lib/teltonika/restart";
+
+test("cpureset stays an exact Codec 12 command and does not open other production writes", () => {
+  const frame = encodeCodec12(TELTONIKA_CPU_RESET);
+  const parsed = parseCodec12(frame);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(parsed.value.kind, "command");
+  assert.equal(parsed.value.text, "cpureset");
+  assert.equal(teltonikaWireCommandAllowed("cpureset"), false);
+  assert.equal(devListenerCommandAllowed("cpureset"), true);
+  assert.equal(devListenerCommandAllowed("cpureset 1"), false);
+  assert.equal(devListenerCommandAllowed("setdigout 1"), false);
+  assert.equal(productionListenerCommandAllowed("cpureset"), true);
+  assert.equal(productionListenerCommandAllowed("cpureset 1"), false);
+  assert.equal(productionListenerCommandAllowed("setparam 106:0"), true);
+  assert.equal(productionListenerCommandAllowed("setparam 11000:1;11004:2.31"), false);
+  assert.equal(productionListenerCommandAllowed("setparam 11703:2"), false);
+  assert.equal(productionListenerCommandAllowed("setkey 0000"), false);
+  assert.equal(productionListenerCommandAllowed("delkey 0000"), false);
+  assert.equal(productionListenerCommandAllowed("setdigout 1 15"), false);
+  assert.equal(productionListenerCommandAllowed("getparam 138;11004"), true);
+  assert.equal(deviceRestartAllowed("tripetica"), true);
+  assert.equal(deviceRestartAllowed("tripetica_dev"), true);
+  assert.equal(deviceRestartAllowed("other"), false);
+});
+
+test("a reconnect after cpureset is recorded and is not a verified restart", () => {
+  const sent = advanceDeviceRestart({ phase: "armed", event: "written" });
+  assert.equal(sent.phase, "sent");
+  const dropped = advanceDeviceRestart({ phase: sent.phase, event: "closed" });
+  assert.equal(dropped.phase, "waiting_reconnect");
+  const back = advanceDeviceRestart({ phase: dropped.phase, event: "reconnected" });
+  assert.equal(back.phase, "unverified");
+  assert.equal(back.error, "reconnect_observed");
+  assert.notEqual(back.phase, "verified");
+  const early = advanceDeviceRestart({ phase: "preparing", event: "reconnected" });
+  assert.equal(early.phase, "preparing");
+  const ignored = advanceDeviceRestart({ phase: "sent", event: "timeout" });
+  assert.equal(ignored.phase, "unverified");
+  assert.equal(ignored.error, "no_reply");
+  const rejected = advanceDeviceRestart({ phase: "sent", event: "reply", reply: "ERR:Ignored" });
+  assert.equal(rejected.phase, "failed");
+  const unexpected = advanceDeviceRestart({ phase: "sent", event: "reply", reply: "CPU Reset" });
+  assert.equal(unexpected.phase, "unverified");
+  assert.equal(unexpected.error, "unexpected_reply");
+});

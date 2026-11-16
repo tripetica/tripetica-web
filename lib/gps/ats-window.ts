@@ -124,6 +124,8 @@ export function planAtsCycle(input: {
     return { ok: false, reason: "duplicate_slot" };
   }
   const freshness = atsPositionIsCurrent(input);
+  // Age, a lost fix, and a quiet heartbeat are notes on the row.
+  // They do not withhold the last stored coordinate from the ministry.
   return {
     ok: true,
     notificationIds: trips.notificationIds,

@@ -63,6 +63,7 @@ export default async function PartnerGpsPage({
       deviceId: selected.id,
       partnerId: selected.partnerId,
       vehicleId: selected.vehicleId,
+      accessPartnerId: actor.partnerId,
       from: range.from,
       to: range.to,
     })
@@ -104,7 +105,12 @@ export default async function PartnerGpsPage({
   const green: DriveGreenView = greenReading
     ? {
         status: greenReading.events.length > 0 ? "recorded" : greenReading.parserReady ? "empty" : "inactive",
-        events: greenReading.events.map((event) => ({ at: event.at, kind: event.kind, rawValue: event.rawValue })),
+        events: greenReading.events.map((event) => ({
+          at: event.at,
+          kind: event.kind,
+          rawValue: event.rawValue,
+          corneringUnit: event.corneringUnit,
+        })),
       }
     : { status: "unsupported", events: [] };
   const driveVehicle = {

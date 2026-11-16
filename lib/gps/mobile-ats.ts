@@ -1,7 +1,7 @@
 /**
- * Oldest real fix that may be used, measured backward from the trip start.
- * After the trip starts this is not a moving freshness limit: a fix inside
- * the window keeps its own GNSS time until the trip ends.
+ * Upcoming sefers inside this lead are logged before they open.
+ * It does not stop an ATS send. A stored GNSS fix older than this is still
+ * eligible for an active sefer and keeps its own measurement time.
  */
 export const MOBILE_ATS_MAX_FIX_AGE_MS = 60 * 60 * 1000;
 
@@ -10,10 +10,10 @@ export type MobileAtsReplay =
   | { send: false; eligible: false; decision: "reject_before_window" | "reject_missing" | "reject_trip" | "reject_mismatch"; measuredAt: string | null };
 
 /**
- * The sixty-minute check is against the trip start, not against each later send.
- * Once a real fix is inside [start − 60min, now], the same measurement may be
- * repeated until the trip ends. This planner never relabels konumZamani and
- * never authorizes a ministry call by itself (`send` stays false).
+ * An active sefer may repeat the last real measurement until the trip ends.
+ * The measurement's age does not make it ineligible. This planner never
+ * relabels konumZamani and never authorizes a ministry call by itself
+ * (`send` stays false).
  */
 export function planMobileAtsReplay(input: {
   measuredAt: string | null;
@@ -33,9 +33,6 @@ export function planMobileAtsReplay(input: {
   const measured = Date.parse(input.measuredAt);
   if (!Number.isFinite(measured) || measured > input.nowMs + 5 * 60 * 1000) {
     return { send: false, eligible: false, decision: "reject_missing", measuredAt: null };
-  }
-  if (measured < input.tripStartMs - MOBILE_ATS_MAX_FIX_AGE_MS) {
-    return { send: false, eligible: false, decision: "reject_before_window", measuredAt: input.measuredAt };
   }
   return { send: false, eligible: true, decision: "use_last", measuredAt: input.measuredAt };
 }

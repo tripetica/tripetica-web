@@ -1,5 +1,21 @@
 import { loadDevelopmentEnv } from "./load-env";
 import { getPool } from "@/lib/db/postgres";
+import { claimConfiguratorCommand, finishConfiguratorCommand, timeoutConfiguratorCommand } from "@/lib/gps/configurator-dispatch";
+import {
+  claimDeviceKeyword,
+  finishDeviceKeyword,
+  markDeviceKeywordSent,
+  timeoutDeviceKeyword,
+} from "@/lib/gps/device-keyword";
+import {
+  claimDeviceRestart,
+  finishDeviceRestart,
+  markDeviceRestartClosed,
+  markDeviceRestartSent,
+  noteDeviceSession,
+  timeoutDeviceRestart,
+} from "@/lib/gps/device-restart";
+import { devListenerCommandAllowed } from "@/lib/teltonika/restart";
 import { authorizeTeltonikaImei, storeTeltonikaPacket } from "@/lib/teltonika/store";
 import { startTeltonikaServer, TELTONIKA_DEFAULT_PORT } from "@/lib/teltonika/server";
 
@@ -30,6 +46,25 @@ async function main() {
     handlers: {
       authorize: authorizeTeltonikaImei,
       store: (imei, packet) => storeTeltonikaPacket(imei, packet),
+      pullCommand: async (imei) => (await claimDeviceRestart(imei)) ?? (await claimDeviceKeyword(imei)) ?? claimConfiguratorCommand(imei),
+      finishCommand: async (commandId, responseText) => {
+        if (await finishDeviceRestart(commandId, responseText)) return;
+        if (await finishDeviceKeyword(commandId, responseText)) return;
+        await finishConfiguratorCommand(commandId, responseText);
+      },
+      timeoutCommand: async (commandId) => {
+        if (await timeoutDeviceRestart(commandId)) return;
+        if (await timeoutDeviceKeyword(commandId)) return;
+        await timeoutConfiguratorCommand(commandId);
+      },
+      commandSent: async (commandId) => {
+        await markDeviceRestartSent(commandId);
+        await markDeviceKeywordSent(commandId);
+      },
+      commandClosed: (commandId) => markDeviceRestartClosed(commandId),
+      sessionOpened: (imei) => noteDeviceSession(imei, "open"),
+      sessionClosed: (imei) => noteDeviceSession(imei, "close"),
+      commandAllowed: devListenerCommandAllowed,
     },
   });
   const address = server.address();

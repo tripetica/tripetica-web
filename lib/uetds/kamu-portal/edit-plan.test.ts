@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { groupListUrl, groupPageIsSameTrip, matchPortalGroups, parsePortalGroupRows, parsePortalPassengerRows, passengerSaveSucceeded, portalGroupNeedsWrite, portalPlaceShowsDistrict, resolvePortalGroupRow, runPortalUpdate, samePortalPlace } from "@/lib/uetds/kamu-portal/live-update";
+import { groupListUrl, groupPageIsSameTrip, matchPortalAreaOption, matchPortalGroups, parsePortalGroupRows, parsePortalPassengerRows, passengerSaveSucceeded, PORTAL_ROUTE_PLACE_INPUTS, portalGroupNeedsWrite, portalPlaceIsSelectedArea, portalPlaceShowsDistrict, resolvePortalGroupRow, runPortalUpdate, samePortalPlace } from "@/lib/uetds/kamu-portal/live-update";
 import {
   diffPortalGroup,
   matchExistingPassenger,
@@ -567,4 +567,72 @@ test("placeholder passengers match the full ministry name, not the first word or
     [{ index: 1, nationality: "KR", documentNumber: "M868P8841", firstName: "Donglee", lastName: "Shin", gender: "male" }],
   );
   assert.deepEqual(nextPassengerSyncStep(fallbackDoc!, listed), { action: "update", yolcuIndex: 8 });
+});
+
+const ISTANBUL_AREAS = ["Seçiniz", "Arnavutköy", "Bakırköy", "Beyoğlu", "Pendik", "Şişli", "İstanbul Havalimanı", "Sabiha Gökçen Havalimanı"];
+const ANTALYA_AREAS = ["Seçiniz", "Muratpaşa", "Konyaaltı", "Antalya Havalimanı"];
+const IZMIR_AREAS = ["Seçiniz", "Konak", "Karşıyaka", "Adnan Menderes Havalimanı"];
+
+function area(options: string[], target: string, province: string) {
+  const match = matchPortalAreaOption(options, target, province);
+  return match.ok ? match.label : match.error;
+}
+
+test("portal area options keep airports and districts in one list for every province", () => {
+  assert.equal(area(ISTANBUL_AREAS, "Beyoğlu", "İstanbul"), "Beyoğlu");
+  assert.equal(area(ISTANBUL_AREAS, "Sabiha Gökçen Havalimanı", "İstanbul"), "Sabiha Gökçen Havalimanı");
+  assert.equal(area(ISTANBUL_AREAS, "Arnavutköy", "İstanbul"), "Arnavutköy");
+  assert.equal(area(ISTANBUL_AREAS, "İstanbul Havalimanı", "İstanbul"), "İstanbul Havalimanı");
+  assert.equal(area(ANTALYA_AREAS, "Antalya Havalimanı", "Antalya"), "Antalya Havalimanı");
+  assert.equal(area(ANTALYA_AREAS, "Muratpaşa", "Antalya"), "Muratpaşa");
+  assert.equal(area(IZMIR_AREAS, "Adnan Menderes Havalimanı", "İzmir"), "Adnan Menderes Havalimanı");
+  assert.equal(area(IZMIR_AREAS, "Karşıyaka", "İzmir"), "Karşıyaka");
+  assert.equal(area(ISTANBUL_AREAS, "Şişli", "İstanbul"), "Şişli");
+  assert.equal(area(ISTANBUL_AREAS, "Bakırköy", "İstanbul"), "Bakırköy");
+  assert.equal(area(ISTANBUL_AREAS, "İstanbul Havalimanı", "İstanbul") === area(ISTANBUL_AREAS, "Sabiha Gökçen Havalimanı", "İstanbul"), false);
+  assert.equal(area(["Seçiniz", "Pendik", "İstanbul Sabiha Gökçen Uluslararası Havalimanı"], "Sabiha Gökçen Havalimanı", "İstanbul"), "İstanbul Sabiha Gökçen Uluslararası Havalimanı");
+  assert.equal(area(["Seçiniz", "Gaziemir", "İzmir Adnan Menderes Havalimanı"], "Adnan Menderes Havalimanı", "İzmir"), "İzmir Adnan Menderes Havalimanı");
+  assert.equal(area(ISTANBUL_AREAS, "Pendik", "İstanbul"), "Pendik");
+  assert.notEqual(area(ISTANBUL_AREAS, "Pendik", "İstanbul"), "Sabiha Gökçen Havalimanı");
+  assert.equal(area(ISTANBUL_AREAS, "Olmayan Havalimanı", "İstanbul"), "area_not_found");
+  assert.notEqual(area(ISTANBUL_AREAS, "Olmayan Havalimanı", "İstanbul"), "Pendik");
+  assert.equal(area(["İstanbul Sabiha Gökçen Havalimanı", "Sabiha Gökçen Uluslararası Havalimanı"], "Sabiha Gökçen Havalimanı", "İstanbul"), "ambiguous_area_match");
+});
+
+test("group updates clear place text and change only the side that differs", () => {
+  const row = {
+    grupIndex: 0,
+    name: "Transfer",
+    pickup: "BEYOĞLU / İSTANBUL",
+    dropoff: "PENDİK / İSTANBUL",
+    editHref: "?asama=yeniGrup&grupIndex=0",
+    passengerHref: "?asama=yolcuListesi&grupIndex=0",
+  };
+  const dirty = { ...row, dropoff: "Sabiha Gökçen Havalimanı / PENDİK / İSTANBUL" };
+  assert.equal(portalPlaceIsSelectedArea(dirty.dropoff, { provinceName: "İstanbul", districtName: "Pendik", placeName: "" }), false);
+  assert.deepEqual(
+    portalGroupNeedsWrite(dirty, { provinceName: "İstanbul", districtName: "Beyoğlu", placeName: "" }, { provinceName: "İstanbul", districtName: "Bakırköy", placeName: "" }),
+    { pickup: false, dropoff: true },
+  );
+  assert.deepEqual(
+    portalGroupNeedsWrite(row, { provinceName: "İstanbul", districtName: "Şişli", placeName: "Otel" }, { provinceName: "İstanbul", districtName: "Pendik", placeName: "" }),
+    { pickup: true, dropoff: false },
+  );
+  assert.deepEqual(
+    portalGroupNeedsWrite(
+      { ...row, pickup: "SABİHA GÖKÇEN HAVALİMANI / İSTANBUL", dropoff: "İSTANBUL HAVALİMANI / İSTANBUL" },
+      { provinceName: "İstanbul", districtName: "Pendik", placeName: "" },
+      { provinceName: "İstanbul", districtName: "İstanbul Havalimanı", placeName: "" },
+    ),
+    { pickup: true, dropoff: false },
+  );
+  assert.equal(portalPlaceIsSelectedArea("KARŞIYAKA / İZMİR", { provinceName: "İzmir", districtName: "Karşıyaka", placeName: "Otel" }), true);
+  assert.equal(portalPlaceIsSelectedArea("ANTALYA HAVALİMANI / ANTALYA", { provinceName: "Antalya", districtName: "Antalya Havalimanı", placeName: "Antalya Havalimanı" }), true);
+  assert.deepEqual(PORTAL_ROUTE_PLACE_INPUTS.pickup, ["baslangicYeri", "baslangicYer"]);
+  assert.deepEqual(PORTAL_ROUTE_PLACE_INPUTS.dropoff, ["bitisYeri", "bitisYer"]);
+  const browser = readFileSync("lib/uetds/kamu-login-browser.ts", "utf8");
+  assert.match(browser, /clearPlace\(PORTAL_ROUTE_PLACE_INPUTS\.pickup\)/);
+  assert.match(browser, /clearPlace\(PORTAL_ROUTE_PLACE_INPUTS\.dropoff\)/);
+  assert.match(browser, /field\.fill\(""\)/);
+  assert.doesNotMatch(browser, /selectText\([^)]*placeName/);
 });

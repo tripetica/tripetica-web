@@ -72,6 +72,7 @@ export default async function DriverGpsPage({
       deviceId: selected.id,
       partnerId: selected.partnerId,
       vehicleId: selected.vehicleId,
+      accessPartnerId: actor.partnerId,
       from: range.from,
       to: range.to,
     })
@@ -113,7 +114,12 @@ export default async function DriverGpsPage({
   const green: DriveGreenView = greenReading
     ? {
       status: greenReading.events.length > 0 ? "recorded" : greenReading.parserReady ? "empty" : "inactive",
-      events: greenReading.events.map((event) => ({ at: event.at, kind: event.kind, rawValue: event.rawValue })),
+      events: greenReading.events.map((event) => ({
+        at: event.at,
+        kind: event.kind,
+        rawValue: event.rawValue,
+        corneringUnit: event.corneringUnit,
+      })),
     }
     : { status: "unsupported", events: [] };
   const fromQuery = one(queryParams.from) ?? "";
@@ -132,6 +138,7 @@ export default async function DriverGpsPage({
   const sections = {
     live: permissions.gpsLive,
     history: permissions.gpsHistory,
+    documents: permissions.gpsDocuments,
     maintenance: permissions.gpsMaintenance,
     drive: permissions.gpsDrive,
     device: permissions.gpsDevice,
@@ -182,6 +189,8 @@ export default async function DriverGpsPage({
           sections={sections}
           liveUrl={selected && (permissions.gpsLive || permissions.gpsDevice) ? `/api/driver/gps/live/${selected.id}` : undefined}
           maintenanceBase={permissions.gpsMaintenance ? "/api/driver/gps/maintenance" : undefined}
+          documentsUrl="/api/driver/gps/documents"
+          documentsCanEdit={false}
           fleetUrl="/api/driver/gps/fleet"
           loadImmobilizer={permissions.gpsDevice}
         />

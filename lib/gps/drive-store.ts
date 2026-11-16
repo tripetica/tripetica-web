@@ -2,7 +2,7 @@ import "server-only";
 
 import { query } from "@/lib/db/postgres";
 import { DRIVE_POINT_LIMIT, type DriveTrackPoint } from "@/lib/gps/drive";
-import { type GreenDrivingKind } from "@/lib/teltonika/green-driving";
+import { corneringDisplayUnit, greenDrivingSource, type GreenDrivingKind } from "@/lib/teltonika/green-driving";
 
 export type VehicleGreenDriving = {
   parserReady: boolean;
@@ -12,6 +12,7 @@ export type VehicleGreenDriving = {
     rawValue: number | null;
     latitude: number;
     longitude: number;
+    corneringUnit: "g" | "rad/s";
   }[];
 };
 
@@ -68,14 +69,19 @@ export async function listVehicleGreenDriving(input: {
     longitude: string;
   }>(
     `SELECT recorded_at, kind, raw_value, latitude::text AS latitude, longitude::text AS longitude
-       FROM gps_green_driving_events
+       FROM (
+         SELECT id, recorded_at, kind, raw_value, latitude, longitude, vehicle_id FROM gps_green_driving_events
+         UNION ALL
+         SELECT id, recorded_at, kind, raw_value, latitude, longitude, vehicle_id FROM gps_green_driving_event_variants
+       ) AS events
       WHERE vehicle_id = $1
         AND recorded_at >= $2
         AND recorded_at < $3
-      ORDER BY recorded_at ASC
+      ORDER BY recorded_at DESC, id DESC
       LIMIT 200`,
     [input.vehicleId, input.from.toISOString(), input.to.toISOString()],
   );
+  const source = await readGreenDrivingSource(input.vehicleId);
   return {
     parserReady: (ready.rowCount ?? 0) > 0,
     events: result.rows.flatMap((row) => {
@@ -83,15 +89,37 @@ export async function listVehicleGreenDriving(input: {
       const latitude = Number(row.latitude);
       const longitude = Number(row.longitude);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+      const at = row.recorded_at.getTime();
       return [{
-        at: row.recorded_at.getTime(),
+        at,
         kind: row.kind,
         rawValue: row.raw_value,
         latitude,
         longitude,
+        corneringUnit: corneringDisplayUnit({ recordedAtMs: at, source }),
       }];
     }),
   };
+}
+
+async function readGreenDrivingSource(vehicleId: string) {
+  try {
+    const result = await query<{ response_text: string | null }>(
+      `SELECT reads.response_text
+         FROM gps_teltonika_config_reads reads
+         JOIN gps_devices device ON device.id = reads.device_id
+        WHERE device.vehicle_id = $1
+          AND reads.phase = 'answered'
+          AND reads.command_text LIKE 'getparam %'
+          AND reads.response_text LIKE '%11007%'
+        ORDER BY reads.finished_at DESC NULLS LAST
+        LIMIT 1`,
+      [vehicleId],
+    );
+    return greenDrivingSource(result.rows[0]?.response_text ?? null);
+  } catch {
+    return null;
+  }
 }
 
 export async function listPhysicalDrivePoints(input: {

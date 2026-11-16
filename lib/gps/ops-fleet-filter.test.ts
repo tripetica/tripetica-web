@@ -102,3 +102,22 @@ test("stock devices stay on the ops fleet filter without a partner or plate", ()
   assert.equal(stock?.vehicles[0]?.deviceCode, "TPT-20CBB2C1A032");
   assert.deepEqual(searchOpsFleet(groups, "20cbb").map((group) => group.partnerId), ["stock"]);
 });
+
+test("configurator details are searchable without changing a map row that has none", () => {
+  const choices = opsFleetChoices([
+    {
+      id: "device",
+      partnerId: "p1",
+      partnerName: "Search Travel",
+      plate: "34UM647",
+      deviceCode: "TPT-1",
+      source: "device",
+      detail: "FMB920 · 353691844301837",
+      searchText: "34UM647 Search Travel 353691844301837 +905550000000",
+    },
+  ], "Stokta");
+  assert.equal(choices[0]?.detail, "FMB920 · 353691844301837");
+  assert.deepEqual(searchOpsFleet(groupOpsFleet(choices), "353691844301837").map((group) => group.partnerId), ["p1"]);
+  const mapGroups = groupOpsFleet(vehicles);
+  assert.equal(searchOpsFleet(mapGroups, "353691844301837").length, 0);
+});

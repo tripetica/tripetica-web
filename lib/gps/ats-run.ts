@@ -6,7 +6,6 @@ import { listAtsTripClocks } from "@/lib/gps/ats-trips";
 import { planAtsCycle, type AtsTripClock } from "@/lib/gps/ats-window";
 import { chooseAtsFixForTrips } from "@/lib/gps/ats-fix";
 import { withAtsSlot } from "@/lib/gps/ats-slot";
-import { MOBILE_ATS_MAX_FIX_AGE_MS } from "@/lib/gps/mobile-ats";
 import { atsPlate, nextAtsAttempt } from "@/lib/gps/ats-policy";
 import { resolveAtsDistrict } from "@/lib/gps/ats-district";
 import { uetdsTripTimestamp } from "@/lib/uetds/list-policy";
@@ -249,11 +248,9 @@ async function choosePhysicalFix(
     pointsNewestFirst: [storedFix(latest)],
     trips,
     nowMs,
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
   });
   if (first.ok || first.reason !== "district_unresolved") return first;
-  const floor = new Date(Math.min(...trips.map((trip) => trip.startMs)) - MOBILE_ATS_MAX_FIX_AGE_MS);
   const points = [storedFix(latest)];
   let before = latest.recorded_at;
   for (let page = 0; page < 8; page += 1) {
@@ -262,18 +259,16 @@ async function choosePhysicalFix(
          FROM gps_positions
         WHERE device_id = $1
           AND vehicle_id = $2
-          AND recorded_at >= $3
-          AND recorded_at < $4
+          AND recorded_at < $3
         ORDER BY recorded_at DESC
         LIMIT 200`,
-      [vehicle.source_device_id, vehicle.vehicle_id, floor, before],
+      [vehicle.source_device_id, vehicle.vehicle_id, before],
     );
     for (const row of rows.rows) points.push(storedFix(row));
     const choice = chooseAtsFixForTrips({
       pointsNewestFirst: points,
       trips,
       nowMs,
-      maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
       resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
     });
     const oldest = rows.rows.at(-1);
@@ -284,7 +279,6 @@ async function choosePhysicalFix(
     pointsNewestFirst: points,
     trips,
     nowMs,
-    maxAgeBeforeStartMs: MOBILE_ATS_MAX_FIX_AGE_MS,
     resolve: (latitude, longitude) => resolveAtsDistrict(latitude, longitude),
   });
 }

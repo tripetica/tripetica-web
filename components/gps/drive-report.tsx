@@ -139,10 +139,10 @@ function DrivePerformance({
         <div><dt>{copy.driveHarshCorner}</dt><dd>{counts.cornering}</dd></div>
       </dl>
       <ul className="gps-drive-events">
-        {green.events.map((event) => {
-          const value = formatGreenDrivingValue(event.kind, event.rawValue, locale);
+        {green.events.map((event, index) => {
+          const value = formatGreenDrivingValue(event.kind, event.rawValue, locale, event.corneringUnit);
           return (
-            <li key={`${event.at}:${event.kind}`}>
+            <li key={`${event.at}:${event.kind}:${index}`}>
               {formatDriveDay(event.at, locale)} {formatDriveClock(event.at)} · {greenLabel(copy, event.kind)}{value ? ` · ${value}` : ""}
             </li>
           );

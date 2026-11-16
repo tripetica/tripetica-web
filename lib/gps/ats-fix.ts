@@ -38,16 +38,15 @@ export type AtsFixChoice<T extends AtsFixPoint> =
     };
 
 /**
- * Newest real fix that resolves to one official district and falls inside at
- * least one trip's pre-start window. An unresolved newer coordinate is skipped
- * with its own time and position; the older fix keeps its own coordinate,
- * GNSS time, and district. Nothing is relabelled.
+ * Newest real fix that resolves to one official district for the active trips.
+ * Age before the trip start does not drop it. An unresolved newer coordinate
+ * is skipped with its own time and position; the older fix keeps its own
+ * coordinate, GNSS time, and district. Nothing is relabelled.
  */
 export function chooseAtsFixForTrips<T extends AtsFixPoint>(input: {
   pointsNewestFirst: readonly T[];
   trips: readonly AtsFixTrip[];
   nowMs: number;
-  maxAgeBeforeStartMs: number;
   resolve: (latitude: number, longitude: number) => AtsDistrictHit;
 }): AtsFixChoice<T> {
   const unresolved: AtsUnresolvedFix[] = [];
@@ -58,9 +57,7 @@ export function chooseAtsFixForTrips<T extends AtsFixPoint>(input: {
       continue;
     }
     sawPoint = true;
-    const tripIds = input.trips
-      .filter((trip) => point.measuredAtMs >= trip.startMs - input.maxAgeBeforeStartMs)
-      .map((trip) => trip.id);
+    const tripIds = input.trips.map((trip) => trip.id);
     if (tripIds.length === 0) continue;
     sawInWindow = true;
     const district = input.resolve(point.latitude, point.longitude);

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptyDraft, createPassengerDraft } from "../uetds/draft";
 import { submitUetdsTestNotification } from "../uetds/ministry-submit";
+import { mutateUetdsSeferGuncelle } from "../uetds/ministry-mutate";
 import { retryUetdsFinalVerification } from "../uetds/retry-verification";
 import { verifyUetdsMinistryNotification } from "../uetds/verify-ministry";
 import { UETDS_LIVE_ENDPOINT, UETDS_TEST_ENDPOINT } from "../uetds/ministry-env";
@@ -25,6 +26,17 @@ test("create final verification and read-only reconciliation with all network mo
   draft.startDate = draft.endDate = "2030-01-01";
   draft.startTime = "19:00"; draft.endTime = "22:00";
   draft.passengers = [createPassengerDraft({ firstName: "Johanna", lastName: "Huedo-Gonzalez", identityNumber: "FAKE-TEST", nationality: "TR", gender: "male" })];
+  const sentNumbers = new Set<string>();
+  const updateBodies: string[] = [];
+  let millis = 1794325684000;
+  let allocations = 0;
+  globals.tripeticaPgPool = {
+    query: async (sql: string) => {
+      assert.match(sql, /UPDATE uetds_firma_sefer_counter/);
+      allocations++;
+      return { rows: [{ last_millis: String(millis++) }] };
+    },
+  };
   let operations: string[] = [];
   let summaryXml = summary;
   let timeout = false;
@@ -37,6 +49,14 @@ test("create final verification and read-only reconciliation with all network mo
     assert.equal(user, expectedUsername);
     const action = String((init?.headers as Record<string,string>).SOAPAction).replaceAll('"', '').split('/').pop()!;
     operations.push(action);
+    if (action === "seferEkle") {
+      const number = String(init?.body).match(/<firmaSeferNo>(TRP-\d{13})<\/firmaSeferNo>/)?.[1];
+      assert.ok(number);
+      assert.ok(!sentNumbers.has(number));
+      sentNumbers.add(number);
+      if (draft.reservationId) assert.ok(!String(init?.body).includes(draft.reservationId));
+    }
+    if (action === "seferGuncelle") updateBodies.push(String(init?.body));
     if (action === "yolcuEkle") {
       assert.match(String(init?.body), /<adi>Johanna<\/adi>/);
       assert.match(String(init?.body), /<soyadi>Huedo Gonzalez<\/soyadi>/);
@@ -50,6 +70,7 @@ test("create final verification and read-only reconciliation with all network mo
     }
     const response: Record<string,string> = {
       seferEkle: `<uetdsSeferReferansNo>${reference}</uetdsSeferReferansNo>`,
+      seferGuncelle: "",
       personelEkle: "", seferGrupEkle: "<uetdsGrupRefNo>1234</uetdsGrupRefNo>", yolcuEkle: "<uetdsYolcuRefNo>5678</uetdsYolcuRefNo>",
     };
     assert.ok(action in response, "unexpected SOAP operation");
@@ -61,14 +82,32 @@ test("create final verification and read-only reconciliation with all network mo
         Object.assign(process.env, { NODE_ENV: environment === "live" ? "production" : "development", EXPECTED_DATABASE: environment === "live" ? "tripetica" : "tripetica_dev" });
         expectedEndpoint = environment === "live" ? UETDS_LIVE_ENDPOINT : UETDS_TEST_ENDPOINT;
         expectedUsername = `${environment}-fixture`;
+        draft.source = environment === "live" ? "reservation" : "manual";
+        draft.reservationId = environment === "live" ? companyId : null;
         operations = [];
         const result = await submitUetdsTestNotification({ username: expectedUsername, password: "fake", plate: expected.plate, driverNationalId: "FAKE", driverFullName: "Fixture Driver", draft });
         assert.equal(result.status, "submitted");
+        assert.ok(result.firmaSeferNo && sentNumbers.has(result.firmaSeferNo));
+        assert.equal(result.seferReferansNo, reference);
         assert.equal(result.finalVerification?.environment, environment);
         assert.equal(result.finalVerification?.result, "verified");
         assert.deepEqual(operations, ["seferEkle", "personelEkle", "seferGrupEkle", "yolcuEkle", "bildirimOzeti"]);
       });
     }
+    await t.test("concurrent creates get distinct numbers and update retains the stored number", async () => {
+      const input = { username: expectedUsername, password: "fake", plate: expected.plate, driverNationalId: "FAKE", driverFullName: "Fixture Driver", draft };
+      const results = await Promise.all(Array.from({ length: 8 }, () => submitUetdsTestNotification(input)));
+      assert.ok(results.every((result) => result.status === "submitted" && result.firmaSeferNo));
+      assert.equal(new Set(results.map((result) => result.firmaSeferNo)).size, results.length);
+      const firmaSeferNo = results[0].firmaSeferNo!;
+      const beforeUpdate = allocations;
+      await mutateUetdsSeferGuncelle({ ...input, seferReferansNo: reference, firmaSeferNo });
+      assert.equal(allocations, beforeUpdate);
+      assert.equal(updateBodies.length, 1);
+      assert.ok(updateBodies[0].includes(`<firmaSeferNo>${firmaSeferNo}</firmaSeferNo>`));
+      assert.ok(updateBodies[0].includes(`<guncellenecekSeferReferansNo>${reference}</guncellenecekSeferReferansNo>`));
+      assert.ok(!updateBodies[0].includes(companyId));
+    });
     await t.test("summary failure preserves sefer/group/passenger references without replay", async () => {
       operations = [];
       summaryXml = summary.replace("<sonucKodu>0", "<sonucKodu>99");
