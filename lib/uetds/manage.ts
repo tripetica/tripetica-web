@@ -1,6 +1,7 @@
 import "server-only";
 
 import { query } from "@/lib/db/postgres";
+import { readStoredFirmaSeferNo } from "@/lib/uetds/firma-sefer-no";
 import { isUuid } from "@/lib/ops/process-filters";
 import {
   blockingUetdsDraftIssues,
@@ -564,6 +565,7 @@ export async function updateUetdsNotification(input: {
         seferReferansNo: notification.ministryReference,
         draft: working,
         plate: nextMinistryPlate,
+        firmaSeferNo: readStoredFirmaSeferNo(notification.snapshotJson),
       }),
     );
   }

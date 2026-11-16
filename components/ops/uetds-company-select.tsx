@@ -17,6 +17,7 @@ type UetdsCompanySelectProps = {
   emptyLabel: string;
   disabled?: boolean;
   hideLabel?: boolean;
+  includeNone?: boolean;
   onChange: (value: string) => void;
 };
 
@@ -31,9 +32,10 @@ export function UetdsCompanySelect({
   emptyLabel,
   disabled = false,
   hideLabel = false,
+  includeNone = true,
   onChange,
 }: UetdsCompanySelectProps) {
-  const options = buildUetdsCompanySelectOptions(activeCompanies, currentCompany, noneLabel);
+  const options = buildUetdsCompanySelectOptions(activeCompanies, currentCompany, noneLabel, includeNone);
   return (
     <div className="ops-field">
       {hideLabel ? null : <span>{fieldLabel}</span>}

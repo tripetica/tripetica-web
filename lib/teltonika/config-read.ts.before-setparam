@@ -1,0 +1,22 @@
+/** The only GPRS text this read path may put on a device socket. */
+export const TELTONIKA_GREEN_GETPARAM =
+  "getparam 11000;11003;11004;11005;11006;11007;11008;11011;11015;11019";
+
+const IMMOBILIZER_WIRE_COMMANDS = new Set(["setdigout 0", "setdigout 1"]);
+
+/** Codec 12 payload that the listener is allowed to write. setparam is never allowed. */
+export function teltonikaWireCommandAllowed(text: string) {
+  return text === TELTONIKA_GREEN_GETPARAM || IMMOBILIZER_WIRE_COMMANDS.has(text);
+}
+
+/** Keeps the raw device text. Unknown reply shapes stay unparsed instead of being guessed. */
+export function parseTeltonikaGetparam(text: string) {
+  const values: Record<string, string> = {};
+  const pattern = /(?:Param ID:)?(\d{4,6})\s*(?:Value:|[:=])\s*(-?\d+(?:\.\d+)?)/gi;
+  for (const match of text.matchAll(pattern)) {
+    const id = match[1];
+    const value = match[2];
+    if (id && value && values[id] === undefined) values[id] = value;
+  }
+  return values;
+}

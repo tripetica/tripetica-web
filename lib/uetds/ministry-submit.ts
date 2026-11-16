@@ -1,5 +1,6 @@
 import { normalizeUetdsFare } from "@/lib/uetds/fare";
 import "server-only";
+import { query } from "@/lib/db/postgres";
 import { verifyUetdsMinistryNotification } from "@/lib/uetds/verify-ministry";
 import type { UetdsFinalVerification } from "@/lib/uetds/final-verification";
 import { canonicalMinistryPlate } from "@/lib/uetds/ministry-plate";
@@ -93,7 +94,15 @@ export async function submitUetdsTestNotification(input: {
   }
   const stages: UetdsMinistryStageResult[] = [];
   const userXml = soapUserXml(input.username, input.password);
-  const firmaSeferNo = input.draft.reservationId?.trim() || `TRP-${Date.now()}`;
+  const allocated = await query<{ last_millis: string }>(
+    `UPDATE uetds_firma_sefer_counter
+      SET last_millis = GREATEST(last_millis + 1, floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint)
+      WHERE singleton
+      RETURNING last_millis`,
+  );
+  const millis = allocated.rows[0]?.last_millis;
+  if (!millis) throw new Error("uetds_firma_sefer_counter_missing");
+  const firmaSeferNo = `TRP-${millis}`;
   const seferXml = `${userXml}<ariziSeferBilgileriInput>
       ${soapField("aracPlaka", canonicalMinistryPlate(input.plate))}
       ${soapField("seferAciklama", normalizeUetdsPurposeText(input.draft.purpose.trim() || purposeForTripKind(input.draft.tripKind)))}

@@ -31,10 +31,10 @@ export function teltonikaGreenDriving(record: {
   longitude: number;
   io: readonly GreenIo[];
 }): GreenDrivingReading | null {
-  const type = record.io.find((item) => item.id === TELTONIKA_GREEN_TYPE_IO);
+  const type = record.io.find((item) => item.id === TELTONIKA_GREEN_TYPE_IO && greenKind(item.value));
   const kind = greenKind(type?.value);
   if (!kind) return null;
-  const value = record.io.find((item) => item.id === TELTONIKA_GREEN_VALUE_IO)?.value;
+  const value = record.io.find((item) => item.id === TELTONIKA_GREEN_VALUE_IO && greenRawValue(item.value) !== null)?.value;
   return {
     kind,
     rawValue: greenRawValue(value),
@@ -68,4 +68,15 @@ function greenRawValue(value: number | null | undefined) {
   if (value === null || value === undefined) return null;
   if (!Number.isSafeInteger(value) || value < 0 || value > 65535) return null;
   return value;
+}
+
+export function greenDrivingEventError(event: GreenDrivingReading, now: Date, assignedAt: Date | null) {
+  if (!Number.isSafeInteger(event.recordedAtMs) || event.recordedAtMs < 1) return "invalid_time";
+  if (event.recordedAtMs > now.getTime() + 5 * 60_000) return "future_time";
+  if (event.recordedAtMs < now.getTime() - 24 * 60 * 60_000) return "stale_event";
+  if (assignedAt && event.recordedAtMs < assignedAt.getTime()) return "before_assignment";
+  if (!Number.isFinite(event.latitude) || !Number.isFinite(event.longitude)
+    || Math.abs(event.latitude) > 90 || Math.abs(event.longitude) > 180
+    || (event.latitude === 0 && event.longitude === 0)) return "invalid_coordinate";
+  return null;
 }
