@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { planMobileAts, planMobileAtsReplay } from "@/lib/gps/mobile-ats";
-import { driverReminderCopy, mobileReminderDue, mobileReminderRuntimeAllowed, mobileReminderSlot, mobileShareHeard, overlappingTripReminderBlocks, ownerIsDriver, ownerReminderCopy, recentReminderBlocks, reminderPushSources, reminderTargets, uniquePushEndpoints } from "@/lib/gps/mobile-reminders";
+import { driverReminderCopy, MOBILE_REMINDER_COOLDOWN_MS, MOBILE_REMINDER_INTERVAL_MS, mobileReminderDue, mobileReminderRuntimeAllowed, mobileReminderSlot, mobileShareHeard, overlappingTripReminderBlocks, ownerIsDriver, ownerReminderCopy, recentReminderBlocks, reminderPushSources, reminderTargets, uniquePushEndpoints } from "@/lib/gps/mobile-reminders";
 import { shareEventPresentation, shareHistoryWindow } from "@/lib/gps/share-history";
 import { acceptMobilePoint, emailsMatch, mobileFixFresh, mobileShareAllowed, mobileShareForeignLive, mobileShareStartDecision } from "@/lib/gps/mobile";
 import { gpsSpeedKmSa, mobileDisplaySpeedMps, resolveMobileSpeed, shouldStoreMobilePoint } from "@/lib/gps/mobile-speed";
@@ -192,12 +192,13 @@ test("mobile reminders check five minutes before the trip and then every ten min
   assert.equal(mobileReminderDue({ ...absent, nowMs: start - 5 * minute, lastHeardAtMs: heard }), null);
   assert.equal(mobileReminderDue({ ...absent, nowMs: start - 5 * minute, lastHeardAtMs: start - 24 * 60 * minute }), start - 5 * minute);
   assert.equal(ownerIsDriver({ driverEmail: "A@B.com", ownerEmail: "a@b.com" }), true);
-  assert.deepEqual(reminderTargets({ ownerIsDriver: true }).map((item) => `${item.audience}:${item.channel}`), ["driver:push", "driver:email"]);
-  assert.deepEqual(reminderTargets({ ownerIsDriver: false }).map((item) => `${item.audience}:${item.channel}`), ["driver:push", "owner:push", "owner:email"]);
+  assert.deepEqual(reminderTargets({ ownerIsDriver: true }).map((item) => `${item.audience}:${item.channel}`), ["driver:push"]);
+  assert.deepEqual(reminderTargets({ ownerIsDriver: false }).map((item) => `${item.audience}:${item.channel}`), ["driver:push", "owner:push"]);
   const same = reminderTargets({ ownerIsDriver: true });
   const other = reminderTargets({ ownerIsDriver: false });
   assert.equal(new Set(same.map((item) => item.audience)).size, 1);
-  assert.equal(other.filter((item) => item.audience === "owner").length, 2);
+  assert.equal(other.filter((item) => item.channel === "push").length, 2);
+  assert.equal(other.every((item) => item.channel === "push"), true);
   assert.deepEqual(reminderPushSources({ samePerson: true, audience: "driver" }), ["driver", "owner"]);
   assert.deepEqual(reminderPushSources({ samePerson: false, audience: "driver" }), ["driver"]);
   assert.deepEqual(reminderPushSources({ samePerson: false, audience: "owner" }), ["owner"]);
@@ -250,6 +251,12 @@ test("a share that stops between checks waits for the next ten-minute checkpoint
     pickup: "IST",
     dropoff: "Taksim",
   });
+  assert.equal(MOBILE_REMINDER_INTERVAL_MS, 10 * 60 * 1000);
+  assert.equal(MOBILE_REMINDER_COOLDOWN_MS, 60 * 1000);
+  const run = readFileSync(new URL("./mobile-reminder-run.ts", import.meta.url), "utf8");
+  assert.match(run, /reminderTargets\(\{ ownerIsDriver: samePerson \}\)/);
+  assert.match(run, /sendPartnerPushToSubscriptions/);
+  assert.doesNotMatch(run, /sendPartnerMail/);
   assert.equal(during.title, "Mobil GPS Konum Paylaşımı Kesildi");
   assert.match(during.body, /güncel GPS konumu alınamıyor/);
   assert.match(during.body, /Ada/);

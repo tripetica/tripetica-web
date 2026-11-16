@@ -20,6 +20,8 @@ self.addEventListener("push", (event) => {
               ? "mobile-gps-reminder"
               : payload.kind === "vehicle-maintenance"
                 ? "vehicle-maintenance"
+                : payload.kind === "vehicle-document"
+                  ? "vehicle-document"
                 : payload.kind === "gps-fault"
                   ? "gps-fault"
                   : "process";
@@ -29,7 +31,7 @@ self.addEventListener("push", (event) => {
       ? "/tr/partner"
       : kind === "mobile-gps-reminder"
         ? "/tr/driver"
-        : kind === "vehicle-maintenance"
+        : kind === "vehicle-maintenance" || kind === "vehicle-document"
           ? "/tr/partner/gps"
           : kind === "gps-fault"
             ? "/tr/ops/gps?tab=devices&devices=faults"
@@ -55,7 +57,7 @@ self.addEventListener("push", (event) => {
       });
       for (const client of windows) {
         client.postMessage({
-          type: kind === "partner-job" || kind === "partner-low-battery" || kind === "mobile-gps-reminder" || kind === "vehicle-maintenance"
+          type: kind === "partner-job" || kind === "partner-low-battery" || kind === "mobile-gps-reminder" || kind === "vehicle-maintenance" || kind === "vehicle-document"
             ? "partner-push"
             : "ops-push",
           kind,
@@ -75,7 +77,7 @@ self.addEventListener("notificationclick", (event) => {
       ? "/tr/partner"
       : kind === "mobile-gps-reminder"
       ? "/tr/driver"
-      : kind === "vehicle-maintenance"
+      : kind === "vehicle-maintenance" || kind === "vehicle-document"
         ? "/tr/partner/gps"
         : kind === "gps-fault"
           ? "/tr/ops/gps?tab=devices&devices=faults"

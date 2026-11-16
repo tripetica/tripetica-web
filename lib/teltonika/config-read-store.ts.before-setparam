@@ -1,0 +1,49 @@
+import { getPool } from "@/lib/db/postgres";
+import { TELTONIKA_GREEN_GETPARAM } from "@/lib/teltonika/config-read";
+
+export async function claimTeltonikaConfigRead(imei: string) {
+  const result = await getPool().query<{ id: string; command_text: string }>(
+    `UPDATE gps_teltonika_config_reads AS read
+     SET phase = 'sent'
+     WHERE read.id = (
+       SELECT queued.id
+       FROM gps_teltonika_config_reads queued
+       JOIN gps_devices device ON device.id = queued.device_id
+       WHERE device.imei = $1
+         AND device.receiver = 'teltonika'
+         AND device.status = 'active'
+         AND device.deleted_at IS NULL
+         AND queued.phase = 'queued'
+         AND queued.command_text = $2
+       ORDER BY queued.created_at
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED
+     )
+     RETURNING read.id, read.command_text`,
+    [imei, TELTONIKA_GREEN_GETPARAM],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function finishTeltonikaConfigRead(commandId: string, responseText: string) {
+  await getPool().query(
+    `UPDATE gps_teltonika_config_reads
+     SET phase = 'answered',
+         response_text = $2,
+         finished_at = NOW()
+     WHERE id = $1
+       AND phase = 'sent'`,
+    [commandId, responseText.slice(0, 4000)],
+  );
+}
+
+export async function timeoutTeltonikaConfigRead(commandId: string) {
+  await getPool().query(
+    `UPDATE gps_teltonika_config_reads
+     SET phase = 'timeout',
+         finished_at = NOW()
+     WHERE id = $1
+       AND phase = 'sent'`,
+    [commandId],
+  );
+}

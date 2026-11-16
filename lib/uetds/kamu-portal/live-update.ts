@@ -40,7 +40,7 @@ export type PortalUpdatePage = {
   url(): Promise<string>;
   html(): Promise<string>;
   goto(url: string): Promise<void>;
-  saveGroupForm?(input: { pickup: PortalLocation | null; dropoff: PortalLocation | null; identityConfirmed?: boolean }): Promise<boolean>;
+  saveGroupForm?(input: { pickup: PortalLocation | null; dropoff: PortalLocation | null; verifyPickup?: PortalLocation | null; verifyDropoff?: PortalLocation | null; identityConfirmed?: boolean }): Promise<boolean>;
   savePassengerForm?(input: {
     yolcuIndex: number;
     nationality: string;
@@ -180,6 +180,94 @@ export function portalPlaceShowsDistrict(cell: string, location: PortalLocation)
   return parts.length >= 2 && Boolean(district) && parts[0] === district && parts[parts.length - 1] === province;
 }
 
+/** Saved route cell is exactly the selected district or airport, then the province. Extra place text is not settled. */
+export function portalPlaceIsSelectedArea(cell: string, location: Pick<PortalLocation, "provinceName" | "districtName">) {
+  const parts = placeSegments(cell).map((part) => fold(part));
+  const district = fold(location.districtName);
+  const province = fold(location.provinceName);
+  return parts.length === 2 && Boolean(district) && parts[0] === district && parts[1] === province;
+}
+
+export type PortalAreaMatch =
+  | { ok: true; label: string }
+  | { ok: false; error: "area_not_found" | "ambiguous_area_match" };
+
+function foldArea(value: string) {
+  return value
+    .toLocaleUpperCase("tr-TR")
+    .replace(/İ/g, "I")
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+}
+
+function isPortalAreaPlaceholder(value: string) {
+  const folded = foldArea(value);
+  return !folded || folded === "SECINIZ" || folded === "SECIN" || /^-+$/.test(folded);
+}
+
+function looksLikePortalAirport(value: string) {
+  const folded = foldArea(value);
+  return folded.includes("HAVALIMANI") || folded.includes("HAVAALANI") || folded.includes("AIRPORT");
+}
+
+function portalAirportKey(value: string) {
+  return foldArea(value)
+    .replace(/\bINTERNATIONAL\b/g, " ")
+    .replace(/\bULUSLARARASI\b/g, " ")
+    .replace(/\bINTL\b/g, " ")
+    .replace(/\bAIRPORT\b/g, " HAVALIMANI ")
+    .replace(/\bHAVAALANI\b/g, " HAVALIMANI ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function portalAirportTokens(value: string, provinceName: string) {
+  const province = foldArea(provinceName);
+  return portalAirportKey(value)
+    .split(" ")
+    .filter((token) => token.length >= 4 && token !== "HAVALIMANI" && token !== province);
+}
+
+/**
+ * Match one İlçesi/Hava Alanı option. Airports stay airports.
+ * A district target never falls through to a nearby airport, and an airport
+ * target never falls through to the district that contains it.
+ */
+export function matchPortalAreaOption(options: readonly string[], target: string, provinceName = ""): PortalAreaMatch {
+  const usable = options.map((option) => option.replace(/\s+/g, " ").trim()).filter((option) => !isPortalAreaPlaceholder(option));
+  const wanted = foldArea(target);
+  if (!wanted) return { ok: false, error: "area_not_found" };
+  const exact = usable.filter((option) => foldArea(option) === wanted);
+  if (exact.length === 1) return { ok: true, label: exact[0]! };
+  if (exact.length > 1) return { ok: false, error: "ambiguous_area_match" };
+  if (!looksLikePortalAirport(target)) return { ok: false, error: "area_not_found" };
+  const targetTokens = portalAirportTokens(target, provinceName);
+  const airportOptions = usable.filter((option) => looksLikePortalAirport(option));
+  const hits = airportOptions.filter((option) => {
+    const tokens = portalAirportTokens(option, provinceName);
+    if (targetTokens.length === 0) return tokens.length === 0;
+    if (tokens.length === 0) return false;
+    const same = targetTokens.length === tokens.length && targetTokens.every((token) => tokens.includes(token));
+    return same;
+  });
+  if (hits.length === 1) return { ok: true, label: hits[0]! };
+  if (hits.length > 1) return { ok: false, error: "ambiguous_area_match" };
+  const contained = airportOptions.filter((option) => {
+    const tokens = portalAirportTokens(option, provinceName);
+    return targetTokens.length > 0 && targetTokens.every((token) => tokens.includes(token));
+  });
+  if (contained.length === 1) return { ok: true, label: contained[0]! };
+  if (contained.length > 1) return { ok: false, error: "ambiguous_area_match" };
+  return { ok: false, error: "area_not_found" };
+}
+
+export const PORTAL_ROUTE_PLACE_INPUTS = {
+  pickup: ["baslangicYeri", "baslangicYer"],
+  dropoff: ["bitisYeri", "bitisYer"],
+} as const;
+
 export function matchPortalGroups(rows: PortalGroupRow[], pickup: PortalLocation, dropoff: PortalLocation) {
   const hits = rows.filter((row) => samePortalPlace(row.pickup, pickup) && samePortalPlace(row.dropoff, dropoff));
   if (hits.length === 0) return { ok: false as const, error: "group_not_found" as const };
@@ -207,8 +295,8 @@ export function resolvePortalGroupRow(
 /** Ministry CURRENT versus Tripetica TARGET. A side that already shows the target district is not written. */
 export function portalGroupNeedsWrite(group: PortalGroupRow, targetPickup: PortalLocation, targetDropoff: PortalLocation) {
   return {
-    pickup: !portalPlaceShowsDistrict(group.pickup, targetPickup),
-    dropoff: !portalPlaceShowsDistrict(group.dropoff, targetDropoff),
+    pickup: !portalPlaceIsSelectedArea(group.pickup, targetPickup),
+    dropoff: !portalPlaceIsSelectedArea(group.dropoff, targetDropoff),
   };
 }
 
@@ -385,6 +473,8 @@ export async function runPortalUpdate(input: {
     const saved = await page.saveGroupForm({
       pickup: needs.pickup ? plan.newPickup : null,
       dropoff: needs.dropoff ? plan.newDropoff : null,
+      verifyPickup: plan.newPickup,
+      verifyDropoff: plan.newDropoff,
       identityConfirmed: identity === "match",
     });
     if (!saved) return { phase: "group_compare", error: "group_update_unverified", passengerStep: null };

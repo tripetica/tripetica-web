@@ -5,6 +5,7 @@ import { fromStoredPhone } from "@/lib/booking/phone";
 import { PhoneField } from "@/components/booking/phone-field";
 import { UetdsCompanySelect } from "@/components/ops/uetds-company-select";
 import { DriverPermissionsEditor } from "@/components/partner/driver-permissions";
+import { DriverQualificationCard } from "@/components/partner/driver-qualifications";
 import { FleetLinkMenu } from "@/components/partner/fleet-link-checks";
 import { patchPartnerDriverVehicleAction } from "@/lib/partner/fleet-list-actions";
 import { FleetOptionalSelect } from "@/components/partner/fleet-optional-select";
@@ -23,6 +24,7 @@ import {
 import { PARTNER_DEFAULT_COUNTRY_CODE } from "@/lib/partner/constants";
 import { type PartnerCopy } from "@/lib/partner/copy";
 import { type DriverPermissions } from "@/lib/driver-portal/permissions";
+import { type DriverQualificationView } from "@/lib/uetds/qualification";
 import { partnerDriverDetailMode } from "@/lib/partner/driver-detail-view";
 import { formatPartnerDriverLanguagesFull } from "@/lib/partner/driver-languages";
 import {
@@ -46,6 +48,7 @@ type PartnerDriverDetailProps = {
   vehicleIds: readonly string[];
   defaultAuthorityId: string;
   permissions: DriverPermissions;
+  qualification: DriverQualificationView;
 };
 
 type DriverDraft = {
@@ -86,6 +89,8 @@ const ERROR_COPY: Record<
   "invalid-uetds-company": "invalidUetdsCompany",
   "invalid-fleet-pair": "invalidFleetPair",
   "invalid-edevlet-authority": "invalidEdevletAuthority",
+  "qualification-src": "qualificationSrcTitle",
+  "qualification-unverified": "qualificationUnverified",
   failed: "driverSaveFailed",
 };
 
@@ -182,6 +187,7 @@ export function PartnerDriverDetail({
   vehicleIds,
   defaultAuthorityId,
   permissions,
+  qualification,
 }: PartnerDriverDetailProps) {
   const baseline = useMemo(
     () => draftFromDriver(driver, { vehicleIds, defaultAuthorityId }),
@@ -516,6 +522,15 @@ export function PartnerDriverDetail({
         ) : null}
       </form>
 
+      <DriverQualificationCard
+        copy={copy}
+        locale={locale}
+        driverId={driver.id}
+        companyId={draft.uetdsCompanyId}
+        savedCompanyId={driver.uetdsCompanyId ?? null}
+        initial={qualification}
+      />
+
       <div className="partner-driver-permissions">
         <button
           type="button"
@@ -523,13 +538,13 @@ export function PartnerDriverDetail({
           aria-expanded={permissionsOpen}
           onClick={() => setPermissionsOpen((open) => !open)}
         >
-          {permissionsOpen ? copy.driverPermissionsHide : copy.driverPermissionsShow}
+          {copy.driverPermissionsTitle}
         </button>
         {permissionsOpen ? (
           <>
             <DriverPermissionsEditor driverId={driver.id} initial={permissions} copy={copy} />
             <button type="button" className="ops-btn-ghost driver-permissions-toggle" onClick={() => setPermissionsOpen(false)}>
-              {copy.driverPermissionsHide}
+              {copy.driverPermissionsTitle}
             </button>
           </>
         ) : null}

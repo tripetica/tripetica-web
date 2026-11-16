@@ -68,11 +68,15 @@ export async function listVehicleGreenDriving(input: {
     longitude: string;
   }>(
     `SELECT recorded_at, kind, raw_value, latitude::text AS latitude, longitude::text AS longitude
-       FROM gps_green_driving_events
+       FROM (
+         SELECT id, recorded_at, kind, raw_value, latitude, longitude, vehicle_id FROM gps_green_driving_events
+         UNION ALL
+         SELECT id, recorded_at, kind, raw_value, latitude, longitude, vehicle_id FROM gps_green_driving_event_variants
+       ) AS events
       WHERE vehicle_id = $1
         AND recorded_at >= $2
         AND recorded_at < $3
-      ORDER BY recorded_at ASC
+      ORDER BY recorded_at DESC, id DESC
       LIMIT 200`,
     [input.vehicleId, input.from.toISOString(), input.to.toISOString()],
   );

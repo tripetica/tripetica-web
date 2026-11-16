@@ -57,7 +57,7 @@ type SessionRecord = KamuLoginSessionState & {
     readCaptcha?(): Promise<string | null>;
     fillCaptcha?(value: string): Promise<boolean>;
     collectSeferRows?(): Promise<import("@/lib/uetds/kamu-portal/edit-plan").PortalSeferRow[]>;
-    saveGroupForm?(input: { pickup: { provinceName: string; districtName: string } | null; dropoff: { provinceName: string; districtName: string } | null; identityConfirmed?: boolean }): Promise<boolean>;
+    saveGroupForm?(input: { pickup: { provinceName: string; districtName: string } | null; dropoff: { provinceName: string; districtName: string } | null; verifyPickup?: { provinceName: string; districtName: string } | null; verifyDropoff?: { provinceName: string; districtName: string } | null; identityConfirmed?: boolean }): Promise<boolean>;
     savePassengerForm?(input: { yolcuIndex: number; nationality: string; documentNumber: string; firstName: string; lastName: string; gender: string }): Promise<boolean>;
     focusCaptcha?(): Promise<boolean>;
     completeCaptchaHandoff?(): Promise<{ phase: KamuLoginPhase; error: string | null }>;

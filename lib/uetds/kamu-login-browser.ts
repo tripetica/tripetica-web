@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { classifyKamuLoginPage, isBlockedPortalUrl, KAMU_LOGIN_TARGETS, type KamuLoginControls } from "@/lib/uetds/kamu-login-flow";
 import { mergePortalSeferRows, portalSeferRowFromCells, type PortalSeferRow } from "@/lib/uetds/kamu-portal/edit-plan";
-import { isDetachedNavigation, passengerSaveSucceeded } from "@/lib/uetds/kamu-portal/live-update";
+import { isDetachedNavigation, matchPortalAreaOption, parsePortalGroupRows, passengerSaveSucceeded, portalPlaceIsSelectedArea, PORTAL_ROUTE_PLACE_INPUTS } from "@/lib/uetds/kamu-portal/live-update";
 import { type KamuLoginViewport } from "@/lib/uetds/kamu-login-session";
 
 const MOBILE_VIEWPORT = { width: 1280, height: 800 };
@@ -127,7 +127,7 @@ export async function openChromiumLoginControls(viewport: KamuLoginViewport): Pr
     readCaptcha(): Promise<string | null>;
     fillCaptcha(value: string): Promise<boolean>;
     collectSeferRows(): Promise<PortalSeferRow[]>;
-    saveGroupForm(input: { pickup: { provinceName: string; districtName: string } | null; dropoff: { provinceName: string; districtName: string } | null; identityConfirmed?: boolean }): Promise<boolean>;
+    saveGroupForm(input: { pickup: { provinceName: string; districtName: string } | null; dropoff: { provinceName: string; districtName: string } | null; verifyPickup?: { provinceName: string; districtName: string } | null; verifyDropoff?: { provinceName: string; districtName: string } | null; identityConfirmed?: boolean }): Promise<boolean>;
     savePassengerForm(input: { yolcuIndex: number; nationality: string; documentNumber: string; firstName: string; lastName: string; gender: string }): Promise<boolean>;
     close(): Promise<void>;
   }
@@ -403,48 +403,63 @@ export async function openChromiumLoginControls(viewport: KamuLoginViewport): Pr
     },
     screenshot: async () => captureFrame(page),
     screenshotDocument: async () => captureFrame(page),
-    saveGroupForm: async (input: { pickup: { provinceName: string; districtName: string } | null; dropoff: { provinceName: string; districtName: string } | null; identityConfirmed?: boolean }) => {
+    saveGroupForm: async (input: { pickup: { provinceName: string; districtName: string } | null; dropoff: { provinceName: string; districtName: string } | null; verifyPickup?: { provinceName: string; districtName: string } | null; verifyDropoff?: { provinceName: string; districtName: string } | null; identityConfirmed?: boolean }) => {
       const url = page.url();
       if (/flush/i.test(url) || /asama=(?:seferDetay|grupIptali|yolcuIptali|excelYukle|yeniYolcu)/i.test(url)) return false;
       const existingGroupUrl = /asama=yeniGrup/i.test(url) && /[?&]grupIndex=\d+(?:&|$)/i.test(url);
       if (!existingGroupUrl && !input.identityConfirmed) return false;
-      const selectText = async (names: string[], label: string, attempts = 1) => {
+      const optionTexts = async (names: string[]) => {
+        for (const name of names) {
+          const select = page.locator(`select[name="${name}"]`);
+          if ((await select.count()) !== 1) continue;
+          const options = select.locator("option");
+          const count = await options.count();
+          const texts: string[] = [];
+          for (let index = 0; index < count; index += 1) {
+            texts.push(((await options.nth(index).textContent()) || "").replace(/\s+/g, " ").trim());
+          }
+          return { select, texts };
+        }
+        return null;
+      };
+      const selectText = async (names: string[], label: string, provinceName = "", attempts = 1, previousSignature = "") => {
         if (!label.trim()) return false;
         for (let attempt = 0; attempt < attempts; attempt += 1) {
-          let select = page.locator("select").nth(0);
-          let found = false;
-          for (const name of names) {
-            const candidate = page.locator(`select[name="${name}"]`);
-            if ((await candidate.count()) === 1) {
-              select = candidate;
-              found = true;
-              break;
-            }
-          }
+          const found = await optionTexts(names);
           if (found) {
-            const options = select.locator("option");
-            const count = await options.count();
-            const wanted = label.trim().toLocaleUpperCase("tr-TR");
-            for (let index = 0; index < count; index += 1) {
-              const text = ((await options.nth(index).textContent()) || "").replace(/\s+/g, " ").trim();
-              if (text.toLocaleUpperCase("tr-TR") === wanted) {
-                await select.selectOption({ label: text });
-                return true;
-              }
+            const signature = found.texts.join("|");
+            const stale = Boolean(previousSignature) && signature === previousSignature && attempt < 2;
+            const decision = stale ? null : matchPortalAreaOption(found.texts, label, provinceName);
+            if (decision?.ok) {
+              await found.select.selectOption({ label: decision.label });
+              return true;
             }
           }
           if (attempt + 1 < attempts) await page.waitForTimeout(300);
         }
         return false;
       };
+      const clearPlace = async (names: readonly string[]) => {
+        for (const name of names) {
+          const field = page.locator(`input[name="${name}"], textarea[name="${name}"]`);
+          const count = await field.count();
+          if (count > 1) return false;
+          if (count === 1) await field.fill("");
+        }
+        return true;
+      };
       if (input.pickup) {
+        const beforeAreas = (await optionTexts(["baslangicIlcesi", "baslangicIlce"]))?.texts.join("|") ?? "";
         if (!(await selectText(["baslangicIli", "baslangicIl"], input.pickup.provinceName))) return false;
-        if (!(await selectText(["baslangicIlcesi", "baslangicIlce"], input.pickup.districtName, 8))) return false;
+        if (!(await selectText(["baslangicIlcesi", "baslangicIlce"], input.pickup.districtName, input.pickup.provinceName, 8, beforeAreas))) return false;
       }
       if (input.dropoff) {
+        const beforeAreas = (await optionTexts(["bitisIlcesi", "bitisIlce"]))?.texts.join("|") ?? "";
         if (!(await selectText(["bitisIli", "bitisIl"], input.dropoff.provinceName))) return false;
-        if (!(await selectText(["bitisIlcesi", "bitisIlce"], input.dropoff.districtName, 8))) return false;
+        if (!(await selectText(["bitisIlcesi", "bitisIlce"], input.dropoff.districtName, input.dropoff.provinceName, 8, beforeAreas))) return false;
       }
+      if (!(await clearPlace(PORTAL_ROUTE_PLACE_INPUTS.pickup))) return false;
+      if (!(await clearPlace(PORTAL_ROUTE_PLACE_INPUTS.dropoff))) return false;
       const inputButton = page.locator("input[value='Güncelle']");
       const textButton = page.locator("button").filter({ hasText: /^\s*Güncelle\s*$/ });
       const inputCount = await inputButton.count();
@@ -456,9 +471,11 @@ export async function openChromiumLoginControls(viewport: KamuLoginViewport): Pr
         button.evaluate((element) => { if (element instanceof HTMLElement) element.click(); }),
       ]);
       const html = await page.content();
-      const pickupOk = !input.pickup || html.toLocaleUpperCase("tr-TR").includes(input.pickup.districtName.toLocaleUpperCase("tr-TR"));
-      const dropoffOk = !input.dropoff || html.toLocaleUpperCase("tr-TR").includes(input.dropoff.districtName.toLocaleUpperCase("tr-TR"));
-      return /asama=grupListesi/i.test(page.url()) && pickupOk && dropoffOk;
+      const verifyPickup = input.verifyPickup ?? input.pickup;
+      const verifyDropoff = input.verifyDropoff ?? input.dropoff;
+      if (!verifyPickup || !verifyDropoff || !/asama=grupListesi/i.test(page.url())) return false;
+      const saved = parsePortalGroupRows(html).filter((row) => portalPlaceIsSelectedArea(row.pickup, verifyPickup) && portalPlaceIsSelectedArea(row.dropoff, verifyDropoff));
+      return saved.length > 0;
     },
     savePassengerForm: async (input: { yolcuIndex: number; nationality: string; documentNumber: string; firstName: string; lastName: string; gender: string }) => {
       const current = page.url();

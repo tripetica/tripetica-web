@@ -153,7 +153,7 @@ export function PartnerDriverList({
                       aria-expanded={openPermissions === driver.id}
                       onClick={() => setOpenPermissions((current) => current === driver.id ? null : driver.id)}
                     >
-                      {openPermissions === driver.id ? copy.driverPermissionsHide : copy.driverPermissionsShow}
+                      {copy.driverPermissionsTitle}
                     </button>
                   </td>
                   <td className="ltr-isolate" dir="ltr">{formatPartnerFleetPhone(driver.phone)}</td>
@@ -278,7 +278,7 @@ export function PartnerDriverList({
                         className="ops-btn-ghost driver-permissions-toggle"
                         onClick={() => setOpenPermissions(null)}
                       >
-                        {copy.driverPermissionsHide}
+                        {copy.driverPermissionsTitle}
                       </button>
                     </td>
                   </tr>

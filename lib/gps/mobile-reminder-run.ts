@@ -1,8 +1,7 @@
 import "server-only";
 
 import { getPool } from "@/lib/db/postgres";
-import { driverReminderCopy, MOBILE_REMINDER_COOLDOWN_MS, mobileReminderDue, mobileReminderPhase, mobileReminderRuntimeAllowed, overlappingTripReminderBlocks, ownerIsDriver, ownerReminderCopy, reminderEmailHtml, reminderPushSources, reminderTargets, uniquePushEndpoints } from "@/lib/gps/mobile-reminders";
-import { sendPartnerMail } from "@/lib/partner/mail";
+import { driverReminderCopy, MOBILE_REMINDER_COOLDOWN_MS, mobileReminderDue, mobileReminderPhase, mobileReminderRuntimeAllowed, overlappingTripReminderBlocks, ownerIsDriver, ownerReminderCopy, reminderPushSources, reminderTargets, uniquePushEndpoints } from "@/lib/gps/mobile-reminders";
 import { sendPartnerPushToSubscriptions, type PartnerWebPushPayload } from "@/lib/partner/push/send";
 import { type PartnerPushSubscriptionRecord } from "@/lib/partner/push/subscriptions";
 import { ATS_ACTIVE_NOTIFICATION_STATUSES } from "@/lib/gps/ats-window";
@@ -120,9 +119,7 @@ async function remindTrip(trip: TripRow, now: Date, deliver: boolean) {
   let skipped = 0;
   for (const target of reminderTargets({ ownerIsDriver: samePerson })) {
     const copy = samePerson || target.audience === "driver" ? driverCopy : ownerCopy;
-    const recipient = target.channel === "email"
-      ? trip.owner_email
-      : (target.audience === "owner" || samePerson ? trip.owner_id : trip.driver_id);
+    const recipient = target.audience === "owner" || samePerson ? trip.owner_id : trip.driver_id;
     if (await driverReminderCoolingDown(trip.driver_id, trip.id, target, now)) continue;
     const claimed = await claimReminder(trip, new Date(slot), target, recipient);
     if (!claimed) continue;
@@ -164,16 +161,6 @@ async function deliverReminder(input: {
   copy: { title: string; preview: string; body: string };
   samePerson: boolean;
 }): Promise<{ status: "sent" | "failed" | "skipped"; detail: string }> {
-  if (input.target.channel === "email") {
-    const to = input.trip.owner_email ?? "";
-    const mailed = await sendPartnerMail({
-      to,
-      subject: input.copy.title,
-      text: input.copy.body,
-      html: reminderEmailHtml({ title: input.copy.title, body: input.copy.body }),
-    });
-    return mailed.ok ? { status: "sent", detail: "smtp" } : { status: "failed", detail: mailed.error ?? "smtp" };
-  }
   const subscriptions = await reminderPushSubscriptions(input.trip, input.target.audience, input.samePerson);
   if (subscriptions.length === 0) return { status: "skipped", detail: "no_subscription" };
   const url = input.samePerson || input.target.audience === "driver"

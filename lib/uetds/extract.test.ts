@@ -4,6 +4,7 @@ import { istanbulLocalToUtcMs } from "@/lib/booking/istanbul-time";
 import { createEmptyDraft, createPassengerDraft } from "@/lib/uetds/draft";
 import { countryIso2FromName, extractUetdsFromText, mergeExtractedDraft } from "@/lib/uetds/extract";
 import { mapAiUetdsExtraction, mergeAiUetdsExtraction } from "@/lib/uetds/ai-extraction-schema";
+import { mergeAiExtractedSources } from "@/lib/uetds/ai-passenger-sources";
 import { isOfficialUetdsLocationReady } from "@/lib/uetds/location";
 import { prefillUetdsDraftFromReservation } from "@/lib/uetds/prefill";
 
@@ -265,6 +266,59 @@ test("empty identity stays empty when merging a blank extraction", () => {
   const merged = mergeExtractedDraft(draft, { passengers: [{ firstName: "Ada" }] });
   assert.equal(merged.draft.passengers[0]?.identityNumber, "");
   assert.doesNotMatch(JSON.stringify(merged.draft), /11111111111/);
+});
+
+const EMPTY_AI = {
+  origin: null, destination: null, startDate: null, startTime: null, endDate: null, endTime: null,
+  tripKind: null, purpose: null, fare: null, flightCode: null, visibleText: null, passengers: [],
+};
+
+test("an explicit group label fills only the group name, with or without punctuation", () => {
+  const cases = [
+    ["Grup adı Ahmet", "Ahmet"],
+    ["Grup adı Alf Turizm", "Alf Turizm"],
+    ["Grup adı Search Travel", "Search Travel"],
+    ["Grup adı Elif Turizm", "Elif Turizm"],
+    ["Grup adı: Ahmet", "Ahmet"],
+    ["Grup ismi Mehmet", "Mehmet"],
+    ["Group name Search Travel", "Search Travel"],
+    ["GROUP NAME search travel", "search travel"],
+  ] as const;
+  for (const [text, expected] of cases) {
+    assert.equal(extractUetdsFromText(text).groupName, expected, text);
+    const mapped = mapAiUetdsExtraction(EMPTY_AI, text);
+    assert.equal(mapped.groupName, expected, text);
+    const draft = mergeAiUetdsExtraction(createEmptyDraft("manual"), mapped).draft;
+    assert.equal(draft.groupName, expected, text);
+  }
+});
+
+test("a dictated group name stops before the next field and does not invent one", () => {
+  const priced = "Grup adı Alfa Turizm grup ücreti 100 TL";
+  assert.equal(extractUetdsFromText(priced).groupName, "Alfa Turizm");
+  const mapped = mapAiUetdsExtraction({ ...EMPTY_AI, fare: "100" }, priced);
+  assert.equal(mapped.groupName, "Alfa Turizm");
+  assert.equal(mapped.fare, "100");
+  assert.equal(mergeAiUetdsExtraction(createEmptyDraft("manual"), mapped).draft.groupName, "Alfa Turizm");
+  assert.equal(mergeAiUetdsExtraction(createEmptyDraft("manual"), mapped).draft.fare, "100");
+
+  const dictated = "Ayşe Yılmaz Fatma Yılmaz Kerem Yılmaz alış yeri Beyoğlu bırakma yeri İstanbul Havalimanı grup adı Alfa Turizm grup ücreti 100 TL";
+  assert.equal(extractUetdsFromText(dictated).groupName, "Alfa Turizm");
+  const dictatedMapped = mapAiUetdsExtraction({ ...EMPTY_AI, fare: "100" }, dictated);
+  assert.equal(dictatedMapped.groupName, "Alfa Turizm");
+  assert.equal(dictatedMapped.fare, "100");
+  assert.equal(dictatedMapped.origin, "Beyoğlu");
+  assert.equal(dictatedMapped.destination, "İstanbul Havalimanı");
+  assert.equal(extractUetdsFromText("Ayşe Yılmaz alış yeri Beyoğlu").groupName, undefined);
+  assert.equal(extractUetdsFromText("Alf Turizm grup ücreti 100 TL").groupName, undefined);
+
+  const current = createEmptyDraft("manual");
+  current.groupName = "Elle yazılan";
+  current.fieldProvenance.groupName = "user";
+  const blank = mapAiUetdsExtraction(EMPTY_AI, "Alış yeri Beyoğlu bırakma yeri Şişli");
+  assert.equal(blank.groupName, undefined);
+  assert.equal(mergeAiUetdsExtraction(current, blank).draft.groupName, "Elle yazılan");
+  assert.equal(mergeAiExtractedSources([mapped]).groupName, "Alfa Turizm");
 });
 
 test("document gender overrides default Kadın when an explicit value arrives", () => {
