@@ -29,7 +29,9 @@ import { gpsPresence } from "@/lib/gps/presence";
 import { type GpsCopy } from "@/lib/gps/copy";
 import { GpsAtsPanel } from "@/components/gps/ats-panel";
 import { type GpsAtsPanel as GpsAtsPanelState } from "@/lib/gps/ats-panel-state";
+import { GpsDocumentsPanel } from "@/components/gps/documents-section";
 import { GpsMaintenancePanel } from "@/components/gps/maintenance-section";
+import { documentCopyFor } from "@/lib/gps/documents";
 import { GpsSectionToggle } from "@/components/gps/section-toggle";
 import { type PanelLocale } from "@/lib/i18n/config";
 import { GpsImmobilizerSwitch } from "@/components/gps/immobilizer-switch";
@@ -45,6 +47,7 @@ import { type DriveGreenView } from "@/lib/teltonika/green-driving";
 export type GpsSectionVisibility = {
   live: boolean;
   history: boolean;
+  documents: boolean;
   maintenance: boolean;
   drive: boolean;
   device: boolean;
@@ -53,6 +56,7 @@ export type GpsSectionVisibility = {
 const allGpsSections: GpsSectionVisibility = {
   live: true,
   history: true,
+  documents: true,
   maintenance: true,
   drive: true,
   device: true,
@@ -94,6 +98,8 @@ export function GpsLiveSection({
   fleetUrl = "/api/gps/fleet",
   liveUrl,
   maintenanceUrl,
+  documentsUrl = "/api/gps/documents",
+  documentsCanEdit = true,
   sections = allGpsSections,
   opsFilter = false,
   locale = "tr",
@@ -133,6 +139,8 @@ export function GpsLiveSection({
   fleetUrl?: string;
   liveUrl?: string;
   maintenanceUrl?: string;
+  documentsUrl?: string;
+  documentsCanEdit?: boolean;
   sections?: GpsSectionVisibility;
   opsFilter?: boolean;
   locale?: PanelLocale;
@@ -582,6 +590,22 @@ export function GpsLiveSection({
           fromLocal={shareFromLocal}
           toLocal={shareToLocal}
         />
+      ) : null}
+      {sections.documents && (picking || selectedFleet?.vehicleId) ? (
+        <GpsSectionToggle showLabel={copy.showDocuments} hideLabel={copy.hideDocuments} blockedMessage={picking || !selectedFleet?.vehicleId ? documentCopyFor(locale).pick : undefined}>
+          {selectedFleet?.vehicleId && !picking ? (
+            <GpsDocumentsPanel
+              key={selectedFleet.vehicleId}
+              vehicleId={selectedFleet.vehicleId}
+              locale={locale}
+              documentsUrl={documentsUrl}
+              canEdit={documentsCanEdit}
+              plate={selectedFleet.plate}
+              brand={selectedFleet.brand}
+              model={selectedFleet.model}
+            />
+          ) : null}
+        </GpsSectionToggle>
       ) : null}
       {sections.maintenance && surface === "partner" && (picking || selectedFleet?.vehicleId) ? (
         <GpsSectionToggle showLabel={copy.showMaintenance} hideLabel={copy.hideMaintenance} blockedMessage={picking || !selectedFleet?.vehicleId ? copy.maintenancePick : undefined}>

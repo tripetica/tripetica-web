@@ -3,12 +3,17 @@ import { AtsFaultLists } from "@/components/gps/ats-fault-lists";
 import { GpsDeviceBoard } from "@/components/gps/device-board";
 import { OpsDeviceTabs } from "@/components/gps/ops-device-tabs";
 import { GpsLiveSection } from "@/components/gps/live-section";
+import { ConfiguratorPanel } from "@/components/gps/configurator-panel";
 import { OpsGpsTabs } from "@/components/gps/ops-gps-tabs";
 import { asPanelLocale, isLocale } from "@/lib/i18n/config";
 import { localizedPath } from "@/lib/i18n/path";
 import { atsFaultCopy } from "@/lib/gps/ats-fault-copy";
+import { configuratorCopy } from "@/lib/gps/configurator-copy";
+import { loadConfiguratorSnapshot } from "@/lib/gps/configurator-store";
 import { gpsCopy, gpsErrorText } from "@/lib/gps/copy";
 import { type GpsFleetVehicle } from "@/lib/gps/fleet";
+import { opsFleetChoices } from "@/lib/gps/ops-fleet-filter";
+import { gpsPresence } from "@/lib/gps/presence";
 import { type GpsLiveSnapshot } from "@/lib/gps/live";
 import { loadOpsMapFleet, loadOpsMobileHistory } from "@/lib/gps/ops-fleet";
 import { gpsIsLiveMapSource } from "@/lib/gps/registration";
@@ -34,7 +39,15 @@ export default async function OpsGpsPage({
   ]);
   const fleet = await loadOpsMapFleet(devices);
   const query = await searchParams;
-  const copy = gpsCopy[asPanelLocale(locale)];
+  const panelLocale = asPanelLocale(locale);
+  const copy = gpsCopy[panelLocale];
+  let configurator = null;
+  let configuratorUnavailable = false;
+  try {
+    configurator = await loadConfiguratorSnapshot();
+  } catch {
+    configuratorUnavailable = true;
+  }
   const faultCopy = atsFaultCopy(locale);
   const deviceTab = one(query.devices) === "faults" || one(query.devices) === "history" ? one(query.devices) : "devices";
   const requested = one(query.vehicle);
@@ -59,6 +72,7 @@ export default async function OpsGpsPage({
       deviceId: device.id,
       partnerId: device.partnerId,
       vehicleId: device.vehicleId,
+      accessPartnerId: null,
       from: range.from,
       to: range.to,
     })
@@ -78,9 +92,10 @@ export default async function OpsGpsPage({
 
   return (
     <OpsGpsTabs
-      initialTab={one(query.tab) === "devices" ? "devices" : "gps"}
+      initialTab={one(query.tab) === "devices" ? "devices" : one(query.tab) === "configurator" ? "configurator" : "gps"}
       gpsLabel={copy.tabGps}
       devicesLabel={copy.tabDevices}
+      configuratorLabel={copy.tabConfigurator}
       gps={(
         <GpsLiveSection
           copy={copy}
@@ -161,6 +176,33 @@ export default async function OpsGpsPage({
           )}
           faults={<AtsFaultLists locale={locale} mode="faults" />}
           history={<AtsFaultLists locale={locale} mode="history" />}
+        />
+      )}
+      configurator={(
+        <ConfiguratorPanel
+          gpsCopy={copy}
+          copy={configuratorCopy[panelLocale]}
+          choices={opsFleetChoices(devices.filter((device) => device.status === "active").map((device) => ({
+            id: device.id,
+            partnerId: device.partnerId ?? "stock",
+            partnerName: device.partnerName || copy.stock,
+            plate: device.plate,
+            deviceCode: device.plate ? device.deviceCode : device.imei,
+            source: "device" as const,
+            model: device.trackerModel.toUpperCase(),
+            detail: [
+              device.trackerModel.toUpperCase(),
+              device.imei,
+              device.simPhone,
+              configuratorCopy[panelLocale][gpsPresence(device.lastHeartbeatAt ?? device.lastSeenAt, new Date())],
+              device.lastSeenAt ? new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(device.lastSeenAt)) : "",
+            ].filter((part) => part && part.length > 0).join(" · "),
+            searchText: [device.plate, device.partnerName, device.imei, device.simPhone, device.deviceCode].filter((part) => part && part.length > 0).join(" "),
+          })), copy.stock)}
+          snapshot={configurator}
+          canManage={actorCan(actor, "gps.manage")}
+          unavailable={configuratorUnavailable}
+          locale={locale}
         />
       )}
     />

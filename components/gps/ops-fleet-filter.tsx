@@ -139,5 +139,6 @@ function vehicleLabel(vehicle: OpsFleetChoice, copy: GpsCopy) {
   const source = vehicle.source === "mobile" ? copy.sourceMobile : copy.sourcePhysical;
   const identity = vehicle.plate?.trim() || (vehicle.source === "device" ? vehicle.deviceCode : "");
   const driver = vehicle.driverName?.trim() ?? "";
-  return [identity, driver, source].filter((part) => part.length > 0).join(" — ");
+  const detail = vehicle.detail?.trim() ?? "";
+  return [identity, driver, source, detail].filter((part) => part.length > 0).join(" — ");
 }

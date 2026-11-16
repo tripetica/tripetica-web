@@ -64,7 +64,10 @@ const FIRST_LABEL = /(?:first\s*name|имя|الاسم\s+الأول)\s*[:\-]\s*(
 const LAST_LABEL = /(?:soyad|last\s*name|surname|фамилия|الكنية)\s*[:\-]\s*([^\n,]{2,40})/i;
 const GENDER_LABEL = /(?:cinsiyet|gender|пол|الجنس)\s*[:\-]?\s*([^\n,]{2,20})/i;
 const PURPOSE_LABEL = /(?:amaç|purpose|açıklama|description|цель|الوصف)\s*[:\-]\s*([^\n]{3,80})/i;
-const GROUP_LABEL = /(?:grup|group|группа)\s*(?:adı|name|название)?\s*[:\-]\s*([^\n]{2,80})/i;
+const GROUP_LABEL =
+  /(?<![\p{L}\p{N}_])(?:grup\s+(?:ad[ıiİI]|isimi|ismi)|group\s+name|название\s+группы|группа\s+название|(?:grup|group|группа)\s*[:\-–—])\s*[:\-–—,.]?\s*/iu;
+const GROUP_VALUE_END =
+  /(?<![\p{L}\p{N}_])(?:grup\s+(?:ücret(?:i)?|ucret(?:i)?)|(?:ücret|ucret|tutar|price|fare)|alış(?:\s+(?:yeri|noktası|saati))?|alis(?:\s+(?:yeri|noktasi|saati))?|bırak(?:ma|ış)(?:\s+(?:yeri|saati))?|birak(?:ma|is)(?:\s+(?:yeri|saati))?|varış(?:\s+(?:yeri|saati))?|pick-?up(?:\s+(?:place|location|point|time))?|drop-?off(?:\s+(?:place|location|point|time))?|yolcu(?:\s+sayısı)?|passenger|telefon|phone|uyruk|nationality|cinsiyet|gender|pasaport|passport)\b/iu;
 const NUMBERED_PASSENGER = /(?:^|\n)\s*(?:\d{1,2}[.)-]|yolcu\s*\d+|passenger\s*\d+)\s*[:\-]?\s*([A-Za-zÀ-ÿĞğİıÖöŞşÜüЁёА-я\u0600-\u06FF][A-Za-zÀ-ÿĞğİıÖöŞşÜüЁёА-я\u0600-\u06FF'’\- ]{2,60})/gi;
 
 function clip(value: string | undefined, max = 120) {
@@ -123,6 +126,18 @@ function splitPersonName(value: string) {
 
 function looksLikeLocation(value: string) {
   return /havaliman[ıi]|airport|otel|hotel|hilton|terminal/i.test(value);
+}
+
+function describedGroupName(source: string) {
+  const match = source.match(GROUP_LABEL);
+  if (!match || match.index === undefined) {
+    return "";
+  }
+  const rest = source.slice(match.index + match[0].length);
+  const end = rest.match(GROUP_VALUE_END);
+  const raw = (end?.index === undefined ? rest.split(/\r?\n/, 1)[0] ?? "" : rest.slice(0, end.index))
+    .replace(/[\s,;:.–—-]+$/u, "");
+  return clip(raw, 80);
 }
 
 function firstCapture(match: RegExpMatchArray | null) {
@@ -188,7 +203,7 @@ export function extractUetdsFromText(text: string, nowUtcMs = Date.now()): Uetds
   const lastName = clip(source.match(LAST_LABEL)?.[1]);
   const gender = parseGender(source.match(GENDER_LABEL)?.[1] ?? "");
   const purpose = clip(source.match(PURPOSE_LABEL)?.[1]);
-  const groupName = clip(source.match(GROUP_LABEL)?.[1]);
+  const groupName = describedGroupName(source);
 
   if (origin) {
     extracted.origin = origin;

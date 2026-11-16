@@ -6,6 +6,9 @@ export type OpsFleetChoice = {
   driverName: string | null;
   deviceCode: string;
   source: "device" | "mobile";
+  detail?: string;
+  searchText?: string;
+  model?: string | null;
 };
 
 export type OpsFleetGroup = {
@@ -31,6 +34,9 @@ export function opsFleetChoices(
     driverName?: string | null;
     deviceCode: string;
     source?: "device" | "mobile" | null;
+    detail?: string;
+    searchText?: string;
+    model?: string | null;
   }[],
   stockLabel: string,
 ): OpsFleetChoice[] {
@@ -45,6 +51,9 @@ export function opsFleetChoices(
         driverName: vehicle.driverName ?? null,
         deviceCode: vehicle.deviceCode,
         source: vehicle.source === "mobile" ? "mobile" : "device",
+        detail: vehicle.detail,
+        searchText: vehicle.searchText,
+        model: vehicle.model,
       });
       continue;
     }
@@ -57,6 +66,9 @@ export function opsFleetChoices(
       driverName: null,
       deviceCode: vehicle.deviceCode,
       source: "device",
+      detail: vehicle.detail,
+      searchText: vehicle.searchText,
+      model: vehicle.model,
     });
   }
   return choices;
@@ -90,7 +102,9 @@ export function searchOpsFleet(groups: readonly OpsFleetGroup[], query: string):
     const vehicles = group.vehicles.filter((vehicle) =>
       fold(vehicle.plate ?? "").includes(needle)
       || fold(vehicle.driverName ?? "").includes(needle)
-      || fold(vehicle.deviceCode).includes(needle));
+      || fold(vehicle.deviceCode).includes(needle)
+      || fold(vehicle.detail ?? "").includes(needle)
+      || fold(vehicle.searchText ?? "").includes(needle));
     return vehicles.length > 0 ? [{ ...group, vehicles }] : [];
   });
 }

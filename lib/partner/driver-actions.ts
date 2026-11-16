@@ -16,6 +16,16 @@ import { resolveUetdsCompanyIdFromForm } from "@/lib/ops/uetds-company-options";
 import { saveDriverAuthority, saveDriverVehiclePair, saveDriverVehicleSet } from "@/lib/partner/fleet-pairing";
 import { firstPartnerTabPath, partnerHasTab } from "@/lib/partner/access";
 import { getPartnerActor } from "@/lib/partner/session";
+import { normalizeDriverNationalId } from "@/lib/partner/driver-identity";
+import { isTurkishIdentityNumber } from "@/lib/uetds/qualification";
+import { cachedDriverQualification } from "@/lib/uetds/qualification-query";
+import { saveDriverQualification } from "@/lib/uetds/qualification-store";
+import {
+  driverPermissionKeys,
+  emptyDriverPermissions,
+  newDriverPermissions,
+  type DriverPermissions,
+} from "@/lib/driver-portal/permissions";
 
 export type PartnerDriverFormState = {
   error:
@@ -31,6 +41,8 @@ export type PartnerDriverFormState = {
     | "invalid-uetds-company"
     | "invalid-fleet-pair"
     | "invalid-edevlet-authority"
+    | "qualification-src"
+    | "qualification-unverified"
     | "failed"
     | null;
   ok: boolean;
@@ -57,6 +69,14 @@ function refreshPartnerDrivers(locale: Locale, partnerId: string, driverId?: str
   if (driverId) {
     revalidatePath(localizedPath(locale, `/ops/partners/${partnerId}/drivers/${driverId}`));
   }
+}
+
+function permissionsFromForm(formData: FormData): DriverPermissions {
+  if (!formData.has("permissionsPresent")) return newDriverPermissions();
+  const selected = new Set(formData.getAll("permission").map((value) => String(value)));
+  const permissions = emptyDriverPermissions();
+  for (const key of driverPermissionKeys) permissions[key] = selected.has(key);
+  return permissions;
 }
 
 function submittedId(formData: FormData, key: string) {
@@ -123,8 +143,27 @@ export async function partnerCreateDriverAction(
   const actor = await requirePartnerActor(locale);
   let result: Awaited<ReturnType<typeof createPartnerDriver>>;
   const resolved = await resolveUetdsCompanyIdFromForm(formData, null);
-  if (!resolved.ok) {
+  if (!resolved.ok || !resolved.companyId) {
     return { error: "invalid-uetds-company", ok: false };
+  }
+  const nationalId = normalizeDriverNationalId(String(formData.get("nationalId") ?? ""));
+  if (!isTurkishIdentityNumber(nationalId)) {
+    return { error: "invalid-national-id", ok: false };
+  }
+  if (!String(formData.get("email") ?? "").trim()) {
+    return { error: "invalid-email", ok: false };
+  }
+  const outcome = await cachedDriverQualification({
+    partnerId: actor.partnerId,
+    companyId: resolved.companyId,
+    nationalId,
+  });
+  const confirmation = String(formData.get("qualificationConfirm") ?? "");
+  if (outcome.status === "unverified" && confirmation !== "unverified") {
+    return { error: "qualification-unverified", ok: false };
+  }
+  if (outcome.status === "verified" && !outcome.srcReady && confirmation !== "src-missing") {
+    return { error: "qualification-src", ok: false };
   }
   try {
     result = await createPartnerDriver({
@@ -137,6 +176,7 @@ export async function partnerCreateDriverAction(
       languageCodes: languageCodesFromForm(formData),
       email: String(formData.get("email") ?? ""),
       uetdsCompanyId: resolved.companyId,
+      permissions: permissionsFromForm(formData),
     });
   } catch {
     return { error: "failed", ok: false };
@@ -152,6 +192,15 @@ export async function partnerCreateDriverAction(
   );
   if (linkError) {
     return linkError;
+  }
+  try {
+    await saveDriverQualification({
+      driverId: result.driverId,
+      companyId: resolved.companyId,
+      outcome,
+    });
+  } catch {
+    // The driver record stays. A later card refresh can store the ministry result.
   }
   refreshPartnerDrivers(locale, actor.partnerId, result.driverId);
   redirect(localizedPath(locale, "/partner/drivers?added=1"));

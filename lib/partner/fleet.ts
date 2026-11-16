@@ -1,6 +1,11 @@
 import "server-only";
 
 import { query } from "@/lib/db/postgres";
+import {
+  newDriverPermissions,
+  parseDriverPermissions,
+  type DriverPermissions,
+} from "@/lib/driver-portal/permissions";
 import { isValidEmail, phoneValidity, toE164 } from "@/lib/booking/phone";
 import { normalizePartnerEmail } from "@/lib/partner/email";
 import { recordFleetStatusAudit } from "@/lib/partner/fleet-status-audit";
@@ -627,6 +632,7 @@ export async function createPartnerDriver(input: {
   languageCodes: readonly string[];
   email?: string;
   uetdsCompanyId: string | null;
+  permissions?: DriverPermissions;
 }) {
   const parsed = parseDriverInput({
     fullName: input.fullName,
@@ -647,9 +653,9 @@ export async function createPartnerDriver(input: {
       `INSERT INTO partner_drivers (
           partner_id, first_name, last_name, national_id, phone, phone_country_code,
           email, languages, status, last_edited_by_ops_user_id, last_edited_by_partner_user_id,
-          uetds_company_id
+          uetds_company_id, portal_permissions
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10, $11, $12::jsonb)
        RETURNING id`,
       [
         input.partnerId,
@@ -663,6 +669,7 @@ export async function createPartnerDriver(input: {
         edited.lastEditedByOpsUserId,
         edited.lastEditedByPartnerUserId,
         input.uetdsCompanyId,
+        JSON.stringify(parseDriverPermissions(input.permissions ?? newDriverPermissions())),
       ],
     );
     const id = created.rows[0]?.id;

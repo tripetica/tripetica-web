@@ -1,4 +1,5 @@
 import "server-only";
+import type { PoolClient } from "pg";
 
 import { getPool } from "@/lib/db/postgres";
 import { chooseLivePoint } from "@/lib/gps/backfill";
@@ -22,10 +23,12 @@ export async function ingestTelemetry(
   deviceId: string,
   points: GpsPoint[],
   rejected: { seq: number; error: GpsPointError }[],
+  transactionClient?: PoolClient,
 ): Promise<IngestOk | IngestDenied> {
-  const client = await getPool().connect();
+  const client = transactionClient ?? await getPool().connect();
+  const ownsTransaction = !transactionClient;
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) await client.query("BEGIN");
     const locked = await client.query<{
       id: string;
       partner_id: string | null;
@@ -42,7 +45,7 @@ export async function ingestTelemetry(
     );
     const device = locked.rows[0];
     if (!device || device.status !== "active") {
-      await client.query("ROLLBACK");
+      if (ownsTransaction) await client.query("ROLLBACK");
       return { http: 403, error: "disabled" };
     }
     const accepted: number[] = [];
@@ -171,12 +174,12 @@ export async function ingestTelemetry(
       );
       liveAdvanced = (advanced.rowCount ?? 0) > 0;
     }
-    await client.query("COMMIT");
+    if (ownsTransaction) await client.query("COMMIT");
     return { http: 200, accepted, duplicate, rejected, ackedThrough: cursor, liveAdvanced };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (ownsTransaction) await client.query("ROLLBACK");
     throw error;
   } finally {
-    client.release();
+    if (ownsTransaction) client.release();
   }
 }
